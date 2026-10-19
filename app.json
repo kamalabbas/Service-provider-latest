@@ -1,0 +1,52 @@
+{
+  "expo": {
+    "name": "Service Provider",
+    "slug": "service-provider",
+    "version": "1.0.1",
+    "orientation": "portrait",
+    "icon": "./assets/images/service-provider-icon.png",
+    "scheme": "familytree",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.kimzaster.familytree",
+      "buildNumber": "1",
+      "splash": {
+        "backgroundColor": "#0F172A",
+        "image": "./assets/images/service-provider-icon.png",
+        "resizeMode": "contain"
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "Service Provider accesses photos when you choose an image.",
+        "NSCameraUsageDescription": "Service Provider uses the camera when you choose to capture a photo."
+      }
+    },
+    "android": {
+      "edgeToEdgeEnabled": true,
+      "package": "com.kimzaster.familytree",
+      "googleServicesFile": "./google-services.json",
+      "splash": {
+        "backgroundColor": "#0F172A",
+        "image": "./assets/images/service-provider-icon.png",
+        "resizeMode": "contain"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Service Provider accesses photos when you choose an image."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "02557e69-e417-490c-81ea-6d46a925c66a"
+      }
+    }
+  }
+}

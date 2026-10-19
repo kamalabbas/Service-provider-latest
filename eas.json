@@ -1,0 +1,63 @@
+{
+  "cli": {
+    "version": ">= 16.4.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "dev",
+        "EXPO_PUBLIC_BASE_URL": ""
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "dev": {
+      "distribution": "internal",
+      "environment": "dev",
+      "env": {
+        "APP_VARIANT": "dev",
+        "EXPO_PUBLIC_BASE_URL": ""
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "environment": "preview",
+      "env": {
+        "APP_VARIANT": "production",
+        "EXPO_PUBLIC_BASE_URL": ""
+      },
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "environment": "production",
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "APP_VARIANT": "production",
+        "EXPO_PUBLIC_BASE_URL": ""
+      }
+    }
+  },
+  "submit": {
+    "preview": {},
+    "production": {}
+  }
+}
