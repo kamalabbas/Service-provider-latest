@@ -44,15 +44,6 @@ Lookup/location serialization and query hooks remain reusable. Their endpoints m
 
 ## Temporary native and cloud identity
 
-The following values are intentionally preserved by owner approval. They are unresolved migration configuration, not final Service Provider production identifiers:
-
-| Setting | Temporarily retained value |
-| --- | --- |
-| Android package | `com.kimzaster.familytree` |
-| iOS bundle identifier | `com.kimzaster.familytree` |
-| URL scheme | `familytree` |
-| EAS project ID | `02557e69-e417-490c-81ea-6d46a925c66a` |
-
 The display name is **Service Provider**, and the local package name and Expo slug are `service-provider`. The neutral icon has an editable SVG source alongside its PNG export.
 
 Do not publish, submit, or reassign cloud ownership until these identity decisions are resolved. The renamed slug must be reconciled with the existing EAS project by its owner before cloud builds/submission.
