@@ -59,8 +59,7 @@ export default function OtpForgotPasswordScreen() {
           try {
             const res = await sendForgotPasswordOtp({ email });
             res.message && showToast(res.message, "success");
-          } catch (err) {
-            console.log(err);
+          } catch {
             showToast("Something went wrong.", "error");
           }
         }}

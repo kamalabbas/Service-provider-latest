@@ -77,8 +77,8 @@ const usePushNotification = (): UsePushNotificationResult => {
               console.log("✅ Token already stored, skipping save.");
             }
           }
-        } catch (e) {
-          console.warn("Failed to get Expo push token:", e);
+        } catch {
+          console.warn("Failed to get Expo push token.");
           token = null;
         }
         setExpoPushToken(token);

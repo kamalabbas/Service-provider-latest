@@ -52,8 +52,6 @@ export function useAuth() {
   const loginMutation = useMutation<BaseResponse<LoginResponse>, unknown, LoginRequest>({
     mutationFn: login,
     onSuccess: async (response) => {
-      // console.log("Login successful:", response.data);
-
       try {
         if (response.data) {
           if (response.data.token?.accessToken && response.data.token?.refreshToken) {
@@ -79,9 +77,8 @@ export function useAuth() {
             }
           }
         }
-      } catch (error) {
-        console.log("Error in login onSuccess:", error);
-        console.log("second Login successful:", response.data);
+      } catch {
+        console.warn("Failed to complete sign-in.");
       }
     },
   });
@@ -90,7 +87,6 @@ export function useAuth() {
   const registerMutation = useMutation<BaseResponse<RegisterResponse>, unknown, RegisterRequest>({
     mutationFn: register,
     onSuccess: (response) => {
-      console.log("Registration successful:", response);
       if (response.data) {
         setUser(response.data.user);
         router.push("/(auth)/otp-register");
@@ -165,15 +161,14 @@ export function useAuth() {
   // Send Forget Password mutation
   const sendForgetPasswordMutation = useMutation<BaseResponse<SendForgotPasswordOtpResponse>, unknown, sendForgotPasswordOtpRequest>({
     mutationFn: sendForgotPasswordOtp,
-    onSuccess: (response, variables) => {
+    onSuccess: (_response, variables) => {
       try {
-        console.log("Forgot password email sent:", response);
         router.push({
           pathname: "/(auth)/otp-forgot-password",
           params: { email: variables.email },
         });
-      } catch (err) {
-        console.log("router push failed:", err);
+      } catch {
+        console.warn("Password-reset navigation failed.");
       }
     },
   });
@@ -182,7 +177,6 @@ export function useAuth() {
   const verifyResetPasswordOtpMutation = useMutation<BaseResponse<VerifyResetPasswordOtpResponse>, unknown, VerifyResetPasswordOtpRequest>({
     mutationFn: verifyResetPasswordOtp,
     onSuccess: (response) => {
-      console.log("Reset password verification successful:", response);
       router.push({
         pathname: "/(auth)/set-new-password",
         params: { forgotPasswordToken: response.data?.forgotPasswordToken },
@@ -193,9 +187,7 @@ export function useAuth() {
   // Reset Password mutation
   const setNewPasswordMutation = useMutation<BaseResponse<setNewPasswordResponse>, unknown, setNewPasswordRequest>({
     mutationFn: setNewPassword,
-    onSuccess: (response) => {
-      console.log("Reset password successful:", response);
-
+    onSuccess: () => {
       showToast("Password has been reset successfully. Please login.", "success");
       setTimeout(() => {
         router.replace("/(auth)");

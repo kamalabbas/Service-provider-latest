@@ -21,10 +21,6 @@ api.interceptors.request.use(
 
     const token = useAuthStore.getState().accessToken;
 
-    console.log("➡️ Request URL:", config.url);
-    // console.log("➡️ Headers:", config.headers);
-    console.log("➡️ Body:", config?.data?.data?.data);
-
     if (!config.headers || !(config.headers instanceof axios.AxiosHeaders)) {
       config.headers = new axios.AxiosHeaders(config.headers);
     }
@@ -47,10 +43,7 @@ api.interceptors.response.use(
     const err = error as AxiosError<any>;
     const originalRequest = err.config as (AxiosRequestConfig & { _retry?: boolean }) | undefined;
 
-    console.log("⛔ RESPONSE ERROR:", err?.response);
-    console.log("  URL:", originalRequest?.url);
-    console.log("  STATUS:", err.response?.status);
-    console.log("  DATA:", err.response?.data);
+    console.log("API request failed. HTTP status:", err.response?.status);
 
     const detail = err.response?.data?.detail;
 
