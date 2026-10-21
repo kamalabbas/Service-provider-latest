@@ -50,7 +50,7 @@ function harness({ saved = 'A-refresh', signedIn = true, policy = policyRecord('
   const storage = [], refreshes = [], requests = [], toasts = [], navigation = [], registrations = [], logs = [];
   const policyStorage = [], storageEvents = [];
   const holds = { get: [], set: [], delete: [], policyGet: [], policySet: [] };
-  const mutationHolds = [];
+  const mutationHolds = [], forms = [];
   const holdNext = kind => {
     const started = deferred(), finished = deferred();
     holds[kind].push({ started, finished });
@@ -127,22 +127,44 @@ function harness({ saved = 'A-refresh', signedIn = true, policy = policyRecord('
     },
     '@tanstack/react-query': { QueryClient, useQuery: options => options, useMutation: options => {
       const observer = new MutationObserver(queryClient, options);
-      return { ...options, mutateAsync: variables => observer.mutate(variables) };
+      return { ...options, mutateAsync: variables => observer.mutate(variables),
+        mutate: variables => { void observer.mutate(variables).catch(() => {}); },
+      };
     } },
-    'expo-router': { useRouter: () => router },
+    'expo-router': { useRouter: () => router, useLocalSearchParams: () => ({ email: 'A@example.test', forgotPasswordToken: 'synthetic-reset-token' }), Link: 'Link' },
+    react: require('react'),
+    'react/jsx-runtime': require('react/jsx-runtime'),
+    'react-native': { StyleSheet: { create: styles => styles }, View: 'View' },
+    'react-native-keyboard-aware-scroll-view': { KeyboardAwareScrollView: 'KeyboardAwareScrollView' },
+    '@/hooks/useThemeColor': { useThemeColor: () => '#fff' },
+    '@/hooks/usePushNotification': { __esModule: true, default: () => {} },
+    '@hookform/resolvers/yup': require('@hookform/resolvers/yup'),
+    yup: require('yup'),
+    'react-hook-form': {
+      Controller: 'Controller',
+      useForm: options => {
+        const form = { values: options.defaultValues, errors: {} };
+        forms.push(form);
+        return { control: {}, formState: { errors: form.errors }, handleSubmit: submit => async () => {
+          const result = await options.resolver(form.values, {}, { criteriaMode: 'all', fields: {} });
+          Object.assign(form.errors, result.errors);
+          if (Object.keys(result.errors).length === 0) await submit(result.values);
+        } };
+      },
+    },
   };
   function load(file) {
     if (modules.has(file)) return modules.get(file).exports;
     if (!compiled.has(file)) {
       compiled.set(file, ts.transpileModule(fs.readFileSync(path.join(root, file), 'utf8'), {
         fileName: file,
-        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
+        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
       }).outputText);
     }
     const module = { exports: {} };
     modules.set(file, module);
     vm.runInNewContext(compiled.get(file), {
-      module, exports: module.exports, setTimeout, clearTimeout, URLSearchParams,
+      module, exports: module.exports, setTimeout, clearTimeout, URL, URLSearchParams,
       process: { env: { EXPO_PUBLIC_BASE_URL: 'https://api.example.test' } },
       console: Object.fromEntries(['log', 'warn', 'error'].map(name => [name, (...args) => logs.push(args)])),
       require: id => {
@@ -152,7 +174,10 @@ function harness({ saved = 'A-refresh', signedIn = true, policy = policyRecord('
           return pending.promise;
         } };
         if (id === '@/stores/toastStore') return { useToastStore: Object.assign(
-          select => select({ showToast: (...args) => toasts.push(args) }),
+          select => {
+            const state = { showToast: (...args) => toasts.push(args) };
+            return select ? select(state) : state;
+          },
           { getState: () => ({ showToast: (...args) => toasts.push(args) }) },
         ) };
         if (file.startsWith('hooks/') && id === '@/stores/authStore') {
@@ -160,6 +185,13 @@ function harness({ saved = 'A-refresh', signedIn = true, policy = policyRecord('
         }
         if (file === 'hooks/useAuth.ts' && id === './useNotification') {
           return { useNotification: () => ({ registerNotification: { mutate: payload => registrations.push(payload) } }) };
+        }
+        if (file.startsWith('app/') && id === '@/stores/authStore') {
+          return { useAuthStore: select => select(load('stores/authStore.ts').useAuthStore.getState()) };
+        }
+        if (id.startsWith('@/components/')) {
+          const name = path.posix.basename(id);
+          return { [name]: name };
         }
         if (Object.hasOwn(external, id)) return external[id];
         const relative = id.startsWith('@/') ? id.slice(2) : path.posix.join(path.posix.dirname(file), id);
@@ -187,7 +219,12 @@ function harness({ saved = 'A-refresh', signedIn = true, policy = policyRecord('
     return adapter(config);
   };
   return {
-    store, session, api, queryClient, refreshes, storage, requests, toasts, navigation, registrations, logs, holdNext,
+    store, session, api, queryClient, refreshes, storage, requests, toasts, navigation, registrations, logs, holdNext, forms,
+    apiHelpers: () => load('services/api.ts'),
+    errorInfo: (...args) => load('services/apiError.ts').toAppError(...args),
+    authServices: () => load('services/authService.ts'),
+    notification: () => load('hooks/useNotification.ts').useNotification(),
+    screen: name => load(`app/(auth)/${name}.tsx`).default(),
     holdNextMutation: () => {
       const started = deferred(), finished = deferred();
       mutationHolds.push({ started, finished });
@@ -1211,16 +1248,18 @@ for (const mutationName of ['loginMutation', 'verifyEmailMutation', 'verifyNewEm
     const write = h.holdNext('set');
     const pending = observe(mutation.mutateAsync({ email: 'B@example.test', password: 'synthetic', otp: '123456' }));
     await write.started;
-    write.fail(new Error('Synthetic private native error'));
-    assert.equal((await pending).status, 'rejected');
+    const failure = new Error('Synthetic private native error');
+    write.fail(failure);
+    assert.equal((await pending).reason, failure);
     assert.equal(h.store.getState().user, null);
     assert.equal(h.store.getState().accessToken, null);
     assert.equal(h.disk, null);
     assert.equal(h.session.isRefreshBlocked(), true);
     assert.equal(h.registrations.length, 0);
-    assert.equal(h.toasts.length, 0);
+    assert.equal(h.toasts.length, 1);
+    assert.equal(h.toasts[0][1], 'error', 'Persistence failure must show one safe error, never a success toast');
     assert.equal(h.navigation.length, 0);
-    assert.equal(JSON.stringify(h.logs).includes('Synthetic private native error'), false);
+    assert.equal(JSON.stringify({ logs: h.logs, toasts: h.toasts }).includes('Synthetic private native error'), false);
   });
 }
 
@@ -1913,3 +1952,316 @@ test('captured logout authorization cannot be reused for another endpoint', asyn
   assert.equal(serverLogout.headers.get('Authorization'), 'Bearer A-access');
   assert.equal(h.store.getState().accessToken, null);
 });
+
+// Task 8: real Axios, HTTP helpers, React Query mutation callbacks, and retained
+// auth screen handlers. UI primitives/native services remain mocked.
+const httpFailure = (config, status, data = {}) => new axios.AxiosError(
+  'Private backend diagnostics', 'ERR_BAD_RESPONSE', config, {},
+  { status, statusText: 'Error', headers: {}, config, data },
+);
+const findElement = (tree, type) => {
+  if (!tree || typeof tree !== 'object') return null;
+  if (tree.type === type) return tree;
+  for (const child of [tree.props?.children].flat()) {
+    const found = findElement(child, type);
+    if (found) return found;
+  }
+  return null;
+};
+
+for (const signedIn of [false, true]) {
+  for (const endpoint of ['SignIn', 'SignUp', 'VerifyEmailOtp', 'SendEmailOtp', 'SendForgotPasswordOtp', 'VerifyForgotPasswordOtp', 'ResetPassword']) {
+    test(`public ${endpoint} 401 never refreshes or replays (signedIn=${signedIn})`, async () => {
+      const h = harness({ signedIn });
+      const generation = h.session.getSessionGeneration();
+      let failure;
+      h.setAdapter(async config => { throw (failure = httpFailure(config, 401)); });
+      const result = await observe(h.api.post(`/Auth/${endpoint}`, { private: 'synthetic' }));
+      assert.equal(result.reason, failure);
+      assert.equal(h.refreshes.length, 0);
+      assert.equal(h.requests.length, 1);
+      assert.equal(h.requests[0]._retry, undefined);
+      assert.equal(h.session.getSessionGeneration(), generation);
+      assert.equal(h.store.getState().accessToken, signedIn ? 'A-access' : null);
+      assert.equal(h.disk, 'A-refresh');
+      assert.equal(h.toasts.length, 1);
+      assert.equal(h.toasts[0][1], 'error');
+    });
+  }
+}
+
+for (const [status, expected] of [
+  [400, 'Unable to sign in. Check your details and try again.'],
+  [401, 'Unable to sign in. Check your details and try again.'],
+  [403, "You don't have permission to complete this request."],
+  [429, 'Too many requests. Please wait and try again.'],
+  [500, 'The service is temporarily unavailable. Please try again later.'],
+]) {
+  test(`login HTTP ${status} shows one controlled message and preserves the original error`, async () => {
+    const h = harness({ signedIn: false });
+    let failure;
+    h.setAdapter(async config => { throw (failure = httpFailure(config, status, {
+      detail: '<html>internal trace and private payload</html>', title: 'Private error', message: 'Not approved for display',
+      errors: { password: ['Synthetic secret echoed by validation'] },
+    })); });
+    const result = await observe(h.auth().loginMutation.mutateAsync({ email: 'a@example.test', password: 'synthetic-private' }));
+    assert.equal(result.reason, failure);
+    assert.deepEqual(h.toasts, [[expected, 'error']]);
+    assert.equal(h.refreshes.length, 0);
+    assert.equal(h.navigation.length, 0);
+    assert.equal(h.store.getState().accessToken, null);
+    assert.equal(h.logs.length, 0);
+    const info = h.errorInfo(failure, 'signIn');
+    assert.equal(info.kind, 'http');
+    assert.equal(info.status, status);
+    assert.equal(info.message, expected);
+    assert.deepEqual(Object.keys(info).sort(), ['kind', 'message', 'status']);
+  });
+}
+
+for (const [name, code, kind, expected] of [
+  ['offline', 'ERR_NETWORK', 'network', 'Unable to connect. Check your connection and try again.'],
+  ['timeout', 'ECONNABORTED', 'timeout', 'The request timed out. Please try again.'],
+  ['explicit timeout', 'ETIMEDOUT', 'timeout', 'The request timed out. Please try again.'],
+]) {
+  test(`${name} is distinguished without refreshing, retrying, or leaking the native message`, async () => {
+    const h = harness({ signedIn: false });
+    let failure;
+    h.setAdapter(async config => { throw (failure = new axios.AxiosError('Private native details', code, config, {})); });
+    const result = await observe(h.auth().registerMutation.mutateAsync({ email: 'a@example.test', password: 'synthetic-private' }));
+    assert.equal(result.reason, failure);
+    assert.deepEqual(h.toasts, [[expected, 'error']]);
+    assert.equal(h.errorInfo(failure).kind, kind);
+    assert.equal(h.requests.length, 1);
+    assert.equal(h.refreshes.length, 0);
+    assert.equal(h.navigation.length, 0);
+    assert.equal(h.logs.length, 0);
+  });
+}
+
+for (const [mutationName, expected] of [
+  ['registerMutation', 'Unable to register. Check your details and try again.'],
+  ['verifyEmailMutation', 'Unable to verify the code. Check it and try again.'],
+  ['verifyNewEmailMutation', 'Unable to verify the code. Check it and try again.'],
+  ['sendForgetPasswordMutation', 'Unable to request a code. Check your details and try again.'],
+  ['verifyResetPasswordOtpMutation', 'Unable to verify the code. Check it and try again.'],
+  ['setNewPasswordMutation', 'Unable to reset your password. Please try again.'],
+  ['changeEmailMutation', 'Unable to change your email. Check your details and try again.'],
+  ['changePasswordMutation', 'Unable to change your password. Check your details and try again.'],
+]) {
+  test(`${mutationName} HTTP 400 has one safe error notification and no success side effects`, async () => {
+    const h = harness();
+    const generation = h.session.getSessionGeneration();
+    h.setAdapter(async config => { throw httpFailure(config, 400, { detail: { password: 'unsafe object' } }); });
+    const result = await observe(h.auth()[mutationName].mutateAsync({ email: 'a@example.test', otp: '123456', forgotPasswordToken: 'synthetic-reset' }));
+    assert.equal(result.status, 'rejected');
+    assert.deepEqual(h.toasts, [[expected, 'error']]);
+    assert.equal(h.navigation.length, 0);
+    assert.equal(h.registrations.length, 0);
+    assert.equal(h.refreshes.length, 0);
+    assert.equal(h.session.getSessionGeneration(), generation);
+    assert.equal(h.store.getState().accessToken, 'A-access');
+  });
+}
+
+for (const endpoint of ['/Auth/Refresh', '/Auth/Logout', '/Auth/CheckAppVersion']) {
+  for (const status of [401, 500]) {
+    test(`${endpoint} HTTP ${status} remains silent and never starts refresh`, async () => {
+      const h = harness();
+      let failure;
+      h.setAdapter(async config => { throw (failure = httpFailure(config, status, { detail: 'Internal details' })); });
+      const result = await observe(h.api.post(endpoint));
+      h.apiHelpers().notifyApiError(result.reason);
+      assert.equal(result.reason, failure);
+      assert.equal(h.refreshes.length, 0);
+      assert.equal(h.requests.length, 1);
+      assert.equal(h.toasts.length, 0);
+      assert.equal(h.logs.length, 0);
+    });
+  }
+}
+
+test('background push registration remains protected but stays silent after a failed replay', async () => {
+  const h = harness();
+  h.setAdapter(async config => { throw httpFailure(config, config._retry ? 500 : 401); });
+  const pending = observe(h.notification().registerNotification.mutateAsync({ expoPushToken: 'synthetic-push', userId: 'A' }));
+  await until(() => h.refreshes.length === 1);
+  h.refreshes[0].resolve(responseFor(account('A', '-renewed')));
+  assert.equal((await pending).status, 'rejected');
+  assert.equal(h.refreshes.length, 1);
+  assert.equal(h.requests.length, 2);
+  assert.equal(h.requests[1].headers.get('Authorization'), 'Bearer A-access-renewed');
+  assert.equal(h.toasts.length, 0);
+  assert.equal(h.store.getState().accessToken, 'A-access-renewed');
+});
+
+test('credential settings still share refresh and failed replays notify once without looping', async () => {
+  const h = harness();
+  const generation = h.session.getSessionGeneration();
+  h.setAdapter(async config => { throw httpFailure(config, 401); });
+  const pending = observe(h.auth().changePasswordMutation.mutateAsync({ currentPassword: 'synthetic-old', newPassword: 'synthetic-new' }));
+  await until(() => h.refreshes.length === 1);
+  h.refreshes[0].resolve(responseFor(account('A', '-renewed')));
+  assert.equal((await pending).status, 'rejected');
+  assert.equal(h.refreshes.length, 1);
+  assert.equal(h.requests.length, 2);
+  assert.equal(h.session.getSessionGeneration(), generation);
+  assert.deepEqual(h.toasts, [['Unable to change your password. Check your details and try again.', 'error']]);
+});
+
+for (const mode of ['cancelled error', 'cancelled code', 'aborted signal']) {
+  test(`${mode} remains silent through the interceptor and auth hook`, async () => {
+    const h = harness();
+    h.setAdapter(async config => {
+      const failure = mode === 'cancelled error' ? new axios.CanceledError('Private cancellation', config) : new axios.AxiosError('Private cancellation', 'ERR_CANCELED', config);
+      // Even an attached response must not turn cancellation into refresh.
+      failure.response = { status: 401, data: {}, config };
+      throw failure;
+    });
+    let result;
+    if (mode === 'aborted signal') {
+      const controller = new AbortController(); controller.abort();
+      result = await observe(h.api.get('/private', { signal: controller.signal }));
+      h.apiHelpers().notifyApiError(result.reason);
+    } else result = await observe(h.auth().loginMutation.mutateAsync({ email: 'a@example.test', password: 'synthetic' }));
+    assert.equal(result.status, 'rejected');
+    assert.equal(h.errorInfo(result.reason).kind, 'cancelled');
+    assert.equal(h.refreshes.length, 0);
+    assert.equal(h.toasts.length, 0);
+    assert.equal(h.logs.length, 0);
+  });
+}
+
+test('an error from a stale login request cannot notify or modify the newer session', async () => {
+  const h = harness(), reply = deferred();
+  h.setAdapter(() => reply.promise);
+  const pending = observe(h.auth().loginMutation.mutateAsync({ email: 'old@example.test', password: 'synthetic' }));
+  await until(() => h.requests.length === 1);
+  await h.session.setAuthenticatedSession(account('B'));
+  h.queryClient.setQueryData(['private'], 'B-private');
+  reply.reject(httpFailure(h.requests[0], 401));
+  assert.equal((await pending).status, 'rejected');
+  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.queryClient.getQueryData(['private']), 'B-private');
+  assert.equal(h.toasts.length, 0);
+  assert.equal(h.refreshes.length, 0);
+});
+
+test('the same error notifies once while independent attempts may notify again', async () => {
+  const h = harness();
+  h.setAdapter(async config => { throw httpFailure(config, 400); });
+  const first = await observe(h.api.get('/private'));
+  h.apiHelpers().notifyApiError(first.reason);
+  h.apiHelpers().notifyApiError(first.reason);
+  assert.equal(h.toasts.length, 1);
+  await observe(h.api.get('/private'));
+  assert.equal(h.toasts.length, 2);
+});
+
+for (const method of ['getData', 'postData', 'putData', 'deleteData']) {
+  test(`${method} returns HTTP 2xx success:false bodies unchanged and preserves rejection identity`, async () => {
+    const h = harness();
+    const body = { success: false, message: 'Unconfirmed backend semantics', data: null };
+    h.setAdapter(async config => h.ok(config, body));
+    const helper = h.apiHelpers()[method];
+    assert.equal(await helper('/private', {}), body);
+    assert.equal(h.toasts.length, 0);
+    let failure;
+    h.setAdapter(async config => { throw (failure = httpFailure(config, 500)); });
+    assert.equal((await observe(helper('/private', {}))).reason, failure);
+    assert.equal(h.toasts.length, 1);
+  });
+}
+
+test('public request policies match canonical, query-string, trailing-slash, and absolute URLs', async () => {
+  const h = harness();
+  h.setAdapter(async config => { throw httpFailure(config, 401); });
+  for (const url of ['Auth/SignIn/', '/Auth/SignIn?request=synthetic', 'https://api.example.test/Auth/SignIn', '/auth/signin']) {
+    assert.equal((await observe(h.api.post(url))).status, 'rejected');
+  }
+  assert.equal(h.refreshes.length, 0);
+  assert.equal(h.requests.length, 4);
+  assert.equal(h.toasts.length, 4);
+});
+
+for (const name of ['otp-register', 'otp-forgot-password']) {
+  test(`${name} actual resend catch cannot duplicate an interceptor error toast`, async () => {
+    const h = harness();
+    h.setAdapter(async config => { throw httpFailure(config, 400, { detail: 'Private resend diagnostics' }); });
+    const otp = findElement(h.screen(name), 'OTPComponent');
+    await otp.props.reSendOtp();
+    assert.equal(h.requests.length, 1);
+    assert.equal(h.refreshes.length, 0);
+    assert.deepEqual(h.toasts, [['Unable to request a code. Check your details and try again.', 'error']]);
+  });
+
+  test(`${name} resend success uses controlled text without interpreting success:false`, async () => {
+    const h = harness();
+    h.setAdapter(async config => h.ok(config, { success: false, message: 'Private backend message', data: null }));
+    const otp = findElement(h.screen(name), 'OTPComponent');
+    await otp.props.reSendOtp();
+    assert.deepEqual(h.toasts, [['A new code has been requested. Please check your email.', 'success']]);
+  });
+}
+
+for (const name of ['index', 'register', 'forgot-password', 'set-new-password']) {
+  test(`${name} existing field validation rejects invalid input before any API request`, async () => {
+    const h = harness();
+    const tree = h.screen(name);
+    const form = h.forms[0];
+    form.values = name === 'set-new-password' ? { password: 'short', confirmPassword: 'mismatch' } : { email: 'invalid', password: 'short', confirmPassword: 'mismatch' };
+    await findElement(tree, 'PrimaryButton').props.onPress();
+    assert.ok(Object.keys(form.errors).length > 0);
+    const firstField = findElement(tree, 'Controller');
+    const input = firstField.props.render({ field: { value: '', onChange() {}, onBlur() {} } });
+    assert.equal(typeof input.props.error, 'string', 'Validation stays bound to the existing inline input error');
+    assert.equal(h.requests.length, 0);
+    assert.equal(h.refreshes.length, 0);
+    assert.equal(h.toasts.length, 0);
+  });
+}
+
+test('safe error projections, notifications, and logs never copy sensitive request/response fields', async () => {
+  const h = harness();
+  const secret = 'synthetic-sensitive-value';
+  let failure;
+  h.setAdapter(async config => { throw (failure = httpFailure(config, 400, {
+    detail: secret, title: secret, message: secret, errors: { password: [secret], otp: [secret] },
+    accessToken: secret, refreshToken: secret, forgotPasswordToken: secret,
+  })); });
+  await observe(h.auth().loginMutation.mutateAsync({ email: secret, password: secret }));
+  const safe = { error: h.errorInfo(failure), toasts: h.toasts, logs: h.logs };
+  assert.equal(JSON.stringify(safe).includes(secret), false);
+  assert.equal(Object.hasOwn(safe.error, 'config'), false);
+  assert.equal(Object.hasOwn(safe.error, 'response'), false);
+  assert.equal(Object.hasOwn(safe.error, 'request'), false);
+  assert.equal(h.toasts.length, 1);
+  const unknown = h.errorInfo(new Error(secret));
+  assert.equal(unknown.kind, 'unknown');
+  assert.equal(unknown.message.includes(secret), false);
+});
+
+for (const mutationName of ['loginMutation', 'verifyEmailMutation', 'verifyNewEmailMutation']) {
+  test(`${mutationName} stale persistence failure cannot notify or affect a newer login`, async () => {
+    const h = harness();
+    h.setAdapter(async config => h.ok(config, responseFor(account('B')).data));
+    const write = h.holdNext('set');
+    const pending = observe(h.auth()[mutationName].mutateAsync({ email: 'b@example.test', password: 'synthetic', otp: '123456' }));
+    await write.started;
+    const newer = h.session.setAuthenticatedSession(account('C'));
+    write.fail(new Error('Old private persistence failure'));
+    await pending;
+    await newer;
+    h.queryClient.setQueryData(['private'], 'C-private');
+    const oldGeneration = h.session.getSessionGeneration() - 1;
+    const lateFailure = new Error('Delayed callback failure');
+    h.apiHelpers().notifyApiError(lateFailure, { generation: oldGeneration, action: 'signIn' });
+    h.apiHelpers().notifyApiError(lateFailure, { action: 'signIn' });
+    assert.equal(h.store.getState().accessToken, 'C-access');
+    assert.equal(h.disk, 'C-refresh');
+    assert.equal(h.policy, policyRecord('allowed'));
+    assert.equal(h.queryClient.getQueryData(['private']), 'C-private');
+    assert.equal(h.registrations.length, 0);
+    assert.equal(h.toasts.length, 0);
+  });
+}

@@ -3,6 +3,7 @@ import { OTPComponent } from "@/components/ui/OTPComponent";
 import { useAuth } from "@/hooks/useAuth";
 import { VerifyResetPasswordOtpRequest } from "@/interfaces/auth.interface";
 import { sendForgotPasswordOtp } from "@/services/authService";
+import { notifyApiError } from "@/services/api";
 import { useToastStore } from "@/stores/toastStore";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StyleSheet } from "react-native";
@@ -58,9 +59,9 @@ export default function OtpForgotPasswordScreen() {
           }
           try {
             const res = await sendForgotPasswordOtp({ email });
-            res.message && showToast(res.message, "success");
-          } catch {
-            showToast("Something went wrong.", "error");
+            res.message && showToast("A new code has been requested. Please check your email.", "success");
+          } catch (error) {
+            notifyApiError(error, { action: "sendCode" });
           }
         }}
       />

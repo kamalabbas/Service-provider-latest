@@ -31,11 +31,26 @@ import {
   verifyResetPasswordOtp,
 } from "@/services/authService";
 import { beginSessionLogout, clearSession, finishSessionLogout, getSessionGeneration, setAuthenticatedSession } from "@/services/authSession";
+import { notifyApiError } from "@/services/api";
+import { ApiErrorAction } from "@/services/apiError";
 import { useAuthStore } from "@/stores/authStore";
 import { useToastStore } from "@/stores/toastStore";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { useNotification } from "./useNotification";
+
+async function persistSession(params: Parameters<typeof setAuthenticatedSession>[0], action: ApiErrorAction) {
+  const operation = setAuthenticatedSession(params);
+  const generation = getSessionGeneration();
+  try {
+    return await operation;
+  } catch (error) {
+    // Persistence failures have no Axios config. Bind their presentation to the
+    // generation that attempted the write, and keep the original rejection.
+    notifyApiError(error, { action, generation });
+    throw error;
+  }
+}
 
 export function useAuth() {
   const showToast = useToastStore((s) => s.showToast);
@@ -51,15 +66,16 @@ export function useAuth() {
   // Login mutation
   const loginMutation = useMutation<BaseResponse<LoginResponse>, unknown, LoginRequest>({
     mutationFn: login,
+    onError: (error) => notifyApiError(error, { action: "signIn" }),
     onSuccess: async (response) => {
       try {
         if (response.data) {
           if (response.data.token?.accessToken && response.data.token?.refreshToken) {
-            const generation = await setAuthenticatedSession({
+            const generation = await persistSession({
               user: response.data.user,
               accessToken: response.data.token.accessToken,
               refreshToken: response.data.token.refreshToken,
-            });
+            }, "signIn");
             if (generation !== getSessionGeneration()) return;
 
             if (pushNotificationToken) {
@@ -87,6 +103,7 @@ export function useAuth() {
   // Register mutation
   const registerMutation = useMutation<BaseResponse<RegisterResponse>, unknown, RegisterRequest>({
     mutationFn: register,
+    onError: (error) => notifyApiError(error, { action: "register" }),
     onSuccess: (response) => {
       if (response.data) {
         setUser(response.data.user);
@@ -98,6 +115,7 @@ export function useAuth() {
   // Change Email mutation
   const changeEmailMutation = useMutation<BaseResponse<VerifyEmailOtpResponse>, unknown, ChangeEmailRequest>({
     mutationFn: changeEmail,
+    onError: (error) => notifyApiError(error, { action: "changeEmail" }),
     onSuccess: () => {
       showToast("PIN sent to new email", "success");
     },
@@ -106,14 +124,15 @@ export function useAuth() {
   // Verify new email mutation
   const verifyNewEmailMutation = useMutation<BaseResponse<VerifyEmailOtpResponse>, unknown, VerifyNewEmailRequest>({
     mutationFn: verifyNewEmail,
+    onError: (error) => notifyApiError(error, { action: "verifyCode" }),
     onSuccess: async (response) => {
       if (response.data) {
         if (response.data.token?.accessToken && response.data.token?.refreshToken) {
-          const generation = await setAuthenticatedSession({
+          const generation = await persistSession({
             user: response.data.user,
             accessToken: response.data.token.accessToken,
             refreshToken: response.data.token.refreshToken,
-          });
+          }, "verifyCode");
           if (generation !== getSessionGeneration()) return;
         } else {
           setUser(response.data.user);
@@ -133,14 +152,15 @@ export function useAuth() {
   // Verify new email mutation
   const verifyEmailMutation = useMutation<BaseResponse<VerifyEmailOtpResponse>, unknown, VerifyEmailOtpRequest>({
     mutationFn: verifyEmail,
+    onError: (error) => notifyApiError(error, { action: "verifyCode" }),
     onSuccess: async (response) => {
       if (response.data) {
         if (response.data.token?.accessToken && response.data.token?.refreshToken) {
-          const generation = await setAuthenticatedSession({
+          const generation = await persistSession({
             user: response.data.user,
             accessToken: response.data.token.accessToken,
             refreshToken: response.data.token.refreshToken,
-          });
+          }, "verifyCode");
           if (generation !== getSessionGeneration()) return;
         } else {
           setUser(response.data.user);
@@ -160,6 +180,7 @@ export function useAuth() {
   // Send Forget Password mutation
   const sendForgetPasswordMutation = useMutation<BaseResponse<SendForgotPasswordOtpResponse>, unknown, sendForgotPasswordOtpRequest>({
     mutationFn: sendForgotPasswordOtp,
+    onError: (error) => notifyApiError(error, { action: "sendCode" }),
     onSuccess: (_response, variables) => {
       try {
         router.push({
@@ -175,6 +196,7 @@ export function useAuth() {
   // Verify Reset Password mutation
   const verifyResetPasswordOtpMutation = useMutation<BaseResponse<VerifyResetPasswordOtpResponse>, unknown, VerifyResetPasswordOtpRequest>({
     mutationFn: verifyResetPasswordOtp,
+    onError: (error) => notifyApiError(error, { action: "verifyCode" }),
     onSuccess: (response) => {
       router.push({
         pathname: "/(auth)/set-new-password",
@@ -186,6 +208,7 @@ export function useAuth() {
   // Reset Password mutation
   const setNewPasswordMutation = useMutation<BaseResponse<setNewPasswordResponse>, unknown, setNewPasswordRequest>({
     mutationFn: setNewPassword,
+    onError: (error) => notifyApiError(error, { action: "resetPassword" }),
     onSuccess: () => {
       showToast("Password has been reset successfully. Please login.", "success");
       setTimeout(() => {
@@ -197,6 +220,7 @@ export function useAuth() {
   // Change Password mutation
   const changePasswordMutation = useMutation<BaseResponse<ChangePasswordResponse>, unknown, ChangePasswordRequest>({
     mutationFn: changePassword,
+    onError: (error) => notifyApiError(error, { action: "changePassword" }),
     onSuccess: () => {
       showToast("Password changed successfully", "success");
     },

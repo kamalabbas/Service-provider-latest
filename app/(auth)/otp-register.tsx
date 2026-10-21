@@ -4,6 +4,7 @@ import { OTPComponent } from "@/components/ui/OTPComponent";
 import { useAuth } from "@/hooks/useAuth";
 import { VerifyEmailOtpRequest } from "@/interfaces/auth.interface";
 import { sendEmailOtp } from "@/services/authService";
+import { notifyApiError } from "@/services/api";
 import { useAuthStore } from "@/stores/authStore";
 import { useToastStore } from "@/stores/toastStore";
 import { useRouter } from "expo-router";
@@ -59,9 +60,9 @@ export default function OtpRegisterScreen() {
           }
           try {
             const res = await sendEmailOtp({ email });
-            res.message && showToast(res.message, "success");
-          } catch {
-            showToast("Something went wrong.", "error");
+            res.message && showToast("A new code has been requested. Please check your email.", "success");
+          } catch (error) {
+            notifyApiError(error, { action: "sendCode" });
           }
         }}
       />

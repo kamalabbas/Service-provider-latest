@@ -1,17 +1,63 @@
 import { useAuthStore } from "@/stores/authStore";
 import { getSessionGeneration, isRefreshBlocked, refreshAccessToken } from "@/services/authSession";
 import { useToastStore } from "@/stores/toastStore";
-import axios, { AxiosError, AxiosRequestConfig, AxiosResponse, CanceledError, InternalAxiosRequestConfig } from "axios";
+import { ApiErrorAction, toAppError } from "@/services/apiError";
+import axios, { AxiosHeaders, AxiosRequestConfig, AxiosResponse, CanceledError, InternalAxiosRequestConfig, isAxiosError, isCancel } from "axios";
 
-type SessionRequestConfig = AxiosRequestConfig & { _retry?: boolean; _sessionGeneration?: number };
+type SessionRequestConfig = InternalAxiosRequestConfig & { _retry?: boolean; _sessionGeneration?: number };
+
+type RequestPolicy = { action?: ApiErrorAction; refresh: boolean; silent?: boolean };
+const protectedRequest: RequestPolicy = { refresh: true };
+// Only the retained endpoints with established request purposes are listed.
+// Other configured API calls keep their existing protected-request behavior.
+const requestPolicies: Record<string, RequestPolicy> = {
+  "/auth/signin": { action: "signIn", refresh: false },
+  "/auth/signup": { action: "register", refresh: false },
+  "/auth/verifyemailotp": { action: "verifyCode", refresh: false },
+  "/auth/sendemailotp": { action: "sendCode", refresh: false },
+  "/auth/sendforgotpasswordotp": { action: "sendCode", refresh: false },
+  "/auth/verifyforgotpasswordotp": { action: "verifyCode", refresh: false },
+  "/auth/resetpassword": { action: "resetPassword", refresh: false },
+  "/auth/refresh": { refresh: false, silent: true },
+  "/auth/logout": { refresh: false, silent: true },
+  "/auth/checkappversion": { refresh: false, silent: true },
+  "/auth/credentials/changeemail": { action: "changeEmail", refresh: true },
+  "/auth/credentials/verifynewemail": { action: "verifyCode", refresh: true },
+  "/auth/credentials/changepassword": { action: "changePassword", refresh: true },
+  "/pushnotification/register": { refresh: true, silent: true },
+};
+
+const getRequestPolicy = (config?: AxiosRequestConfig): RequestPolicy => {
+  let path = config?.url ?? "";
+  if (/^https?:\/\//i.test(path)) {
+    try { path = new URL(path).pathname; } catch { return protectedRequest; }
+  }
+  path = path.split(/[?#]/)[0].replace(/\/+$/, "").toLowerCase();
+  return requestPolicies[path.startsWith("/") ? path : `/${path}`] ?? protectedRequest;
+};
+
+const handledErrors = new WeakSet<object>();
+export function notifyApiError(error: unknown, context: { action?: ApiErrorAction; generation?: number; silent?: boolean } = {}) {
+  // Both the interceptor and a mutation/catch may see the same failure. Silent
+  // errors are also marked so a later callback cannot surface them again.
+  if (error !== null && (typeof error === "object" || typeof error === "function")) {
+    if (handledErrors.has(error)) return;
+    handledErrors.add(error);
+  }
+  const config = isAxiosError(error) ? error.config as SessionRequestConfig | undefined : undefined;
+  const generation = context.generation ?? config?._sessionGeneration;
+  const policy = getRequestPolicy(config);
+  const appError = toAppError(error, context.action ?? policy.action);
+  if (appError.kind === "cancelled" || context.silent || policy.silent ||
+      (generation !== undefined && generation !== getSessionGeneration())) return;
+  useToastStore.getState().showToast(appError.message, "error");
+}
 
 // Create a configured Axios instance
 const api = axios.create({
   baseURL: process.env.EXPO_PUBLIC_BASE_URL,
   timeout: 60000,
 });
-
-let refreshFailureToastShown = false;
 
 // --- Request Interceptor
 api.interceptors.request.use(
@@ -30,8 +76,8 @@ api.interceptors.request.use(
 
     const token = useAuthStore.getState().accessToken;
 
-    if (!config.headers || !(config.headers instanceof axios.AxiosHeaders)) {
-      config.headers = new axios.AxiosHeaders(config.headers);
+    if (!config.headers || !(config.headers instanceof AxiosHeaders)) {
+      config.headers = new AxiosHeaders(config.headers);
     }
 
     if (token) config.headers.set("Authorization", `Bearer ${token}`);
@@ -48,56 +94,50 @@ api.interceptors.request.use(
 
 // --- Response Interceptor
 api.interceptors.response.use(
-  (response) => {
-    refreshFailureToastShown = false;
-    return response;
-  },
-  async (error) => {
-    const err = error as AxiosError<any>;
-    const originalRequest = err.config as SessionRequestConfig | undefined;
+  (response) => response,
+  async (error: unknown) => {
+    const err = isAxiosError(error) ? error : undefined;
+    const originalRequest = err?.config as SessionRequestConfig | undefined;
     const generation = originalRequest?._sessionGeneration;
+    const policy = getRequestPolicy(originalRequest);
 
-    if (generation !== undefined && generation !== getSessionGeneration()) return Promise.reject(error);
+    if (isCancel(error) || err?.code === "ERR_CANCELED" || (generation !== undefined && generation !== getSessionGeneration())) {
+      notifyApiError(error, { silent: true });
+      return Promise.reject(error);
+    }
 
-    console.log("API request failed. HTTP status:", err.response?.status);
-
-    const detail = err.response?.data?.detail;
-
-    // new approach without lock, using a shared promise
-    if (err.response?.status === 401 && originalRequest && !originalRequest._retry && !originalRequest.url?.includes("/Auth/Refresh")) {
-      if (isRefreshBlocked()) return Promise.reject(error);
+    if (err?.response?.status === 401 && originalRequest && !originalRequest._retry && policy.refresh) {
+      if (isRefreshBlocked()) {
+        notifyApiError(error, { silent: true });
+        return Promise.reject(error);
+      }
 
       originalRequest._retry = true;
 
       try {
         const newToken = await refreshAccessToken();
-        if (generation !== getSessionGeneration()) return Promise.reject(error);
+        if (generation !== getSessionGeneration()) {
+          notifyApiError(error, { silent: true });
+          return Promise.reject(error);
+        }
 
         if (!newToken) throw new Error("Refresh failed");
 
-        originalRequest.headers = originalRequest.headers || {};
-        (originalRequest.headers as any)["Authorization"] = `Bearer ${newToken}`;
+        originalRequest.headers = new AxiosHeaders(originalRequest.headers);
+        originalRequest.headers.set("Authorization", `Bearer ${newToken}`);
 
         return api(originalRequest);
       } catch (refreshErr) {
-        if (generation !== getSessionGeneration()) return Promise.reject(error);
-
-        if (!refreshFailureToastShown) {
-          useToastStore.getState().showToast("Unable to refresh your session. Please try again.", "error");
-          refreshFailureToastShown = true;
+        if (generation !== getSessionGeneration()) {
+          notifyApiError(error, { silent: true });
+          return Promise.reject(error);
         }
+        notifyApiError(refreshErr, { action: policy.action, generation, silent: policy.silent });
         return Promise.reject(refreshErr);
       }
     }
 
-    if (detail && err.response?.status !== 401) {
-      useToastStore.getState().showToast(detail, "error");
-    }
-
-    if (err.response?.status !== 401) {
-      refreshFailureToastShown = false;
-    }
-
+    notifyApiError(error);
     return Promise.reject(error);
   },
 );
