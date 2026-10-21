@@ -42,6 +42,16 @@ Lookup/location serialization and query hooks remain reusable. Their endpoints m
 - Axios helpers/interceptors, refresh-token coordination, SecureStore, session restoration, the root QueryClient, Zustand stores, React Hook Form, Yup, theme components, toasts, loaders, and notification mechanisms are retained.
 - Camera/photo selection and generic form controls remain reusable primitives. They do not submit profile data or implement verification requirements.
 
+## Startup and splash screen
+
+The root shares one bootstrap promise per JavaScript runtime, including effect replay and root remounts. Later explicit session-restore/request triggers still work independently. Startup waits for session restoration to settle and for fonts to either load or fail. A rejected restoration releases the startup gate; the session service retains its existing recovery and persistent logout policies. An unexpected rejection settles only an unresolved authentication state still owned by the original generation, without touching persisted credentials or a newer session.
+
+Font-loading failure renders the existing application shell using system fonts (the retained SpaceMono asset is not required by current screens). The normal routing hook runs only after both startup gates settle. The splash is dismissed from the rendered root view's native layout callback, rather than immediately after scheduling a React state update. Rerenders/layout events share a pending dismissal, and unmounted effects cannot update startup state or initiate a fallback hide.
+
+Splash prevention/dismissal rejections produce static diagnostics without raw errors. Failed asynchronous dismissal makes one synchronous Expo hide attempt while mounted; if both fail, a later layout may retry. There is no polling or retry loop. Native splash presentation, actual font rendering, and process restart behavior still require Android/iOS device verification. JavaScript cannot force an unresponsive native splash module to hide or settle a native storage call that never completes; pending restoration is not assigned an artificial timeout.
+
+Run startup regressions with `node tests/startup.test.cjs` and session/cache/persistence regressions with `node tests/authSession.test.cjs`. Startup tests execute the real root/session modules with a deterministic hook runner and mocked native boundaries; they do not replace native rendering checks.
+
 ## Session cache isolation
 
 The provider and session lifecycle use one shared QueryClient from `services/queryClient.ts`. Logout and invalid-session cleanup synchronously clear its query and mutation caches. Changes to the authenticated account ID or the presence of an access token also clear them. Normal token refresh for the same account preserves cached data.
