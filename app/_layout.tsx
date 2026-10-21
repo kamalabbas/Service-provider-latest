@@ -14,10 +14,8 @@ import { useAuthStore } from '@/stores/authStore';
 
 import { useUserStateRedirect } from '@/hooks/useUserStateRedirect';
 import { restoreUser } from '@/utility/restoreUser';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-
-// Create a single QueryClient instance for the app so it's not recreated on every render.
-const queryClient = new QueryClient();
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '@/services/queryClient';
 
 SplashScreen.preventAutoHideAsync();
 

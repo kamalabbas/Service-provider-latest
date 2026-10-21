@@ -1,7 +1,9 @@
 import { useAuthStore } from "@/stores/authStore";
-import { isRefreshBlocked, refreshAccessToken } from "@/services/authSession";
+import { getSessionGeneration, isRefreshBlocked, refreshAccessToken } from "@/services/authSession";
 import { useToastStore } from "@/stores/toastStore";
-import axios, { AxiosError, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from "axios";
+import axios, { AxiosError, AxiosRequestConfig, AxiosResponse, CanceledError, InternalAxiosRequestConfig } from "axios";
+
+type SessionRequestConfig = AxiosRequestConfig & { _retry?: boolean; _sessionGeneration?: number };
 
 // Create a configured Axios instance
 const api = axios.create({
@@ -14,7 +16,14 @@ let sessionExpiredToastShown = false;
 // --- Request Interceptor
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
-    // const token = useAuthStore.getState().accessToken;
+    const sessionConfig = config as InternalAxiosRequestConfig & SessionRequestConfig;
+    const generation = getSessionGeneration();
+    if (sessionConfig._sessionGeneration === undefined) {
+      sessionConfig._sessionGeneration = generation;
+    } else if (sessionConfig._sessionGeneration !== generation) {
+      throw new CanceledError("Session changed before request dispatch.");
+    }
+
     if (config.url?.includes("/Auth/Refresh")) {
       return config;
     }
@@ -30,7 +39,9 @@ api.interceptors.request.use(
 
     return config;
   },
-  (error) => Promise.reject(error),
+  (error) => { throw error; },
+  // Keep the generation check and dispatch in the same turn, including retries.
+  { synchronous: true },
 );
 
 // --- Response Interceptor
@@ -41,7 +52,10 @@ api.interceptors.response.use(
   },
   async (error) => {
     const err = error as AxiosError<any>;
-    const originalRequest = err.config as (AxiosRequestConfig & { _retry?: boolean }) | undefined;
+    const originalRequest = err.config as SessionRequestConfig | undefined;
+    const generation = originalRequest?._sessionGeneration;
+
+    if (generation !== undefined && generation !== getSessionGeneration()) return Promise.reject(error);
 
     console.log("API request failed. HTTP status:", err.response?.status);
 
@@ -55,6 +69,7 @@ api.interceptors.response.use(
 
       try {
         const newToken = await refreshAccessToken();
+        if (generation !== getSessionGeneration()) return Promise.reject(error);
 
         if (!newToken) throw new Error("Refresh failed");
 
@@ -63,6 +78,8 @@ api.interceptors.response.use(
 
         return api(originalRequest);
       } catch (refreshErr) {
+        if (generation !== getSessionGeneration()) return Promise.reject(error);
+
         if (!sessionExpiredToastShown) {
           useToastStore.getState().showToast("Session expired. Please log in again.", "error");
           sessionExpiredToastShown = true;

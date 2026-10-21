@@ -9,14 +9,14 @@ export interface GetCitiesParams {
 }
 
 // Supply endpoint paths only after the Service Provider contract is approved.
-export const locationService = async (regionTypeList: string[], endpoint?: string) => {
+export const locationService = async (regionTypeList: string[], endpoint?: string, signal?: AbortSignal) => {
   if (!endpoint) throw new Error("The regions endpoint is not configured.");
   const params = new URLSearchParams();
   regionTypeList.forEach((regionType) => params.append("regionTypeList", regionType));
-  return getData<BaseResponse<RegionsData>>(endpoint, { params });
+  return getData<BaseResponse<RegionsData>>(endpoint, { params, signal });
 };
 
-export const GetCities = async (params: GetCitiesParams, endpoint?: string) => {
+export const GetCities = async (params: GetCitiesParams, endpoint?: string, signal?: AbortSignal) => {
   if (!endpoint) throw new Error("The cities endpoint is not configured.");
-  return getData<BaseResponse<CitiesResponse>>(endpoint, { params });
+  return getData<BaseResponse<CitiesResponse>>(endpoint, { params, signal });
 };

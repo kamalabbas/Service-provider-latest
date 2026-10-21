@@ -42,6 +42,16 @@ Lookup/location serialization and query hooks remain reusable. Their endpoints m
 - Axios helpers/interceptors, refresh-token coordination, SecureStore, session restoration, the root QueryClient, Zustand stores, React Hook Form, Yup, theme components, toasts, loaders, and notification mechanisms are retained.
 - Camera/photo selection and generic form controls remain reusable primitives. They do not submit profile data or implement verification requirements.
 
+## Session cache isolation
+
+The provider and session lifecycle use one shared QueryClient from `services/queryClient.ts`. Logout and invalid-session cleanup synchronously clear its query and mutation caches. Changes to the authenticated account ID or the presence of an access token also clear them. Normal token refresh for the same account preserves cached data.
+
+All queries, including public/shared data, are cleared at these boundaries. No endpoint currently has an approved public-cache exemption; lookup/location endpoints may depend on the authorization header. Their query keys include the account ID, and their query functions pass React Query's cancellation signal to Axios. Public data is fetched again when an enabled query mounts or refetches.
+
+QueryClient clearing cancels active queries and prevents their late results from repopulating the cache, including requests that ignore abort signals. Cleanup occurs synchronously inside the existing session-generation guards, so delayed cleanup from an older session cannot clear a newer account's cache. Clearing mutation records does not cancel or undo a server mutation already in progress; the retained mutation callbacks do not write query-cache data.
+
+Run the session and cache regression checks with `node tests/authSession.test.cjs`.
+
 ## Temporary native and cloud identity
 
 The display name is **Service Provider**, and the local package name and Expo slug are `service-provider`. The neutral icon has an editable SVG source alongside its PNG export.
@@ -54,6 +64,6 @@ EAS build profiles and the `APP_VARIANT` mechanism remain. The dev variant appen
 
 The BRDs must define provider profiles, roles/permissions, onboarding, approval states, support/content pages, media uploads, locations/lookups, and any other product functionality. Authentication compatibility, API hosts, native/cloud ownership, Firebase files, store links, and push routing also remain pending.
 
-Infrastructure/security enhancements are a later task. Existing token-refresh policy, logging, cache/session behavior, password rules, theme persistence, and numeric version encoding have not been redesigned.
+Further infrastructure/security enhancements remain separate tasks. Existing refresh-failure policy, password rules, theme persistence, and numeric version encoding remain unchanged.
 
 See [the cleanup report](docs/cleanup-report.md) for the file inventory and validation results.
