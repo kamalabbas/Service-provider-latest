@@ -35,7 +35,9 @@ api.interceptors.request.use(
     }
 
     if (token) config.headers.set("Authorization", `Bearer ${token}`);
-    else config.headers.delete?.("Authorization");
+    // Logout uses its captured header after memory has already been cleared.
+    // This exception cannot authorize other endpoints or bypass generation checks.
+    else if (!(config.url === "/Auth/Logout" && isRefreshBlocked())) config.headers.delete?.("Authorization");
 
     return config;
   },

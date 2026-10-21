@@ -1,5 +1,6 @@
 import { BaseResponse } from "@/interfaces/baseResponse.interface";
 import { postData } from "./api";
+import { AxiosRequestConfig } from "axios";
 
 import {
   ChangeEmailRequest,
@@ -69,7 +70,7 @@ export const changePassword = (body: ChangePasswordRequest) => {
   return postData<ChangePasswordRequest, BaseResponse<ChangePasswordResponse>>("/Auth/Credentials/ChangePassword", body);
 };
 
-export const logout = (body: LogoutRequest) => postData<LogoutRequest, any>("/Auth/Logout", body);
+export const logout = (body: LogoutRequest, config?: AxiosRequestConfig) => postData<LogoutRequest, any>("/Auth/Logout", body, config);
 
 export default {
   login,

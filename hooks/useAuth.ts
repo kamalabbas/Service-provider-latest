@@ -30,7 +30,7 @@ import {
   verifyNewEmail,
   verifyResetPasswordOtp,
 } from "@/services/authService";
-import { beginSessionLogout, clearSession, getSessionGeneration, setAuthenticatedSession } from "@/services/authSession";
+import { beginSessionLogout, clearSession, finishSessionLogout, getSessionGeneration, setAuthenticatedSession } from "@/services/authSession";
 import { useAuthStore } from "@/stores/authStore";
 import { useToastStore } from "@/stores/toastStore";
 import { useMutation } from "@tanstack/react-query";
@@ -77,8 +77,9 @@ export function useAuth() {
             }
           }
         }
-      } catch {
+      } catch (error) {
         console.warn("Failed to complete sign-in.");
+        throw error;
       }
     },
   });
@@ -106,8 +107,6 @@ export function useAuth() {
   const verifyNewEmailMutation = useMutation<BaseResponse<VerifyEmailOtpResponse>, unknown, VerifyNewEmailRequest>({
     mutationFn: verifyNewEmail,
     onSuccess: async (response) => {
-      showToast("Email updated successfully", "success");
-
       if (response.data) {
         if (response.data.token?.accessToken && response.data.token?.refreshToken) {
           const generation = await setAuthenticatedSession({
@@ -127,6 +126,7 @@ export function useAuth() {
           });
         }
       }
+      showToast("Email updated successfully", "success");
     },
   });
 
@@ -134,8 +134,6 @@ export function useAuth() {
   const verifyEmailMutation = useMutation<BaseResponse<VerifyEmailOtpResponse>, unknown, VerifyEmailOtpRequest>({
     mutationFn: verifyEmail,
     onSuccess: async (response) => {
-      showToast("Email updated successfully", "success");
-
       if (response.data) {
         if (response.data.token?.accessToken && response.data.token?.refreshToken) {
           const generation = await setAuthenticatedSession({
@@ -155,6 +153,7 @@ export function useAuth() {
           });
         }
       }
+      showToast("Email updated successfully", "success");
     },
   });
 
@@ -205,38 +204,51 @@ export function useAuth() {
 
   // Logout mutation
   const logoutMutation = useMutation({
-    mutationFn: ({ generation, request }: { generation: number; request: LogoutRequest }) => {
+    mutationFn: ({ generation, request, accessToken }: { generation: number; request: LogoutRequest; accessToken: string | null }) => {
       // React Query may defer execution until after another account has signed in.
       if (generation !== getSessionGeneration()) return Promise.resolve();
-      return logout(request);
+      return logout(request, accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : undefined);
     },
   });
 
   // Logout helper (decoupled)
   const logoutUser = async () => {
-    const { generation, refreshToken } = beginSessionLogout();
-    const storedRefreshToken = await refreshToken;
+    const { generation, refreshToken, accessToken } = beginSessionLogout();
+    let storedRefreshToken;
+    let durableLogout = false;
+    try {
+      storedRefreshToken = await refreshToken;
+    } catch {
+      if (generation === getSessionGeneration()) {
+        console.warn("Failed to read logout credentials; continuing local session cleanup.");
+      }
+    } finally {
+      durableLogout = await clearSession(generation);
+    }
     if (generation !== getSessionGeneration()) return;
 
-    // Inform server if possible, but always clear local session regardless.
+    // Credentials are captured only for this server logout. Memory is already
+    // signed out, and local cleanup does not wait for network availability.
     if (storedRefreshToken) {
       try {
         await logoutMutation.mutateAsync({
-          generation,
+          generation, accessToken,
           request: { refreshToken: storedRefreshToken, expoPushToken: pushNotificationToken ?? undefined },
         });
       } catch {
-        // Ignore server logout failures; local logout must still succeed.
+        // A server error cannot restore access or establish confirmed revocation.
+      } finally {
+        finishSessionLogout(generation);
       }
     }
-
-    await clearSession(generation);
-    return generation;
+    return { generation, durableLogout };
   };
 
   const logoutAndGoToLogin = async () => {
-    const generation = await logoutUser();
-    if (generation === getSessionGeneration()) router.replace("/(auth)");
+    const result = await logoutUser();
+    if (!result || result.generation !== getSessionGeneration()) return false;
+    router.replace("/(auth)");
+    return result.durableLogout;
   };
 
   return {

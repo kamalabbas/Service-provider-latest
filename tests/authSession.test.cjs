@@ -43,34 +43,62 @@ const until = async predicate => {
   assert.ok(predicate(), 'Expected asynchronous boundary was not reached');
 };
 
-function harness({ saved = 'A-refresh', signedIn = true } = {}) {
-  let disk = saved;
+const policyRecord = state => JSON.stringify({ version: 1, state });
+function harness({ saved = 'A-refresh', signedIn = true, policy = policyRecord('allowed'), persistence = { token: saved, policy } } = {}) {
   let activeStorage = 0;
   let maxActiveStorage = 0;
   const storage = [], refreshes = [], requests = [], toasts = [], navigation = [], registrations = [], logs = [];
-  const holds = { get: [], set: [], delete: [] };
+  const policyStorage = [], storageEvents = [];
+  const holds = { get: [], set: [], delete: [], policyGet: [], policySet: [] };
   const mutationHolds = [];
   const holdNext = kind => {
     const started = deferred(), finished = deferred();
     holds[kind].push({ started, finished });
-    return { started: started.promise, release: finished.resolve, fail: finished.reject };
+    return {
+      started: started.promise, release: finished.resolve, fail: finished.reject,
+      failAfterEffect: error => finished.resolve(error),
+      skipEffect: () => finished.resolve({ skipEffect: true }),
+    };
   };
   const nativeStorage = async (kind, key, value) => {
     assert.equal(key, 'refresh_token');
     storage.push({ kind, value });
-    const readValue = disk;
+    storageEvents.push({ kind, value });
+    const readValue = persistence.token;
     const hold = holds[kind].shift();
     maxActiveStorage = Math.max(maxActiveStorage, ++activeStorage);
     try {
+      let failureAfterEffect;
       if (hold) {
         hold.started.resolve();
-        await hold.finished.promise;
+        failureAfterEffect = await hold.finished.promise;
       }
+      if (failureAfterEffect?.skipEffect) return;
       if (kind === 'get') return readValue;
-      disk = kind === 'set' ? value : null;
+      persistence.token = kind === 'set' ? value : null;
+      if (failureAfterEffect) throw failureAfterEffect;
     } finally {
       activeStorage--;
     }
+  };
+  const policyStorageOperation = async (kind, uri, value) => {
+    assert.equal(uri, 'file:///app-private/documents/session-restore-policy.json');
+    policyStorage.push({ kind, value });
+    storageEvents.push({ kind, value });
+    const previous = persistence.policy;
+    const hold = holds[kind].shift();
+    maxActiveStorage = Math.max(maxActiveStorage, ++activeStorage);
+    try {
+      let failureAfterEffect;
+      if (hold) { hold.started.resolve(); failureAfterEffect = await hold.finished.promise; }
+      if (failureAfterEffect?.skipEffect) return;
+      if (kind === 'policyGet') {
+        if (previous === null) throw new Error('No restore policy');
+        return previous;
+      }
+      persistence.policy = value;
+      if (failureAfterEffect) throw failureAfterEffect;
+    } finally { activeStorage--; }
   };
   const modules = new Map();
   const router = {
@@ -91,6 +119,11 @@ function harness({ saved = 'A-refresh', signedIn = true } = {}) {
       getItemAsync: key => nativeStorage('get', key),
       setItemAsync: (key, value) => nativeStorage('set', key, value),
       deleteItemAsync: key => nativeStorage('delete', key),
+    },
+    'expo-file-system/legacy': {
+      documentDirectory: 'file:///app-private/documents/',
+      readAsStringAsync: uri => policyStorageOperation('policyGet', uri),
+      writeAsStringAsync: (uri, value) => policyStorageOperation('policySet', uri, value),
     },
     '@tanstack/react-query': { QueryClient, useQuery: options => options, useMutation: options => {
       const observer = new MutationObserver(queryClient, options);
@@ -160,7 +193,10 @@ function harness({ saved = 'A-refresh', signedIn = true } = {}) {
       mutationHolds.push({ started, finished });
       return { started: started.promise, release: finished.resolve };
     },
-    get disk() { return disk; }, get maxActiveStorage() { return maxActiveStorage; },
+    get disk() { return persistence.token; }, get policy() { return persistence.policy; },
+    get maxActiveStorage() { return maxActiveStorage; },
+    policyStorage, storageEvents, persistence,
+    restart: () => harness({ signedIn: false, persistence }),
     auth: () => load('hooks/useAuth.ts').useAuth(),
     restoreUser: () => load('utility/restoreUser.ts').restoreUser(),
     lookup: (...args) => load('hooks/useLookup.ts').useLookup(...args),
@@ -233,7 +269,7 @@ for (const outcome of ['success', 'failure']) {
     assert.equal(h.requests.length, 1);
     assert.equal(h.disk, null);
     assert.equal(h.store.getState().accessToken, null);
-    assert.equal(h.session.isRefreshBlocked(), false);
+    assert.equal(h.session.isRefreshBlocked(), true);
     assert.equal(h.toasts.length, 0);
     assert.equal(h.storage.filter(op => op.kind === 'set').length, 0);
   });
@@ -300,7 +336,7 @@ for (const writeFails of [false, true]) {
     h.refreshes[0].resolve(responseFor(account('A', '-rotated')));
     await write.started;
     const login = h.session.setAuthenticatedSession(account('B'));
-    assert.equal(h.store.getState().accessToken, 'B-access');
+    assert.equal(h.store.getState().accessToken, null);
     if (writeFails) write.fail(new Error('Old native write failed'));
     else write.release();
     assert.equal(await refresh, null);
@@ -317,10 +353,13 @@ test('a delayed logout deletion cannot clear a newer login or delete its credent
   const deletion = h.holdNext('delete');
   const logout = h.session.clearSession();
   await deletion.started;
+  const unsubscribe = h.store.subscribe(state => {
+    if (state.user?.id === 'B') h.queryClient.setQueryData(['private-profile'], { owner: 'B' });
+  });
   const login = h.session.setAuthenticatedSession(account('B'));
-  h.queryClient.setQueryData(['private-profile'], { owner: 'B' });
   deletion.release();
   await Promise.all([logout, login]);
+  unsubscribe();
   assert.equal(h.disk, 'B-refresh');
   assert.equal(h.store.getState().user.id, 'B');
   assert.equal(h.session.isRefreshBlocked(), false);
@@ -330,17 +369,14 @@ test('a delayed logout deletion cannot clear a newer login or delete its credent
 
 test('queued writes are skipped if their session was replaced before native storage starts', async () => {
   const h = harness();
-  let login;
-  const unsubscribe = h.store.subscribe(state => {
-    if (state.accessToken === 'A-access-rotated') {
-      unsubscribe();
-      login = h.session.setAuthenticatedSession(account('B'));
-    }
-  });
+  const read = h.holdNext('get');
   const refresh = h.session.refreshAccessToken();
-  await until(() => h.refreshes.length === 1);
-  h.refreshes[0].resolve(responseFor(account('A', '-rotated')));
+  await read.started;
+  const replacedLogin = h.session.setAuthenticatedSession(account('A', '-replaced'));
+  const login = h.session.setAuthenticatedSession(account('B'));
+  read.release();
   assert.equal(await refresh, null);
+  assert.equal(await replacedLogin, null);
   await login;
   assert.equal(h.disk, 'B-refresh');
   assert.deepEqual(h.storage.filter(op => op.kind === 'set').map(op => op.value), ['B-refresh']);
@@ -499,7 +535,7 @@ test('logout invalidates refresh immediately, and a delayed server logout cannot
   assert.equal(JSON.parse(h.requests[0].data).refreshToken, 'A-refresh');
   h.refreshes[0].resolve(responseFor(account('A', '-stale')));
   assert.equal(await refresh, null);
-  assert.equal(h.disk, 'A-refresh');
+  assert.equal(h.disk, null);
   await h.session.setAuthenticatedSession(account('B'));
   logoutReply.resolve(h.ok(h.requests[0]));
   await logout;
@@ -932,11 +968,14 @@ test('a failed startup SecureStore read preserves credentials and can be retried
 test('failed refresh-token persistence clears in-memory access without deleting the stored token', async () => {
   const h = harness();
   const generation = h.session.getSessionGeneration();
+  const publishedTokens = [];
+  const unsubscribe = h.store.subscribe(state => publishedTokens.push(state.accessToken));
   const write = h.holdNext('set');
   const refresh = h.session.refreshAccessToken();
   await until(() => h.refreshes.length === 1);
   h.refreshes[0].resolve(responseFor(account('A', '-rotated')));
   await write.started;
+  assert.equal(h.store.getState().accessToken, 'A-access');
   write.fail(new Error('SecureStore write failed'));
   assert.equal(await refresh, null);
   assert.equal(h.disk, 'A-refresh');
@@ -945,6 +984,7 @@ test('failed refresh-token persistence clears in-memory access without deleting 
   assert.equal(h.session.isRefreshBlocked(), false);
   assert.equal(h.storage.filter(op => op.kind === 'delete').length, 0);
   assert.equal(h.session.getSessionGeneration(), generation + 1);
+  assert.equal(publishedTokens.includes('A-access-rotated'), false);
   const recovery = h.session.refreshAccessToken();
   await until(() => h.refreshes.length === 2);
   assert.equal(h.refreshes[1].body.refreshToken, 'A-refresh');
@@ -953,6 +993,7 @@ test('failed refresh-token persistence clears in-memory access without deleting 
   assert.equal(h.disk, 'A-refresh-recovered');
   assert.equal(h.session.getSessionGeneration(), generation + 1);
   assert.equal(h.maxActiveStorage, 1);
+  unsubscribe();
 });
 
 test('a missing stored token never grants access, deletes storage, or makes a network refresh', async () => {
@@ -1068,7 +1109,7 @@ test('a failed older refresh cannot unblock a logout that is waiting for its ser
   h.refreshes[0].reject(new axios.AxiosError('Timeout', 'ECONNABORTED'));
   assert.equal(await refresh, null);
   assert.equal(h.session.isRefreshBlocked(), true);
-  assert.equal(h.disk, 'A-refresh');
+  assert.equal(h.disk, null);
   logoutReply.resolve(h.ok(h.requests[0]));
   await logout;
   assert.equal(h.disk, null);
@@ -1080,10 +1121,13 @@ test('an old startup read failure cannot clear a newer login or its cache', asyn
   const read = h.holdNext('get');
   const restore = h.restoreUser();
   await read.started;
+  const unsubscribe = h.store.subscribe(state => {
+    if (state.user?.id === 'B') h.queryClient.setQueryData(['private-profile'], { owner: 'B' });
+  });
   const login = h.session.setAuthenticatedSession(account('B'));
-  h.queryClient.setQueryData(['private-profile'], { owner: 'B' });
   read.fail(new Error('Old SecureStore read failed'));
   await Promise.all([restore, login]);
+  unsubscribe();
   assert.equal(h.store.getState().accessToken, 'B-access');
   assert.equal(h.disk, 'B-refresh');
   assert.equal(h.queryClient.getQueryData(['private-profile']).owner, 'B');
@@ -1100,4 +1144,772 @@ test('a 401 after a successful refresh replay does not recursively refresh or re
   assert.equal(result.reason.response.status, 401);
   assert.equal(h.requests.length, 2);
   assert.equal(h.refreshes.length, 1);
+});
+
+test('login publishes authentication only after persistence succeeds and blocks recovery while pending', async () => {
+  const h = harness();
+  h.queryClient.setQueryData(['private-profile'], { owner: 'A' });
+  const write = h.holdNext('set');
+  const login = h.session.setAuthenticatedSession(account('B'));
+  await write.started;
+  assert.equal(h.disk, 'A-refresh');
+  assert.equal(h.store.getState().user, null);
+  assert.equal(h.store.getState().accessToken, null);
+  assert.equal(h.queryClient.getQueryCache().getAll().length, 0);
+  assert.equal(h.session.isRefreshBlocked(), true);
+  await Promise.all([h.restoreUser(), h.session.refreshAccessToken()]);
+  assert.equal(h.refreshes.length, 0);
+  write.release();
+  assert.equal(await login, h.session.getSessionGeneration());
+  assert.equal(h.disk, 'B-refresh');
+  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.session.isRefreshBlocked(), false);
+});
+
+for (const recovery of ['explicit login', 'logout cleanup']) {
+  test(`a failed login write blocks the older saved account until ${recovery}`, async () => {
+    const h = harness();
+    const generation = h.session.getSessionGeneration();
+    const write = h.holdNext('set');
+    const login = observe(h.session.setAuthenticatedSession(account('B')));
+    await write.started;
+    const error = new Error('Synthetic private native error');
+    write.fail(error);
+    const result = await login;
+    assert.equal(result.status, 'rejected');
+    assert.equal(result.reason, error);
+    assert.equal(h.disk, 'A-refresh');
+    assert.equal(h.store.getState().user, null);
+    assert.equal(h.store.getState().accessToken, null);
+    assert.equal(h.session.isRefreshBlocked(), true);
+    assert.equal(h.session.getSessionGeneration(), generation + 1);
+    const reads = h.storage.filter(op => op.kind === 'get').length;
+    h.requireRefresh();
+    await Promise.all([h.restoreUser(), h.session.refreshAccessToken(), observe(h.api.get('/private'))]);
+    assert.equal(h.refreshes.length, 0);
+    assert.equal(h.storage.filter(op => op.kind === 'get').length, reads);
+    assert.equal(h.requests[0].headers.get('Authorization'), undefined);
+    assert.equal(h.logs.flat().includes(error), false);
+    if (recovery === 'explicit login') {
+      assert.equal(await h.session.setAuthenticatedSession(account('B')), generation + 2);
+      assert.equal(h.disk, 'B-refresh');
+      assert.equal(h.store.getState().accessToken, 'B-access');
+    } else {
+      assert.equal(await h.session.clearSession(), true);
+      assert.equal(h.disk, null);
+      assert.equal(h.store.getState().accessToken, null);
+    }
+    assert.equal(h.session.isRefreshBlocked(), recovery === 'logout cleanup');
+  });
+}
+
+for (const mutationName of ['loginMutation', 'verifyEmailMutation', 'verifyNewEmailMutation']) {
+  test(`${mutationName} rejects a failed session write without publishing auth or registering push`, async () => {
+    const h = harness({ saved: null, signedIn: false });
+    h.setAdapter(async config => h.ok(config, responseFor(account('B')).data));
+    const mutation = h.auth()[mutationName];
+    const write = h.holdNext('set');
+    const pending = observe(mutation.mutateAsync({ email: 'B@example.test', password: 'synthetic', otp: '123456' }));
+    await write.started;
+    write.fail(new Error('Synthetic private native error'));
+    assert.equal((await pending).status, 'rejected');
+    assert.equal(h.store.getState().user, null);
+    assert.equal(h.store.getState().accessToken, null);
+    assert.equal(h.disk, null);
+    assert.equal(h.session.isRefreshBlocked(), true);
+    assert.equal(h.registrations.length, 0);
+    assert.equal(h.toasts.length, 0);
+    assert.equal(h.navigation.length, 0);
+    assert.equal(JSON.stringify(h.logs).includes('Synthetic private native error'), false);
+  });
+}
+
+for (const outcome of ['success', 'failure']) {
+  test(`an older login write ${outcome} cannot publish credentials or block a newer login`, async () => {
+    const h = harness();
+    const write = h.holdNext('set');
+    const oldLogin = observe(h.session.setAuthenticatedSession(account('B')));
+    await write.started;
+    const newLogin = h.session.setAuthenticatedSession(account('C'));
+    const generation = h.session.getSessionGeneration();
+    if (outcome === 'success') write.release();
+    else write.fail(new Error('Old login write failed'));
+    assert.equal((await oldLogin).value, null);
+    assert.equal(await newLogin, generation);
+    assert.equal(h.session.getSessionGeneration(), generation);
+    assert.equal(h.store.getState().user.id, 'C');
+    assert.equal(h.disk, 'C-refresh');
+    assert.equal(h.session.isRefreshBlocked(), false);
+    assert.equal(h.maxActiveStorage, 1);
+  });
+}
+
+for (const writeFails of [false, true]) {
+  test(`concurrent refresh and restore wait for one shared token write (${writeFails ? 'failure' : 'success'})`, async () => {
+    const h = harness();
+    const generation = h.session.getSessionGeneration();
+    h.requireRefresh();
+    h.queryClient.setQueryData(['private-profile'], { owner: 'A' });
+    const write = h.holdNext('set');
+    const requests = Promise.all([observe(h.api.get('/one')), observe(h.api.get('/two'))]);
+    const restore = h.restoreUser();
+    await until(() => h.refreshes.length === 1);
+    h.refreshes[0].resolve(responseFor(account('A', '-rotated')));
+    await write.started;
+    await tick();
+    assert.equal(h.refreshes.length, 1);
+    assert.equal(h.requests.length, 2);
+    assert.equal(h.store.getState().accessToken, 'A-access');
+    assert.equal(h.disk, 'A-refresh');
+    assert.equal(h.queryClient.getQueryData(['private-profile']).owner, 'A');
+    if (writeFails) write.fail(new Error('Shared native write failed'));
+    else write.release();
+    const results = await requests;
+    await restore;
+    if (writeFails) {
+      assert.ok(results.every(result => result.status === 'rejected' && result.reason.response.status === 401));
+      assert.equal(h.requests.length, 2);
+      assert.equal(h.session.getSessionGeneration(), generation + 1);
+      assert.equal(h.store.getState().accessToken, null);
+      assert.equal(h.disk, 'A-refresh');
+      assert.equal(h.queryClient.getQueryCache().getAll().length, 0);
+      assert.equal(h.session.isRefreshBlocked(), false);
+      const recovery = h.restoreUser();
+      await until(() => h.refreshes.length === 2);
+      assert.equal(h.refreshes[1].body.refreshToken, 'A-refresh');
+      h.refreshes[1].resolve(responseFor(account('A', '-recovered')));
+      await recovery;
+      assert.equal(h.disk, 'A-refresh-recovered');
+      assert.equal(h.session.getSessionGeneration(), generation + 1);
+    } else {
+      assert.ok(results.every(result => result.status === 'fulfilled'));
+      assert.equal(h.requests.length, 4);
+      assert.equal(h.store.getState().accessToken, 'A-access-rotated');
+      assert.equal(h.disk, 'A-refresh-rotated');
+      assert.equal(h.session.getSessionGeneration(), generation);
+      assert.equal(h.queryClient.getQueryData(['private-profile']).owner, 'A');
+    }
+  });
+}
+
+test('concurrent refresh requests share a failed token read and recover through a later protected request', async () => {
+  const h = harness();
+  const generation = h.session.getSessionGeneration();
+  h.requireRefresh();
+  const read = h.holdNext('get');
+  const pending = Promise.all([observe(h.api.get('/one')), observe(h.api.get('/two')), h.restoreUser()]);
+  await read.started;
+  read.fail(new Error('Shared native read failed'));
+  await pending;
+  assert.equal(h.storage.filter(op => op.kind === 'get').length, 1);
+  assert.equal(h.refreshes.length, 0);
+  assert.equal(h.store.getState().accessToken, null);
+  assert.equal(h.disk, 'A-refresh');
+  assert.equal(h.session.getSessionGeneration(), generation + 1);
+  assert.equal(h.session.isRefreshBlocked(), false);
+  const recovery = h.api.get('/recovered');
+  await until(() => h.refreshes.length === 1);
+  assert.equal(h.refreshes[0].body.refreshToken, 'A-refresh');
+  h.refreshes[0].resolve(responseFor(account('A', '-recovered')));
+  assert.equal((await recovery).data.protected, true);
+  assert.equal(h.store.getState().accessToken, 'A-access-recovered');
+  assert.equal(h.session.getSessionGeneration(), generation + 1);
+});
+
+for (const deleteFails of [false, true]) {
+  test(`a failed logout read still clears memory and attempts deletion (${deleteFails ? 'failed' : 'successful'} delete)`, async () => {
+    const h = harness();
+    h.queryClient.setQueryData(['private-profile'], { owner: 'A' });
+    const read = h.holdNext('get');
+    const deletion = h.holdNext('delete');
+    const logout = observe(h.auth().logoutAndGoToLogin());
+    await read.started;
+    read.fail(new Error('Synthetic private native read error'));
+    await deletion.started;
+    assert.equal(h.store.getState().user, null);
+    assert.equal(h.store.getState().accessToken, null);
+    assert.equal(h.queryClient.getQueryCache().getAll().length, 0);
+    if (deleteFails) deletion.fail(new Error('Synthetic private native delete error'));
+    else deletion.release();
+    assert.equal((await logout).status, 'fulfilled');
+    assert.equal(h.store.getState().accessToken, null);
+    assert.equal(h.disk, deleteFails ? 'A-refresh' : null);
+    assert.equal(h.session.isRefreshBlocked(), true);
+    assert.equal(h.requests.length, 0);
+    assert.deepEqual(h.navigation, [['replace', '/(auth)']]);
+    assert.equal(JSON.stringify(h.logs).includes('Synthetic private native'), false);
+  });
+}
+
+test('failed logout deletion stays signed out and retries cleanup through restore without authenticating', async () => {
+  const h = harness();
+  const deletion = h.holdNext('delete');
+  const logout = h.auth().logoutAndGoToLogin();
+  await deletion.started;
+  assert.equal(h.store.getState().accessToken, null);
+  const lateReply = deferred();
+  let signal;
+  const lateQuery = observe(h.queryClient.fetchQuery({ queryKey: ['private-profile'], queryFn: context => {
+    signal = context.signal;
+    return lateReply.promise;
+  } }));
+  deletion.fail(new Error('Delete unavailable'));
+  await logout;
+  assert.equal((await lateQuery).status, 'rejected');
+  assert.equal(signal.aborted, true);
+  const generation = h.session.getSessionGeneration();
+  assert.equal(h.disk, 'A-refresh');
+  assert.equal(h.session.isRefreshBlocked(), true);
+  assert.deepEqual(h.navigation, [['replace', '/(auth)']]);
+  h.requireRefresh();
+  assert.equal((await observe(h.api.get('/private'))).status, 'rejected');
+  assert.equal(h.requests.at(-1).headers.get('Authorization'), undefined);
+  assert.equal(h.refreshes.length, 0);
+
+  const failedRetry = h.holdNext('delete');
+  const restore = h.restoreUser();
+  await failedRetry.started;
+  failedRetry.fail(new Error('Delete still unavailable'));
+  await restore;
+  await tick();
+  assert.equal(h.storage.filter(op => op.kind === 'delete').length, 2, 'No automatic retry loop');
+  assert.equal(h.session.isRefreshBlocked(), true);
+  assert.equal(h.session.getSessionGeneration(), generation);
+
+  const retry = h.holdNext('delete');
+  const pending = Promise.all([h.restoreUser(), h.restoreUser(), h.session.refreshAccessToken()]);
+  await retry.started;
+  assert.equal(h.storage.filter(op => op.kind === 'delete').length, 3);
+  retry.release();
+  await pending;
+  assert.equal(h.storage.filter(op => op.kind === 'delete').length, 3, 'Cleanup retries are shared');
+  assert.equal(h.storage.filter(op => op.kind === 'get').length, 4);
+  assert.equal(h.disk, null);
+  assert.equal(h.store.getState().accessToken, null);
+  assert.equal(h.refreshes.length, 0);
+  assert.equal(h.session.isRefreshBlocked(), true);
+  await h.session.setAuthenticatedSession(account('B'));
+  h.queryClient.setQueryData(['private-profile'], { owner: 'B' });
+  lateReply.resolve({ owner: 'A' });
+  await tick();
+  assert.equal(h.disk, 'B-refresh');
+  assert.equal(h.store.getState().user.id, 'B');
+  assert.equal(h.queryClient.getQueryData(['private-profile']).owner, 'B');
+});
+
+test('clearSession reports incomplete durable logout when both policy and deletion fail, and permits retry', async () => {
+  const h = harness();
+  const policyWrite = h.holdNext('policySet');
+  const deletion = h.holdNext('delete');
+  const clear = observe(h.session.clearSession());
+  await policyWrite.started;
+  policyWrite.fail(new Error('Policy storage unavailable'));
+  await deletion.started;
+  deletion.fail(new Error('Delete unavailable'));
+  const result = await clear;
+  assert.equal(result.status, 'fulfilled');
+  assert.equal(result.value, false);
+  assert.equal(h.store.getState().accessToken, null);
+  assert.equal(h.disk, 'A-refresh');
+  assert.equal(h.session.isRefreshBlocked(), true);
+  assert.equal(await h.session.clearSession(), true);
+  assert.equal(h.disk, null);
+  assert.equal(h.session.isRefreshBlocked(), true);
+});
+
+test('a failed delayed deletion cannot clear a newer login or leave it blocked', async () => {
+  const h = harness();
+  const deletion = h.holdNext('delete');
+  const logout = observe(h.session.clearSession());
+  await deletion.started;
+  const login = h.session.setAuthenticatedSession(account('B'));
+  const generation = h.session.getSessionGeneration();
+  deletion.fail(new Error('Old delete failed'));
+  assert.equal((await logout).value, false);
+  assert.equal(await login, generation);
+  h.queryClient.setQueryData(['private-profile'], { owner: 'B' });
+  assert.equal(h.disk, 'B-refresh');
+  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.session.isRefreshBlocked(), false);
+  assert.equal(h.session.getSessionGeneration(), generation);
+  assert.equal(h.maxActiveStorage, 1);
+});
+
+test('an old logout read failure cannot clear a newer login or navigate away from it', async () => {
+  const h = harness();
+  const read = h.holdNext('get');
+  const logout = observe(h.auth().logoutAndGoToLogin());
+  await read.started;
+  const login = h.session.setAuthenticatedSession(account('B'));
+  read.fail(new Error('Old logout read failed'));
+  await Promise.all([logout, login]);
+  assert.equal(h.disk, 'B-refresh');
+  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.session.isRefreshBlocked(), false);
+  assert.equal(h.navigation.length, 0);
+  assert.equal(h.storage.filter(op => op.kind === 'delete').length, 0);
+});
+
+test('an old deletion finalizer cannot detach the newer shared cleanup operation', async () => {
+  const h = harness();
+  const oldDelete = h.holdNext('delete');
+  const oldClear = h.session.clearSession();
+  await oldDelete.started;
+  const newDelete = h.holdNext('delete');
+  const newClear = h.session.clearSession();
+  oldDelete.release();
+  await newDelete.started;
+  assert.equal(await oldClear, false);
+  const restore = h.restoreUser();
+  const refresh = h.session.refreshAccessToken();
+  await tick();
+  assert.equal(h.storage.filter(op => op.kind === 'delete').length, 2);
+  newDelete.release();
+  assert.equal(await newClear, true);
+  await Promise.all([restore, refresh]);
+  assert.equal(h.storage.filter(op => op.kind === 'delete').length, 2);
+  assert.equal(h.refreshes.length, 0);
+  assert.equal(h.disk, null);
+  assert.equal(h.session.isRefreshBlocked(), true);
+});
+
+test('a queued logout deletion is skipped when a newer login replaces it before native storage starts', async () => {
+  const h = harness();
+  const write = h.holdNext('set');
+  const refresh = h.session.refreshAccessToken();
+  await until(() => h.refreshes.length === 1);
+  h.refreshes[0].resolve(responseFor(account('A', '-rotated')));
+  await write.started;
+  const logout = h.session.clearSession();
+  const login = h.session.setAuthenticatedSession(account('B'));
+  write.release();
+  assert.equal(await refresh, null);
+  assert.equal(await logout, false);
+  assert.equal(await login, h.session.getSessionGeneration());
+  assert.equal(h.storage.filter(op => op.kind === 'delete').length, 0);
+  assert.equal(h.disk, 'B-refresh');
+  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.session.isRefreshBlocked(), false);
+  assert.equal(h.maxActiveStorage, 1);
+});
+
+test('a login write that changes storage and then rejects still blocks authentication and restoration', async () => {
+  const h = harness();
+  const write = h.holdNext('set');
+  const login = observe(h.session.setAuthenticatedSession(account('B')));
+  await write.started;
+  write.failAfterEffect(new Error('Native write completion was not confirmed'));
+  assert.equal((await login).status, 'rejected');
+  assert.equal(h.disk, 'B-refresh');
+  assert.equal(h.store.getState().accessToken, null);
+  assert.equal(h.session.isRefreshBlocked(), true);
+  await h.restoreUser();
+  assert.equal(h.refreshes.length, 0);
+  assert.equal(await h.session.clearSession(), true);
+  assert.equal(h.disk, null);
+});
+
+test('recovery re-reads storage after a refresh write changed the token but rejected', async () => {
+  const h = harness();
+  const generation = h.session.getSessionGeneration();
+  const write = h.holdNext('set');
+  const refresh = h.session.refreshAccessToken();
+  await until(() => h.refreshes.length === 1);
+  h.refreshes[0].resolve(responseFor(account('A', '-rotated')));
+  await write.started;
+  write.failAfterEffect(new Error('Native write completion was not confirmed'));
+  assert.equal(await refresh, null);
+  assert.equal(h.disk, 'A-refresh-rotated');
+  assert.equal(h.store.getState().accessToken, null);
+  assert.equal(h.session.isRefreshBlocked(), false);
+  assert.equal(h.session.getSessionGeneration(), generation + 1);
+  const restore = h.restoreUser();
+  await until(() => h.refreshes.length === 2);
+  assert.equal(h.refreshes[1].body.refreshToken, 'A-refresh-rotated');
+  h.refreshes[1].resolve(responseFor(account('A', '-recovered')));
+  await restore;
+  assert.equal(h.disk, 'A-refresh-recovered');
+  assert.equal(h.store.getState().accessToken, 'A-access-recovered');
+  assert.equal(h.session.getSessionGeneration(), generation + 1);
+});
+
+test('a deletion that removes the token but rejects can be confirmed absent by a read-back', async () => {
+  const h = harness();
+  const deletion = h.holdNext('delete');
+  const clear = h.session.clearSession();
+  await deletion.started;
+  deletion.failAfterEffect(new Error('Native delete completion was not confirmed'));
+  assert.equal(await clear, true);
+  assert.equal(h.disk, null);
+  assert.equal(h.store.getState().accessToken, null);
+  assert.equal(h.session.isRefreshBlocked(), true);
+  await h.restoreUser();
+  assert.equal(h.storage.filter(op => op.kind === 'delete').length, 1);
+  assert.equal(h.storage.filter(op => op.kind === 'get').length, 1);
+  assert.equal(h.refreshes.length, 0);
+  assert.equal(h.session.isRefreshBlocked(), true);
+});
+
+const assertRestartDenied = async previous => {
+  const restarted = previous.restart();
+  await Promise.all([restarted.restoreUser(), restarted.session.refreshAccessToken()]);
+  restarted.requireRefresh();
+  assert.equal((await observe(restarted.api.get('/private'))).status, 'rejected');
+  assert.equal(restarted.refreshes.length, 0, 'A retained token must never reach the refresh endpoint');
+  assert.equal(restarted.storage.length, 0, 'Policy denial must precede every credential read');
+  assert.equal(restarted.store.getState().accessToken, null);
+  assert.equal(restarted.store.getState().user, null);
+  return restarted;
+};
+
+test('failed token deletion cannot restore a session after a fresh app runtime', async () => {
+  const h = harness();
+  const deletion = h.holdNext('delete');
+  const logout = h.auth().logoutAndGoToLogin();
+  assert.equal(h.store.getState().accessToken, null, 'Logout invalidates memory synchronously');
+  await deletion.started;
+  assert.equal(h.policy, policyRecord('blocked'));
+  deletion.fail(new Error('Token deletion unavailable'));
+  assert.equal(await logout, true, 'The verified persistent block establishes local protection');
+  assert.equal(h.disk, 'A-refresh');
+  await assertRestartDenied(h);
+});
+
+test('repeated token deletion failures across restarts retain the durable block', async () => {
+  let h = harness();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const deletion = h.holdNext('delete');
+    const clear = h.session.clearSession();
+    await deletion.started;
+    deletion.fail(new Error('Deletion still unavailable'));
+    assert.equal(await clear, true);
+    assert.equal(h.disk, 'A-refresh');
+    h = await assertRestartDenied(h);
+  }
+});
+
+for (const [name, policy] of [
+  ['missing', null], ['malformed JSON', '{'], ['JSON null', 'null'],
+  ['unknown version', JSON.stringify({ version: 2, state: 'allowed' })],
+  ['invalid state', JSON.stringify({ version: 1, state: 'yes' })],
+  ['plain allowed string', JSON.stringify('allowed')], ['blocked', policyRecord('blocked')],
+]) {
+  test(`${name} restore policy denies both startup and protected-request recovery`, async () => {
+    const h = harness({ signedIn: false, policy });
+    const restarted = await assertRestartDenied(h);
+    assert.equal(restarted.disk, 'A-refresh');
+    assert.equal(restarted.policy, policy);
+    assert.equal(restarted.policyStorage.filter(op => op.kind === 'policySet').length, 0);
+    await restarted.session.setAuthenticatedSession(account('B'));
+    assert.equal(restarted.policy, policyRecord('allowed'));
+    assert.equal(restarted.store.getState().accessToken, 'B-access');
+  });
+}
+
+test('unreadable policy denies access without deleting credentials and can be read again after recovery', async () => {
+  const h = harness({ signedIn: false });
+  const read = h.holdNext('policyGet');
+  const pending = Promise.all([h.restoreUser(), h.session.refreshAccessToken()]);
+  await read.started;
+  read.fail(new Error('Synthetic private filesystem error'));
+  await pending;
+  assert.equal(h.refreshes.length, 0);
+  assert.equal(h.storage.length, 0);
+  assert.equal(h.disk, 'A-refresh');
+  assert.equal(h.store.getState().accessToken, null);
+  assert.equal(JSON.stringify(h.logs).includes('Synthetic private'), false);
+  const recovery = h.restoreUser();
+  await until(() => h.refreshes.length === 1);
+  h.refreshes[0].resolve(responseFor(account('A', '-recovered')));
+  await recovery;
+  assert.equal(h.store.getState().accessToken, 'A-access-recovered');
+  assert.equal(h.policy, policyRecord('allowed'));
+  assert.equal(h.policyStorage.filter(op => op.kind === 'policySet').length, 0);
+});
+
+test('login commits credentials before allowed policy and permits restoration only after both succeed', async () => {
+  const h = harness({ signedIn: false, policy: policyRecord('blocked') });
+  const blocking = h.holdNext('policySet');
+  const allowing = h.holdNext('policySet');
+  const login = h.session.setAuthenticatedSession(account('B'));
+  await blocking.started;
+  blocking.release();
+  await allowing.started;
+  assert.equal(h.disk, 'B-refresh');
+  assert.equal(h.policy, policyRecord('blocked'));
+  assert.equal(h.store.getState().accessToken, null);
+  await assertRestartDenied(h);
+  allowing.release();
+  assert.equal(await login, h.session.getSessionGeneration());
+  assert.equal(h.policy, policyRecord('allowed'));
+  assert.equal(h.store.getState().accessToken, 'B-access');
+  const writes = h.storageEvents.filter(op => op.kind === 'policySet' || op.kind === 'set');
+  assert.deepEqual(writes.map(op => op.kind), ['policySet', 'set', 'policySet']);
+  assert.equal(writes[0].value, policyRecord('blocked'));
+  assert.equal(writes[2].value, policyRecord('allowed'));
+  for (const op of h.policyStorage.filter(op => op.kind === 'policySet')) {
+    assert.ok(op.value === policyRecord('allowed') || op.value === policyRecord('blocked'));
+    assert.equal(op.value.includes('refresh'), false, 'Policy files must contain no credentials');
+  }
+  const restarted = h.restart();
+  const restore = restarted.restoreUser();
+  await until(() => restarted.refreshes.length === 1);
+  assert.equal(restarted.refreshes[0].body.refreshToken, 'B-refresh');
+  restarted.refreshes[0].resolve(responseFor(account('B', '-restored')));
+  await restore;
+  assert.equal(restarted.store.getState().user.id, 'B');
+  assert.equal(restarted.maxActiveStorage, 1);
+});
+
+test('a failed login token write leaves a durable block across restart', async () => {
+  const h = harness();
+  const write = h.holdNext('set');
+  const login = observe(h.session.setAuthenticatedSession(account('B')));
+  await write.started;
+  write.fail(new Error('Token write failed'));
+  assert.equal((await login).status, 'rejected');
+  assert.equal(h.disk, 'A-refresh');
+  assert.equal(h.policy, policyRecord('blocked'));
+  await assertRestartDenied(h);
+});
+
+test('failed login policy preparation never writes tokens or enables an existing logout policy', async () => {
+  const h = harness({ signedIn: false, policy: policyRecord('blocked') });
+  const write = h.holdNext('policySet');
+  const login = observe(h.session.setAuthenticatedSession(account('B')));
+  await write.started;
+  write.fail(new Error('Policy write failed'));
+  assert.equal((await login).status, 'rejected');
+  assert.equal(h.storage.length, 0);
+  assert.equal(h.disk, 'A-refresh');
+  await assertRestartDenied(h);
+});
+
+for (const outcome of ['reject', 'reject after effect', 'resolve without effect']) {
+  test(`failed allowed-policy write (${outcome}) cannot publish login and is rolled back to blocked`, async () => {
+    const h = harness({ signedIn: false, policy: policyRecord('blocked') });
+    const block = h.holdNext('policySet');
+    const allow = h.holdNext('policySet');
+    const login = observe(h.session.setAuthenticatedSession(account('B')));
+    await block.started;
+    block.release();
+    await allow.started;
+    if (outcome === 'reject') allow.fail(new Error('Allowed policy write failed'));
+    else if (outcome === 'reject after effect') allow.failAfterEffect(new Error('Allowed policy write unconfirmed'));
+    else allow.skipEffect();
+    assert.equal((await login).status, 'rejected');
+    assert.equal(h.store.getState().accessToken, null);
+    assert.equal(h.policy, policyRecord('blocked'));
+    assert.equal(h.disk, 'B-refresh');
+    await assertRestartDenied(h);
+  });
+}
+
+for (const deleteFails of [false, true]) {
+  test(`failed logout policy write still attempts deletion and reports ${deleteFails ? 'incomplete' : 'verified removal'}`, async () => {
+    const h = harness();
+    const block = h.holdNext('policySet');
+    const deletion = h.holdNext('delete');
+    const logout = h.auth().logoutAndGoToLogin();
+    assert.equal(h.store.getState().accessToken, null);
+    await block.started;
+    assert.equal(h.storage.filter(op => op.kind === 'delete').length, 0);
+    block.fail(new Error('Synthetic private policy error'));
+    await deletion.started;
+    if (deleteFails) deletion.fail(new Error('Synthetic private delete error'));
+    else deletion.release();
+    assert.equal(await logout, !deleteFails);
+    assert.equal(h.disk, deleteFails ? 'A-refresh' : null);
+    assert.equal(h.policy, policyRecord('allowed'), 'A failed write cannot be assumed committed');
+    assert.equal(h.store.getState().accessToken, null);
+    assert.equal(h.session.isRefreshBlocked(), true);
+    assert.equal(h.logs.some(args => String(args[0]).includes('Durable logout is incomplete')), deleteFails);
+    assert.equal(JSON.stringify(h.logs).includes('Synthetic private'), false);
+    assert.equal(h.maxActiveStorage, 1);
+    if (!deleteFails) {
+      const restarted = h.restart();
+      await restarted.restoreUser();
+      assert.equal(restarted.refreshes.length, 0);
+      assert.equal(restarted.store.getState().accessToken, null);
+    }
+  });
+}
+
+test('a rejected logout policy write that changed storage still reports unconfirmed protection conservatively', async () => {
+  const h = harness();
+  const block = h.holdNext('policySet');
+  const deletion = h.holdNext('delete');
+  const logout = h.session.clearSession();
+  await block.started;
+  block.failAfterEffect(new Error('Policy completion unconfirmed'));
+  await deletion.started;
+  deletion.fail(new Error('Delete failed'));
+  assert.equal(await logout, false);
+  assert.equal(h.policy, policyRecord('blocked'));
+  await assertRestartDenied(h);
+});
+
+test('a resolved token deletion that leaves credentials behind is detected by read-back', async () => {
+  const h = harness();
+  const block = h.holdNext('policySet');
+  const deletion = h.holdNext('delete');
+  const logout = h.session.clearSession();
+  await block.started;
+  block.fail(new Error('Policy failed'));
+  await deletion.started;
+  deletion.skipEffect();
+  assert.equal(await logout, false);
+  assert.equal(h.disk, 'A-refresh');
+  assert.equal(h.store.getState().accessToken, null);
+  assert.ok(h.logs.some(args => String(args[0]).includes('Durable logout is incomplete')));
+});
+
+test('a committed logout block survives a crash before credential deletion completes', async () => {
+  const h = harness();
+  const deletion = h.holdNext('delete');
+  const logout = h.session.clearSession();
+  await deletion.started;
+  assert.equal(h.policy, policyRecord('blocked'));
+  assert.equal(h.disk, 'A-refresh');
+  await assertRestartDenied(h);
+  deletion.release();
+  assert.equal(await logout, true);
+  assert.equal(h.policy, policyRecord('blocked'), 'Successful cleanup must retain the block');
+});
+
+for (const outcome of ['success', 'failure']) {
+  test(`an old logout policy write ${outcome} cannot overwrite or block a newer login`, async () => {
+    const h = harness();
+    const block = h.holdNext('policySet');
+    const logout = h.auth().logoutAndGoToLogin();
+    await block.started;
+    const login = h.session.setAuthenticatedSession(account('B'));
+    if (outcome === 'success') block.release();
+    else block.fail(new Error('Old policy write failed'));
+    assert.equal(await logout, false);
+    assert.equal(await login, h.session.getSessionGeneration());
+    await tick();
+    assert.equal(h.disk, 'B-refresh');
+    assert.equal(h.policy, policyRecord('allowed'));
+    assert.equal(h.store.getState().accessToken, 'B-access');
+    assert.equal(h.storage.filter(op => op.kind === 'delete').length, 0);
+    assert.equal(h.navigation.length, 0);
+    assert.equal(h.maxActiveStorage, 1);
+  });
+}
+
+test('an old login allowed-policy completion cannot undo a newer logout', async () => {
+  const h = harness({ signedIn: false, policy: policyRecord('blocked') });
+  const block = h.holdNext('policySet');
+  const allow = h.holdNext('policySet');
+  const login = h.session.setAuthenticatedSession(account('A'));
+  await block.started;
+  block.release();
+  await allow.started;
+  const logout = h.auth().logoutAndGoToLogin();
+  allow.release();
+  assert.equal(await login, null);
+  assert.equal(await logout, true);
+  assert.equal(h.policy, policyRecord('blocked'));
+  assert.equal(h.disk, null);
+  assert.equal(h.store.getState().accessToken, null);
+  await assertRestartDenied(h);
+});
+
+for (const outcome of ['success', 'failure']) {
+  test(`a stale refresh policy read ${outcome} cannot alter a new login's policy`, async () => {
+    const h = harness();
+    const read = h.holdNext('policyGet');
+    const refresh = h.session.refreshAccessToken();
+    await read.started;
+    const login = h.session.setAuthenticatedSession(account('B'));
+    if (outcome === 'success') read.release();
+    else read.fail(new Error('Stale policy read failed'));
+    assert.equal(await refresh, null);
+    await login;
+    assert.equal(h.refreshes.length, 0);
+    assert.equal(h.policy, policyRecord('allowed'));
+    assert.equal(h.store.getState().accessToken, 'B-access');
+  });
+}
+
+test('a transient refresh failure preserves allowed policy and can recover after restart', async () => {
+  const h = harness();
+  const refresh = h.session.refreshAccessToken();
+  await until(() => h.refreshes.length === 1);
+  h.refreshes[0].reject({ response: { status: 503 } });
+  assert.equal(await refresh, null);
+  assert.equal(h.policy, policyRecord('allowed'));
+  assert.equal(h.policyStorage.filter(op => op.kind === 'policySet').length, 0);
+  const restarted = h.restart();
+  const restore = restarted.restoreUser();
+  await until(() => restarted.refreshes.length === 1);
+  restarted.refreshes[0].resolve(responseFor(account('A', '-recovered')));
+  await restore;
+  assert.equal(restarted.store.getState().accessToken, 'A-access-recovered');
+  assert.equal(restarted.policy, policyRecord('allowed'));
+});
+
+test('a resolved logout policy write without effect is not counted as durable protection', async () => {
+  const h = harness();
+  const block = h.holdNext('policySet');
+  const deletion = h.holdNext('delete');
+  const logout = h.session.clearSession();
+  await block.started;
+  block.skipEffect();
+  await deletion.started;
+  deletion.fail(new Error('Delete failed'));
+  assert.equal(await logout, false);
+  assert.equal(h.policy, policyRecord('allowed'));
+  assert.equal(h.store.getState().accessToken, null);
+});
+
+for (const policyFails of [false, true]) {
+  test(`unreadable credential removal verification reports ${policyFails ? 'incomplete logout' : 'protection from the policy'}`, async () => {
+    const h = harness();
+    const block = h.holdNext('policySet');
+    const read = h.holdNext('get');
+    const logout = h.session.clearSession();
+    await block.started;
+    if (policyFails) block.fail(new Error('Policy write failed'));
+    else block.release();
+    await read.started;
+    read.fail(new Error('Cannot confirm token absence'));
+    assert.equal(await logout, !policyFails);
+    assert.equal(h.store.getState().accessToken, null);
+    assert.equal(h.session.isRefreshBlocked(), true);
+    assert.equal(h.disk, null);
+  });
+}
+
+test('a rejected old allowed-policy write cannot roll back a newer explicit login', async () => {
+  const h = harness({ signedIn: false, policy: policyRecord('blocked') });
+  const block = h.holdNext('policySet');
+  const allow = h.holdNext('policySet');
+  const oldLogin = h.session.setAuthenticatedSession(account('A'));
+  await block.started;
+  block.release();
+  await allow.started;
+  const newLogin = h.session.setAuthenticatedSession(account('B'));
+  allow.failAfterEffect(new Error('Old allowed write failed'));
+  assert.equal(await oldLogin, null);
+  assert.equal(await newLogin, h.session.getSessionGeneration());
+  assert.equal(h.policy, policyRecord('allowed'));
+  assert.equal(h.disk, 'B-refresh');
+  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.maxActiveStorage, 1);
+});
+
+test('captured logout authorization cannot be reused for another endpoint', async () => {
+  const h = harness();
+  const block = h.holdNext('policySet');
+  const logout = h.auth().logoutAndGoToLogin();
+  await block.started;
+  await h.api.get('/private', { headers: { Authorization: 'Bearer A-access' } });
+  assert.equal(h.requests[0].headers.get('Authorization'), undefined);
+  block.release();
+  await logout;
+  const serverLogout = h.requests.find(config => config.url === '/Auth/Logout');
+  assert.equal(serverLogout.headers.get('Authorization'), 'Bearer A-access');
+  assert.equal(h.store.getState().accessToken, null);
 });
