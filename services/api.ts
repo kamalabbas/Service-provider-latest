@@ -11,7 +11,7 @@ const api = axios.create({
   timeout: 60000,
 });
 
-let sessionExpiredToastShown = false;
+let refreshFailureToastShown = false;
 
 // --- Request Interceptor
 api.interceptors.request.use(
@@ -47,7 +47,7 @@ api.interceptors.request.use(
 // --- Response Interceptor
 api.interceptors.response.use(
   (response) => {
-    sessionExpiredToastShown = false;
+    refreshFailureToastShown = false;
     return response;
   },
   async (error) => {
@@ -80,9 +80,9 @@ api.interceptors.response.use(
       } catch (refreshErr) {
         if (generation !== getSessionGeneration()) return Promise.reject(error);
 
-        if (!sessionExpiredToastShown) {
-          useToastStore.getState().showToast("Session expired. Please log in again.", "error");
-          sessionExpiredToastShown = true;
+        if (!refreshFailureToastShown) {
+          useToastStore.getState().showToast("Unable to refresh your session. Please try again.", "error");
+          refreshFailureToastShown = true;
         }
         return Promise.reject(refreshErr);
       }
@@ -93,7 +93,7 @@ api.interceptors.response.use(
     }
 
     if (err.response?.status !== 401) {
-      sessionExpiredToastShown = false;
+      refreshFailureToastShown = false;
     }
 
     return Promise.reject(error);

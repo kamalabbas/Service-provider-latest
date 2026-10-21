@@ -4,7 +4,7 @@ import { User } from "@/interfaces/user.interface";
 import { queryClient } from "@/services/queryClient";
 import { useAuthStore } from "@/stores/authStore";
 import { getRefreshToken, removeRefreshToken, setRefreshToken } from "@/utility/secureStore";
-import axios, { AxiosError } from "axios";
+import axios from "axios";
 
 let refreshPromise: Promise<string | null> | null = null;
 let restorePromise: Promise<void> | null = null;
@@ -35,12 +35,25 @@ const runRefreshTokenOperation = <T>(generation: number, operation: () => Promis
   return result;
 };
 
-const isInvalidRefreshError = (error: unknown): boolean => {
-  const axiosError = error as AxiosError<{ status?: number; title?: string; detail?: string }>;
-  const status = axiosError.response?.status ?? axiosError.response?.data?.status;
-  const title = axiosError.response?.data?.title ?? "";
-  const detail = axiosError.response?.data?.detail ?? "";
-  return (status === 400 || status === 401) && `${title} ${detail}`.includes("INVALID_REFRESH_TOKEN");
+const clearInMemorySession = (generation: number) => {
+  if (generation !== sessionGeneration) return;
+  queryClient.clear();
+  if (generation !== sessionGeneration) return;
+
+  const state = useAuthStore.getState();
+  if (state.user !== null || state.accessToken !== null) {
+    state.clearAuth();
+  }
+};
+
+const invalidateRefreshSession = (generation: number) => {
+  if (generation !== sessionGeneration) return;
+
+  // Retire requests from before the failure before cleanup can notify subscribers.
+  // Recovery belongs to the new generation and may still use the saved refresh token.
+  const recoveryGeneration = advanceSession();
+  refreshBlocked = false;
+  clearInMemorySession(recoveryGeneration);
 };
 
 const clearSessionOnce = async (generation: number) => {
@@ -49,12 +62,7 @@ const clearSessionOnce = async (generation: number) => {
   // Do this synchronously, before storage awaits can let another session begin.
   queryClient.clear();
   await runRefreshTokenOperation(generation, removeRefreshToken);
-  if (generation !== sessionGeneration) return;
-
-  const state = useAuthStore.getState();
-  if (state.user !== null || state.accessToken !== null) {
-    state.clearAuth();
-  }
+  clearInMemorySession(generation);
 };
 
 const applyAuthenticatedSession = async (params: AuthenticatedSession, generation: number): Promise<boolean> => {
@@ -95,8 +103,7 @@ export const refreshAccessToken = async (): Promise<string | null> => {
         if (generation !== sessionGeneration) return null;
 
         if (!refreshTok) {
-          refreshBlocked = true;
-          await clearSessionOnce(generation);
+          invalidateRefreshSession(generation);
           return null;
         }
 
@@ -115,7 +122,7 @@ export const refreshAccessToken = async (): Promise<string | null> => {
         const newRefreshToken = data?.token?.refreshToken;
         const user = data?.user;
 
-        if (!newAccessToken || !newRefreshToken || !user) {
+        if (response.data?.success === false || typeof newAccessToken !== "string" || !newAccessToken || typeof newRefreshToken !== "string" || !newRefreshToken || !user) {
           throw new Error("Invalid refresh response");
         }
 
@@ -126,16 +133,13 @@ export const refreshAccessToken = async (): Promise<string | null> => {
         }, generation);
 
         return applied && generation === sessionGeneration ? newAccessToken : null;
-      } catch (error) {
+      } catch {
         if (generation !== sessionGeneration) return null;
 
-        // Fail-closed: after any refresh failure, block subsequent refresh attempts
-        // until the user gets a fresh authenticated session.
-        refreshBlocked = true;
-        if (!isInvalidRefreshError(error)) {
-          console.log("Refresh failed; blocking further refresh attempts for this session.");
-        }
-        await clearSessionOnce(generation);
+        // Terminal invalid/revoked-token detection awaits backend contract confirmation.
+        // All refresh errors are recoverable for now; never delete the saved token here.
+        invalidateRefreshSession(generation);
+        console.log("Session refresh failed; persisted credentials retained for a later retry.");
         return null;
       }
     })().finally(() => {
@@ -150,26 +154,13 @@ export const refreshAccessToken = async (): Promise<string | null> => {
 export const restoreSession = async () => {
   if (restorePromise) return restorePromise;
 
-  // If bootstrap already ran and session is blocked, avoid re-running refresh on remounts.
+  // Do not restore a session while logout is in progress.
   if (restoreAttempted && refreshBlocked) return;
 
   restoreAttempted = true;
 
-  const generation = sessionGeneration;
   const operation = (async () => {
-    const storedRefreshToken = await runRefreshTokenOperation(generation, getRefreshToken);
-    if (generation !== sessionGeneration) return;
-
-    if (!storedRefreshToken) {
-      refreshBlocked = true;
-      queryClient.clear();
-      const state = useAuthStore.getState();
-      if (state.user !== null || state.accessToken !== null) {
-        useAuthStore.setState({ accessToken: null, user: null });
-      }
-      return;
-    }
-
+    // Use the coordinated error handling for storage reads as well as the network call.
     await refreshAccessToken();
   })().finally(() => {
     if (restorePromise === operation) restorePromise = null;

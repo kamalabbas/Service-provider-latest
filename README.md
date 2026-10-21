@@ -52,6 +52,16 @@ QueryClient clearing cancels active queries and prevents their late results from
 
 Run the session and cache regression checks with `node tests/authSession.test.cjs`.
 
+## Refresh failure policy
+
+Invalid/revoked refresh-token detection is pending backend contract confirmation. All refresh errors are treated as recoverable for now, including offline/timeout failures, HTTP 400/401/403/429/500/503 responses, and malformed success payloads. HTTP status alone and unverified error-code/message strings do not establish a terminal failure. A response explicitly reporting `success: false` is also a failed refresh, even if it contains token fields.
+
+A failed refresh returns no access token, clears in-memory authentication and query/mutation caches, and preserves the refresh token in SecureStore. A later protected request or explicit session restore may try again using one shared refresh operation. There are no automatic retries within that failed request, foreground retries, polling, new UI, or routing changes. Startup uses the same failure handling and never authenticates using the previous access token as a fallback. If no refresh token is stored, the app stays signed out and no network refresh is attempted.
+
+Before clearing state or caches, a current refresh failure (including a missing saved token or a SecureStore read/write failure) advances the session generation once. All callers sharing that refresh become stale together; delayed 401s from that generation cannot start another refresh or replay under a recovered session. They reject with their original request error without producing stale session toasts. A stale failure from before logout or a newer login does not advance the generation or run cleanup. Recovery reads the retained token under the new generation. Successful refresh and recovery do not advance it again. Shared refresh/restore finalizers only release their own operation, so an older completion cannot detach recovery started during cleanup.
+
+Only explicit session clearing/logout deletes persisted refresh credentials. A successful refresh still replaces them with the returned token. Native storage writes remain serialized and session-generation guarded. If the backend rotates a token but its response is lost, the retained token may no longer be usable; recovery and terminal classification for that case remain dependent on the unconfirmed backend contract.
+
 ## Temporary native and cloud identity
 
 The display name is **Service Provider**, and the local package name and Expo slug are `service-provider`. The neutral icon has an editable SVG source alongside its PNG export.
@@ -64,6 +74,6 @@ EAS build profiles and the `APP_VARIANT` mechanism remain. The dev variant appen
 
 The BRDs must define provider profiles, roles/permissions, onboarding, approval states, support/content pages, media uploads, locations/lookups, and any other product functionality. Authentication compatibility, API hosts, native/cloud ownership, Firebase files, store links, and push routing also remain pending.
 
-Further infrastructure/security enhancements remain separate tasks. Existing refresh-failure policy, password rules, theme persistence, and numeric version encoding remain unchanged.
+Further infrastructure/security enhancements remain separate tasks. Password rules, theme persistence, and numeric version encoding remain unchanged.
 
 See [the cleanup report](docs/cleanup-report.md) for the file inventory and validation results.

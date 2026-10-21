@@ -23,7 +23,7 @@ const account = (id, suffix = '') => ({
   refreshToken: `${id}-refresh${suffix}`,
 });
 const responseFor = ({ user, accessToken, refreshToken }) => ({
-  data: { data: { user, token: { accessToken, refreshToken } } },
+  data: { success: true, data: { user, token: { accessToken, refreshToken } } },
 });
 const deferred = () => {
   let resolve, reject;
@@ -189,6 +189,7 @@ test('normal login persists credentials and normal logout clears the session', a
 
 test('concurrent 401s share one refresh and replay with the refreshed token', async () => {
   const h = harness();
+  const generation = h.session.getSessionGeneration();
   h.requireRefresh();
   const pending = Promise.all([h.api.get('/one'), h.api.post('/two', { value: 1 }), h.api.get('/three')]);
   await until(() => h.refreshes.length === 1);
@@ -203,10 +204,12 @@ test('concurrent 401s share one refresh and replay with the refreshed token', as
   assert.ok(h.requests.slice(3).every(config => config.headers.get('Authorization') === 'Bearer A-access-new'));
   assert.equal(h.disk, 'A-refresh-new');
   assert.equal(h.store.getState().accessToken, 'A-access-new');
+  assert.equal(h.session.getSessionGeneration(), generation);
 });
 
 test('session restoration still shares a refresh and restores saved credentials', async () => {
   const h = harness({ signedIn: false });
+  const generation = h.session.getSessionGeneration();
   const pending = Promise.all([h.restoreUser(), h.restoreUser()]);
   await until(() => h.refreshes.length === 1);
   h.refreshes[0].resolve(responseFor(account('A', '-restored')));
@@ -214,6 +217,7 @@ test('session restoration still shares a refresh and restores saved credentials'
   assert.equal(h.refreshes.length, 1);
   assert.equal(h.disk, 'A-refresh-restored');
   assert.equal(h.store.getState().accessToken, 'A-access-restored');
+  assert.equal(h.session.getSessionGeneration(), generation);
 });
 
 for (const outcome of ['success', 'failure']) {
@@ -308,21 +312,20 @@ for (const writeFails of [false, true]) {
   });
 }
 
-test('a delayed old failure deletion cannot clear a newer login or delete its credentials last', async () => {
+test('a delayed logout deletion cannot clear a newer login or delete its credentials last', async () => {
   const h = harness();
   const deletion = h.holdNext('delete');
-  const refresh = h.session.refreshAccessToken();
-  await until(() => h.refreshes.length === 1);
-  h.refreshes[0].reject(new Error('Refresh failed'));
+  const logout = h.session.clearSession();
   await deletion.started;
   const login = h.session.setAuthenticatedSession(account('B'));
+  h.queryClient.setQueryData(['private-profile'], { owner: 'B' });
   deletion.release();
-  assert.equal(await refresh, null);
-  await login;
+  await Promise.all([logout, login]);
   assert.equal(h.disk, 'B-refresh');
   assert.equal(h.store.getState().user.id, 'B');
   assert.equal(h.session.isRefreshBlocked(), false);
   assert.equal(h.maxActiveStorage, 1);
+  assert.equal(h.queryClient.getQueryData(['private-profile']).owner, 'B');
 });
 
 test('queued writes are skipped if their session was replaced before native storage starts', async () => {
@@ -453,20 +456,34 @@ test('dispatch rejects a retry bound to a superseded generation without sending 
   assert.equal(h.toasts.length, 0);
 });
 
-test('active-session refresh failures retain blocking, local cleanup, and one expiry toast', async () => {
+test('concurrent failed requests share one refresh, preserve credentials, and allow a later request to recover', async () => {
   const h = harness();
+  const generation = h.session.getSessionGeneration();
   h.requireRefresh();
   const pending = Promise.all([observe(h.api.get('/one')), observe(h.api.get('/two'))]);
   await until(() => h.refreshes.length === 1);
   h.refreshes[0].reject(new Error('Refresh failed'));
   const results = await pending;
-  assert.ok(results.every(result => result.reason.message === 'Refresh failed'));
-  assert.equal(h.disk, null);
+  assert.ok(results.every(result => result.status === 'rejected' && result.reason.response.status === 401));
+  assert.equal(h.disk, 'A-refresh');
   assert.equal(h.store.getState().accessToken, null);
-  assert.equal(h.session.isRefreshBlocked(), true);
-  assert.equal(h.toasts.length, 1);
-  await observe(h.api.get('/three'));
+  assert.equal(h.store.getState().user, null);
+  assert.equal(h.session.isRefreshBlocked(), false);
+  assert.equal(h.toasts.length, 0, 'Superseded requests must not produce session side effects');
+  assert.equal(h.session.getSessionGeneration(), generation + 1);
+  assert.equal(h.requests.length, 2);
+  await tick();
   assert.equal(h.refreshes.length, 1);
+  const recovery = h.api.get('/three');
+  await until(() => h.refreshes.length === 2);
+  assert.equal(h.requests[2].headers.get('Authorization'), undefined);
+  assert.equal(h.refreshes[1].body.refreshToken, 'A-refresh');
+  h.refreshes[1].resolve(responseFor(account('A', '-recovered')));
+  assert.equal((await recovery).data.protected, true);
+  assert.equal(h.requests.length, 4);
+  assert.equal(h.requests[3].headers.get('Authorization'), 'Bearer A-access-recovered');
+  assert.equal(h.disk, 'A-refresh-recovered');
+  assert.equal(h.session.getSessionGeneration(), generation + 1);
 });
 
 test('logout invalidates refresh immediately, and a delayed server logout cannot clear a newer login', async () => {
@@ -641,7 +658,7 @@ for (const signedIn of [false, true]) {
   });
 }
 
-test('expiration cancels active private queries immediately and delayed deletion cannot cancel B queries', async () => {
+test('failed refresh cancels active private queries without deleting credentials or affecting later B queries', async () => {
   const h = harness();
   const replyA = deferred(), replyB = deferred();
   let signalA, signalB;
@@ -649,21 +666,20 @@ test('expiration cancels active private queries immediately and delayed deletion
     signalA = context.signal;
     return replyA.promise;
   } }));
-  const deletion = h.holdNext('delete');
   const refresh = h.session.refreshAccessToken();
   await until(() => h.refreshes.length === 1);
   h.refreshes[0].reject({ response: { status: 401, data: { title: 'INVALID_REFRESH_TOKEN' } } });
-  await deletion.started;
+  assert.equal(await refresh, null);
   assert.equal(signalA.aborted, true);
   assert.equal((await pendingA).status, 'rejected');
   assert.equal(h.queryClient.getQueryCache().getAll().length, 0);
-  const login = h.session.setAuthenticatedSession(account('B'));
+  assert.equal(h.disk, 'A-refresh');
+  assert.equal(h.storage.filter(op => op.kind === 'delete').length, 0);
+  await h.session.setAuthenticatedSession(account('B'));
   const pendingB = h.queryClient.fetchQuery({ queryKey: ['private-details'], queryFn: context => {
     signalB = context.signal;
     return replyB.promise;
   } });
-  deletion.release();
-  await Promise.all([refresh, login]);
   assert.equal(signalB.aborted, false);
   replyA.resolve({ owner: 'A' });
   replyB.resolve({ owner: 'B' });
@@ -798,4 +814,290 @@ test('an old mutation completion cannot repopulate cleared mutation records or r
   replyB.resolve({ owner: 'B' });
   await pendingB;
   assert.equal(records[0].state.data.owner, 'B');
+});
+
+const recoverableRefreshFailures = [
+  ['offline', pending => pending.reject(new axios.AxiosError('Network Error', 'ERR_NETWORK'))],
+  ['timeout', pending => pending.reject(new axios.AxiosError('Timeout', 'ECONNABORTED'))],
+  ...[400, 401, 403, 429, 500, 503].map(status => [
+    `HTTP ${status}`, pending => pending.reject({ response: { status, data: {} } }),
+  ]),
+  ['unverified invalid-token title', pending => pending.reject({ response: {
+    status: 401, data: { title: 'INVALID_REFRESH_TOKEN' },
+  } })],
+  ['unverified invalid-token detail', pending => pending.reject({ response: {
+    status: 400, data: { detail: 'INVALID_REFRESH_TOKEN' },
+  } })],
+  ['unverified revocation text', pending => pending.reject({ response: {
+    status: 401, data: { detail: 'Refresh token has been revoked.' },
+  } })],
+  ['generic authorization code', pending => pending.reject({ response: {
+    status: 401, data: { code: 'NOT_AUTHORISED' },
+  } })],
+  ['unknown error', pending => pending.reject(new Error('Refresh could not complete'))],
+  ['empty success body', pending => pending.resolve({ data: null })],
+  ['success missing tokens', pending => pending.resolve({ data: { data: { user: account('A').user } } })],
+  ['success missing user', pending => {
+    const response = responseFor(account('A'));
+    delete response.data.data.user;
+    pending.resolve(response);
+  }],
+  ['non-string access token', pending => pending.resolve(responseFor({ ...account('A'), accessToken: 123 }))],
+  ['non-string refresh token', pending => pending.resolve(responseFor({ ...account('A'), refreshToken: {} }))],
+  ['explicit unsuccessful response with token fields', pending => {
+    const response = responseFor(account('A', '-must-not-apply'));
+    response.data.success = false;
+    pending.resolve(response);
+  }],
+];
+
+for (const [name, complete] of recoverableRefreshFailures) {
+  test(`${name}: preserve credentials, clear access/caches, and allow later recovery`, async () => {
+    const h = harness();
+    h.queryClient.setQueryData(['private-profile'], { owner: 'A' });
+    const mutation = new MutationObserver(h.queryClient, { mutationFn: async () => ({ owner: 'A' }) });
+    await mutation.mutate({ owner: 'A' });
+    const generation = h.session.getSessionGeneration();
+    const refresh = h.session.refreshAccessToken();
+    await until(() => h.refreshes.length === 1);
+    complete(h.refreshes[0]);
+    assert.equal(await refresh, null);
+    assert.equal(h.disk, 'A-refresh');
+    assert.equal(h.store.getState().accessToken, null);
+    assert.equal(h.store.getState().user, null);
+    assert.equal(h.session.isRefreshBlocked(), false);
+    assert.equal(h.session.getSessionGeneration(), generation + 1);
+    assert.equal(h.queryClient.getQueryCache().getAll().length, 0);
+    assert.equal(h.queryClient.getMutationCache().getAll().length, 0);
+    assert.equal(h.storage.filter(op => op.kind !== 'get').length, 0);
+    await tick();
+    assert.equal(h.refreshes.length, 1, 'A failed refresh must not retry itself');
+
+    const recovery = h.session.refreshAccessToken();
+    await until(() => h.refreshes.length === 2);
+    assert.equal(h.refreshes[1].body.refreshToken, 'A-refresh');
+    h.refreshes[1].resolve(responseFor(account('A', '-recovered')));
+    assert.equal(await recovery, 'A-access-recovered');
+    assert.equal(h.disk, 'A-refresh-recovered');
+    assert.equal(h.store.getState().accessToken, 'A-access-recovered');
+    assert.equal(h.session.getSessionGeneration(), generation + 1);
+  });
+}
+
+test('failed startup restoration completes signed out and a later explicit restore can recover', async () => {
+  const h = harness({ signedIn: false });
+  const generation = h.session.getSessionGeneration();
+  const restore = h.restoreUser();
+  await until(() => h.refreshes.length === 1);
+  h.refreshes[0].reject(new axios.AxiosError('Network Error', 'ERR_NETWORK'));
+  await restore;
+  assert.equal(h.disk, 'A-refresh');
+  assert.equal(h.store.getState().accessToken, null);
+  assert.equal(h.store.getState().user, null);
+  assert.equal(h.session.isRefreshBlocked(), false);
+  assert.equal(h.session.getSessionGeneration(), generation + 1);
+  await tick();
+  assert.equal(h.refreshes.length, 1);
+  const recovery = h.restoreUser();
+  await until(() => h.refreshes.length === 2);
+  h.refreshes[1].resolve(responseFor(account('A', '-recovered')));
+  await recovery;
+  assert.equal(h.store.getState().accessToken, 'A-access-recovered');
+  assert.equal(h.disk, 'A-refresh-recovered');
+  assert.equal(h.session.getSessionGeneration(), generation + 1);
+});
+
+test('a failed startup SecureStore read preserves credentials and can be retried', async () => {
+  const h = harness({ signedIn: false });
+  const generation = h.session.getSessionGeneration();
+  const read = h.holdNext('get');
+  const restore = h.restoreUser();
+  await read.started;
+  read.fail(new Error('SecureStore temporarily unavailable'));
+  await restore;
+  assert.equal(h.refreshes.length, 0);
+  assert.equal(h.disk, 'A-refresh');
+  assert.equal(h.store.getState().accessToken, null);
+  assert.equal(h.store.getState().user, null);
+  assert.equal(h.session.isRefreshBlocked(), false);
+  assert.equal(h.session.getSessionGeneration(), generation + 1);
+  const recovery = h.restoreUser();
+  await until(() => h.refreshes.length === 1);
+  h.refreshes[0].resolve(responseFor(account('A', '-recovered')));
+  await recovery;
+  assert.equal(h.disk, 'A-refresh-recovered');
+  assert.equal(h.session.getSessionGeneration(), generation + 1);
+});
+
+test('failed refresh-token persistence clears in-memory access without deleting the stored token', async () => {
+  const h = harness();
+  const generation = h.session.getSessionGeneration();
+  const write = h.holdNext('set');
+  const refresh = h.session.refreshAccessToken();
+  await until(() => h.refreshes.length === 1);
+  h.refreshes[0].resolve(responseFor(account('A', '-rotated')));
+  await write.started;
+  write.fail(new Error('SecureStore write failed'));
+  assert.equal(await refresh, null);
+  assert.equal(h.disk, 'A-refresh');
+  assert.equal(h.store.getState().accessToken, null);
+  assert.equal(h.store.getState().user, null);
+  assert.equal(h.session.isRefreshBlocked(), false);
+  assert.equal(h.storage.filter(op => op.kind === 'delete').length, 0);
+  assert.equal(h.session.getSessionGeneration(), generation + 1);
+  const recovery = h.session.refreshAccessToken();
+  await until(() => h.refreshes.length === 2);
+  assert.equal(h.refreshes[1].body.refreshToken, 'A-refresh');
+  h.refreshes[1].resolve(responseFor(account('A', '-recovered')));
+  assert.equal(await recovery, 'A-access-recovered');
+  assert.equal(h.disk, 'A-refresh-recovered');
+  assert.equal(h.session.getSessionGeneration(), generation + 1);
+  assert.equal(h.maxActiveStorage, 1);
+});
+
+test('a missing stored token never grants access, deletes storage, or makes a network refresh', async () => {
+  const h = harness({ saved: null });
+  const generation = h.session.getSessionGeneration();
+  assert.equal(await h.session.refreshAccessToken(), null);
+  assert.equal(h.refreshes.length, 0);
+  assert.equal(h.store.getState().accessToken, null);
+  assert.equal(h.store.getState().user, null);
+  assert.equal(h.session.isRefreshBlocked(), false);
+  assert.equal(h.storage.filter(op => op.kind === 'delete').length, 0);
+  assert.equal(h.session.getSessionGeneration(), generation + 1);
+  await h.restoreUser();
+  assert.equal(h.refreshes.length, 0);
+  assert.equal(h.session.getSessionGeneration(), generation + 2);
+});
+
+for (const trigger of ['restore', 'protected request']) {
+  test(`a delayed pre-failure 401 cannot interfere with recovery through ${trigger}`, async () => {
+    const h = harness();
+    const generation = h.session.getSessionGeneration();
+    const oldReply = deferred();
+    h.setAdapter(async config => {
+      if (config.url === '/old-request') return oldReply.promise;
+      if (!config._retry) throw h.unauthorized(config);
+      return h.ok(config, { recovered: true });
+    });
+    const oldRequest = observe(h.api.get('/old-request'));
+    const oldConfig = h.requests[0];
+    assert.equal(oldConfig._sessionGeneration, generation);
+
+    const failedRefresh = h.session.refreshAccessToken();
+    await until(() => h.refreshes.length === 1);
+    h.refreshes[0].reject(new axios.AxiosError('Network Error', 'ERR_NETWORK'));
+    assert.equal(await failedRefresh, null);
+    assert.equal(h.disk, 'A-refresh');
+    assert.equal(h.store.getState().accessToken, null);
+
+    const recovery = trigger === 'restore' ? h.restoreUser() : h.api.get('/recovery');
+    await until(() => h.refreshes.length === 2);
+    assert.equal(h.refreshes[1].body.refreshToken, 'A-refresh');
+    h.refreshes[1].resolve(responseFor(account('A', '-recovered')));
+    const recovered = await recovery;
+    if (trigger === 'protected request') assert.equal(recovered.data.recovered, true);
+    h.queryClient.setQueryData(['private-profile'], { owner: 'recovered' });
+    const newReply = deferred();
+    let newSignal;
+    const newQuery = observe(h.queryClient.fetchQuery({ queryKey: ['private-details'], queryFn: context => {
+      newSignal = context.signal;
+      return newReply.promise;
+    } }));
+
+    const requestCount = h.requests.length;
+    const originalError = h.unauthorized(oldConfig);
+    oldReply.reject(originalError);
+    await tick();
+    assert.equal(h.refreshes.length, 2, 'The old 401 must not start another refresh');
+    const result = await oldRequest;
+    assert.equal(result.status, 'rejected');
+    assert.equal(result.reason, originalError);
+    assert.equal(h.requests.length, requestCount, 'The old request must not replay');
+    assert.equal(h.session.getSessionGeneration(), generation + 1);
+    assert.equal(h.store.getState().accessToken, 'A-access-recovered');
+    assert.equal(h.disk, 'A-refresh-recovered');
+    assert.equal(h.queryClient.getQueryData(['private-profile']).owner, 'recovered');
+    assert.equal(newSignal.aborted, false);
+    assert.equal(h.toasts.length, 0);
+    newReply.resolve({ owner: 'recovered' });
+    const queryResult = await newQuery;
+    assert.equal(queryResult.status, 'fulfilled');
+    assert.equal(queryResult.value.owner, 'recovered');
+  });
+}
+
+test('failed shared restoration advances once and its finalizers cannot detach recovery started during cleanup', async () => {
+  const h = harness();
+  const generation = h.session.getSessionGeneration();
+  let recovery;
+  const unsubscribe = h.store.subscribe(state => {
+    if (state.accessToken !== null) return;
+    unsubscribe();
+    assert.equal(h.session.getSessionGeneration(), generation + 1, 'Advance before notifying subscribers');
+    recovery = h.restoreUser();
+  });
+  const failed = Promise.all([h.restoreUser(), h.restoreUser(), h.session.refreshAccessToken()]);
+  await until(() => h.refreshes.length === 1);
+  h.refreshes[0].reject(new Error('Transient refresh failure'));
+  await failed;
+  await until(() => h.refreshes.length === 2);
+  assert.ok(recovery);
+  const concurrentRestore = h.restoreUser();
+  const concurrentRefresh = h.session.refreshAccessToken();
+  await tick();
+  assert.equal(h.refreshes.length, 2);
+  assert.equal(h.storage.filter(op => op.kind === 'get').length, 2);
+  assert.equal(h.session.getSessionGeneration(), generation + 1);
+  h.refreshes[1].resolve(responseFor(account('A', '-recovered')));
+  assert.equal(await concurrentRefresh, 'A-access-recovered');
+  await Promise.all([recovery, concurrentRestore]);
+  assert.equal(h.store.getState().accessToken, 'A-access-recovered');
+  assert.equal(h.disk, 'A-refresh-recovered');
+  assert.equal(h.session.getSessionGeneration(), generation + 1);
+});
+
+test('a failed older refresh cannot unblock a logout that is waiting for its server call', async () => {
+  const h = harness();
+  const refresh = h.session.refreshAccessToken();
+  await until(() => h.refreshes.length === 1);
+  const logoutReply = deferred();
+  h.setAdapter(() => logoutReply.promise);
+  const logout = h.auth().logoutAndGoToLogin();
+  await until(() => h.requests.length === 1);
+  h.refreshes[0].reject(new axios.AxiosError('Timeout', 'ECONNABORTED'));
+  assert.equal(await refresh, null);
+  assert.equal(h.session.isRefreshBlocked(), true);
+  assert.equal(h.disk, 'A-refresh');
+  logoutReply.resolve(h.ok(h.requests[0]));
+  await logout;
+  assert.equal(h.disk, null);
+  assert.equal(h.store.getState().accessToken, null);
+});
+
+test('an old startup read failure cannot clear a newer login or its cache', async () => {
+  const h = harness({ signedIn: false });
+  const read = h.holdNext('get');
+  const restore = h.restoreUser();
+  await read.started;
+  const login = h.session.setAuthenticatedSession(account('B'));
+  h.queryClient.setQueryData(['private-profile'], { owner: 'B' });
+  read.fail(new Error('Old SecureStore read failed'));
+  await Promise.all([restore, login]);
+  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.disk, 'B-refresh');
+  assert.equal(h.queryClient.getQueryData(['private-profile']).owner, 'B');
+});
+
+test('a 401 after a successful refresh replay does not recursively refresh or retry again', async () => {
+  const h = harness();
+  h.setAdapter(async config => { throw h.unauthorized(config); });
+  const request = observe(h.api.get('/protected'));
+  await until(() => h.refreshes.length === 1);
+  h.refreshes[0].resolve(responseFor(account('A', '-new')));
+  const result = await request;
+  assert.equal(result.status, 'rejected');
+  assert.equal(result.reason.response.status, 401);
+  assert.equal(h.requests.length, 2);
+  assert.equal(h.refreshes.length, 1);
 });
