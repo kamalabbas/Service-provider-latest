@@ -4,10 +4,15 @@
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
+    "preandroid": "node scripts/check-config.cjs --platform android",
     "android": "expo run:android",
+    "preios": "node scripts/check-config.cjs --platform ios",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "config:check": "node scripts/check-config.cjs",
+    "test:config": "node --test tests/config.test.cjs",
+    "eas-build-pre-install": "node scripts/check-config.cjs --eas"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

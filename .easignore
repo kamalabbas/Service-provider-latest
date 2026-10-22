@@ -31,7 +31,8 @@ yarn-error.*
 *.pem
 
 # local env files
-.env*.local
+.env*
+!.env.example
 
 # typescript
 *.tsbuildinfo
@@ -39,3 +40,7 @@ yarn-error.*
 app-example
 .env
 android
+
+# Supply Firebase using the GOOGLE_SERVICES_JSON EAS file variable.
+google-services.json
+google-services.*.json

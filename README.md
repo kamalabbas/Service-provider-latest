@@ -8,6 +8,7 @@ Use the existing lockfile; do not upgrade Expo or package versions as part of se
 
 ```sh
 npm ci
+npm run config:check
 npm start
 ```
 
@@ -23,9 +24,50 @@ npx tsc --noEmit
 
 Native builds require the appropriate Android/iOS toolchain. iOS builds require macOS or EAS.
 
-## Backend configuration
+## Environment and build configuration
 
-Copy `.env.example` to a local `.env` and supply an approved `EXPO_PUBLIC_BASE_URL`. EAS profiles contain an explicitly blank value; replace it only with an approved backend URL when enabling a build environment. Remote EAS variables have not been inspected. Never put secrets in `EXPO_PUBLIC_*` values.
+Copy `.env.example` to an ignored local `.env` or `.env.local`. `APP_VARIANT` is independent of `NODE_ENV`; do not use `NODE_ENV` to choose an application environment. An unset local variant defaults to `dev`. Only `dev`, `preview`, and `production` are accepted; empty, misspelled, or other values fail with an explicit configuration error.
+
+| EAS build profile | APP_VARIANT | EAS environment | Native identifier suffix | Display name |
+| --- | --- | --- | --- | --- |
+| development | dev | development | .dev | Service Provider - Dev |
+| dev (standalone internal build) | dev | development | .dev | Service Provider - Dev |
+| preview | preview | preview | unchanged base IDs | Service Provider |
+| production | production | production | unchanged base IDs | Service Provider |
+
+Preview and production share the existing native IDs and cannot be installed side by side. No new native identities, URL scheme, EAS project/owner, or iOS Firebase reference has been introduced. `app.json` owns the unchanged base identities/assets and app version `1.0.1`; `app.config.js` applies the approved variant rules. The local npm package version `1.0.0` is separate from the native app version. EAS retains its remote build-number/version-code source and production auto-increment policy.
+
+| Input | Owner and location | Requirement |
+| --- | --- | --- |
+| APP_VARIANT | Repository: eas.json for EAS; developer: local environment | Do not redefine the EAS value remotely; it must match the chosen build profile. |
+| EXPO_PUBLIC_BASE_URL | Backend owner supplies an approved host; developer sets it locally, EAS project owner sets it in the selected environment | Required for EAS preview/production builds; optional for local checks/exports and development builds. |
+| GOOGLE_SERVICES_JSON | Firebase/EAS owner: optional path locally or file-type EAS environment variable | Native Android builds require a readable JSON file containing the current variant's Android package. |
+| Native IDs, scheme, EAS project ID | Existing app.json values; application owner approves replacements | Preserved pending migration decisions. |
+
+`EXPO_PUBLIC_BASE_URL` must be an absolute HTTP(S) URL, optionally with an API path, without embedded credentials, query parameters, fragments, or surrounding whitespace. Validation leaves approved URL values unchanged. API URLs remain unset in this repository. EAS profiles no longer override them with blank strings: use the matching EAS environment. Plain-text/sensitive visibility is appropriate for bundled public values; secret visibility does not make a client-side value secret. Do not place passwords, tokens, service-account keys, or other credentials in `EXPO_PUBLIC_*`, app config `extra`, or source code. See [Expo environment variables](https://docs.expo.dev/guides/environment-variables/) and [EAS environment selection](https://docs.expo.dev/eas/environment-variables/usage/).
+
+The installed Expo tooling loads local dotenv files without overriding existing process variables. `config:check` uses that same loader. The EAS pre-install check uses only the worker's supplied environment, with no local dotenv loading or installed dependencies required. Remote EAS variables, credentials, file contents, and project ownership have not been inspected or changed. Any previously configured custom `dev` EAS environment must be reconciled by the project owner with the approved `development` mapping before building.
+
+Android Firebase selection keeps the existing references: an explicit `GOOGLE_SERVICES_JSON` path wins; otherwise `dev` uses `./google-services.dev.json` when present, then falls back to `./google-services.json`; preview/production keep `./google-services.json`. A nonexistent override path is an error for native Android checks, with no silent fallback. The chosen file must include `com.kimzaster.familytree.dev` for dev or `com.kimzaster.familytree` for preview/production. Files are read only for validation, never printed or embedded in `extra`. Existing Firebase references are not credentials supplied by this task. No iOS Firebase plist is configured; these checks do not introduce one.
+
+Local dotenv files and both Firebase filename patterns are excluded from Git and EAS archives; `.env.example` is retained. Supply Firebase to cloud builds through the `GOOGLE_SERVICES_JSON` EAS file variable. Do not assume a local, ignored Firebase file will be uploaded. See [EAS file variables](https://docs.expo.dev/eas/environment-variables/) and [archive exclusion rules](https://docs.expo.dev/build-reference/easignore/).
+
+Validation commands:
+
+```sh
+npm run config:check
+npm run config:check -- --platform android
+npm run config:check -- --platform ios
+npm run test:config
+npx expo config --type public
+npx expo export --platform all
+```
+
+The first command permits missing API/Firebase inputs and explains which capabilities are unavailable. Native Android validation requires matching Firebase input. `npm run android`/`ios` run their platform checks before invoking Expo; direct Android prebuild also registers a native-only validation mod. EAS's [pre-install lifecycle hook](https://docs.expo.dev/build-reference/npm-hooks/) checks the explicit profile/variant, required API URL, Android Firebase input, and the existing development-client prerequisite before native work. Custom EAS workflows must invoke this check explicitly if they bypass standard lifecycle hooks. Config inspection, web, TypeScript/lint, and JavaScript-only exports do not require native Firebase files or a backend. Expo may additionally warn about the retained missing `android.googleServicesFile`; it remains intentionally configured for future native builds.
+
+The `development` profile still requests a custom development client, but `expo-dev-client` is absent from the existing dependencies. Its native preflight reports this requirement. Installing it needs separate approval; no dependencies were added or upgraded. The `dev` profile remains an internal standalone build, not a custom development client. JavaScript exports do not validate signing, Firebase project/credentials, push delivery, device network/TLS configuration, or native binaries. Cloud builds/submission also remain pending EAS slug/ownership reconciliation.
+
+## Backend configuration
 
 With the API host unset, the sign-in screen launches but backend-dependent actions are disabled. Startup skips session restoration and push/version requests; persisted refresh credentials are preserved. No demonstration credentials, fake sessions, or replacement backend paths are provided.
 
@@ -128,7 +170,7 @@ The display name is **Service Provider**, and the local package name and Expo sl
 
 Do not publish, submit, or reassign cloud ownership until these identity decisions are resolved. The renamed slug must be reconciled with the existing EAS project by its owner before cloud builds/submission.
 
-EAS build profiles and the `APP_VARIANT` mechanism remain. The dev variant appends `.dev` to native identifiers. The existing Firebase file references remain unresolved: neither `google-services.json` nor `google-services.dev.json` is supplied. Development configuration deliberately continues to reject missing/mismatched Firebase input; native builds and push delivery are not verified.
+The EAS profile/variant matrix and validation policy are documented above. The dev variant retains its existing `.dev` native identifiers. Neither `google-services.json` nor `google-services.dev.json` is supplied. Native Android builds reject missing/mismatched Firebase input; local config/web/JavaScript checks remain usable. Native builds and push delivery are not verified.
 
 ## Deferred decisions
 
