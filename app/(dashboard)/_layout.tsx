@@ -1,17 +1,22 @@
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import { useThemeColor } from "@/hooks/useThemeColor";
-import { useAuthStore } from "@/stores/authStore";
-import { Redirect, Tabs } from "expo-router";
+import { selectIsAuthenticated, useAuthStore } from "@/stores/authStore";
+import { AppUpdatePolicyContext } from "@/hooks/useAppUpdatePolicy";
+import { Tabs } from "expo-router";
+import { useContext } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function DashboardLayout() {
-  const accessToken = useAuthStore((state) => state.accessToken);
+  const isAuthenticated = useAuthStore(selectIsAuthenticated);
+  const forceUpdate = useContext(AppUpdatePolicyContext)?.action === "force";
   const insets = useSafeAreaInsets();
   const tabActive = useThemeColor({}, "tabIconDefault");
   const tabInactive = useThemeColor({}, "optionSeparator");
   const tabBackground = useThemeColor({}, "background");
 
-  if (!accessToken) return <Redirect href="/(auth)" />;
+  // The root navigator owns fallback navigation. Keep descendants unrendered
+  // while an existing native route is being removed after access changes.
+  if (!isAuthenticated || forceUpdate) return null;
 
   return (
     <Tabs

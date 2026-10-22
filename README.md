@@ -42,6 +42,24 @@ Lookup/location serialization and query hooks remain reusable. Their endpoints m
 - Axios helpers/interceptors, refresh-token coordination, SecureStore, session restoration, the root QueryClient, Zustand stores, React Hook Form, Yup, theme components, toasts, loaders, and notification mechanisms are retained.
 - Camera/photo selection and generic form controls remain reusable primitives. They do not submit profile data or implement verification requirements.
 
+## Route protection
+
+The installed Expo Router `6.0.24` / Expo SDK `54.0.35` supports [`Stack.Protected`](https://docs.expo.dev/router/advanced/protected/). The root stack declares authentication guards using the supported `guard` API and its default fallback. Disallowed groups are excluded from the navigator, and their entries are removed from history when access changes. No dependency upgrade or newer `redirectTo` API is used.
+
+The shared Zustand selector `selectIsAuthenticated` requires both an in-memory access token and a known user. Stored refresh credentials, an unresolved user, or a tokenless pending-verification user grant no dashboard access. The existing session service remains responsible for establishing and persisting credentials. The root still renders no navigator until bootstrap settles and fonts load or fail. During cold restoration, an old in-memory token cannot bypass that startup gate.
+
+| State after startup readiness | Available routes |
+| --- | --- |
+| Signed out, no force policy | Sign in, registration, email OTP, password recovery/reset, not-found, and generated sitemap |
+| Authenticated, no force policy | Home/Menu and credential settings, not-found, and generated sitemap |
+| Confirmed force policy, either session state | Only `/(auth)/forced-update` |
+
+Signed-out protected deep links fall back to Sign In. After explicit login, Home opens without resuming the denied link. Signed-in navigation to ordinary auth routes falls back to Home. The dashboard also returns no descendants when authentication is absent or a force policy is active, covering removal of an existing native route after logout or access loss. Clearing authentication still uses the existing generation, cache-cancellation, persistence, and refresh-recovery mechanisms.
+
+The root's existing version check is shared through `AppUpdatePolicyContext`. Nested layouts and the update screen consume that value without starting another check. Version loading/failure remains nonblocking; normal routes are available until a force policy is known. Once known, guards exclude normal routes, not-found, and Expo's generated sitemap. The existing update screen reads policy content directly, so no imperative redirect or URL-parameter handoff is required. Clearing the force policy restores normal route availability. Soft-update feedback still appears once after startup readiness.
+
+The unused `useProtectedRoute` hook and the fully replaced `useUserStateRedirect` hook have been removed. Navigation protection tests are included in `node tests/startup.test.cjs`. They execute the real application layouts, installed Expo guard-filtering code, React Navigation's stack state engine, and a request-capable React Query probe with mocked native/UI boundaries. Android/iOS deep-link delivery, native mounting/unmounting, back gestures, and web navigation still need device/browser verification. Client route guards do not replace backend authorization.
+
 ## API errors and notifications
 
 `services/apiError.ts` produces a small display-only `AppError`: a failure kind (`network`, `timeout`, `http`, `cancelled`, or `unknown`), controlled message, and optional HTTP status. The shared presenter in `services/api.ts` uses it for interceptor, authentication-mutation, and OTP-resend failures. Original errors still propagate unchanged; they can contain private Axios configuration and must never be logged or displayed directly. The projection never includes request bodies, headers, raw error messages, or backend `detail`, `title`, `message`, or validation payloads. No backend error text has an approved safe-display contract yet.
@@ -60,7 +78,7 @@ Run API/auth/session regressions with `node tests/authSession.test.cjs`. These i
 
 The root shares one bootstrap promise per JavaScript runtime, including effect replay and root remounts. Later explicit session-restore/request triggers still work independently. Startup waits for session restoration to settle and for fonts to either load or fail. A rejected restoration releases the startup gate; the session service retains its existing recovery and persistent logout policies. An unexpected rejection settles only an unresolved authentication state still owned by the original generation, without touching persisted credentials or a newer session.
 
-Font-loading failure renders the existing application shell using system fonts (the retained SpaceMono asset is not required by current screens). The normal routing hook runs only after both startup gates settle. The splash is dismissed from the rendered root view's native layout callback, rather than immediately after scheduling a React state update. Rerenders/layout events share a pending dismissal, and unmounted effects cannot update startup state or initiate a fallback hide.
+Font-loading failure renders the existing application shell using system fonts (the retained SpaceMono asset is not required by current screens). The root navigator mounts only after both startup gates settle. The splash is dismissed from the rendered root view's native layout callback, rather than immediately after scheduling a React state update. Rerenders/layout events share a pending dismissal, and unmounted effects cannot update startup state or initiate a fallback hide.
 
 Splash prevention/dismissal rejections produce static diagnostics without raw errors. Failed asynchronous dismissal makes one synchronous Expo hide attempt while mounted; if both fail, a later layout may retry. There is no polling or retry loop. Native splash presentation, actual font rendering, and process restart behavior still require Android/iOS device verification. JavaScript cannot force an unresponsive native splash module to hide or settle a native storage call that never completes; pending restoration is not assigned an artificial timeout.
 

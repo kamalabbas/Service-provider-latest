@@ -11,9 +11,9 @@ import { Toast } from '@/components/ui/Toast';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { useThemeStore } from '@/stores/theme';
 import { useToastStore } from '@/stores/toastStore';
-import { useAuthStore } from '@/stores/authStore';
+import { selectIsAuthenticated, useAuthStore } from '@/stores/authStore';
 
-import { useUserStateRedirect } from '@/hooks/useUserStateRedirect';
+import { AppUpdatePolicyContext, useAppUpdatePolicy } from '@/hooks/useAppUpdatePolicy';
 import { restoreUser } from '@/utility/restoreUser';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/services/queryClient';
@@ -96,22 +96,33 @@ export default function RootLayout() {
     });
   }, [ready]);
 
-  useUserStateRedirect(ready);
+  const isAuthenticated = useAuthStore(selectIsAuthenticated);
+  const updatePolicy = useAppUpdatePolicy(ready);
+  const forceUpdate = updatePolicy?.action === 'force';
 
   if (!ready) return null;
 
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={theme}>
-        <View style={{ flex: 1, backgroundColor: theme.colors.background }} onLayout={onRootLayout}>
-          <Stack>
-            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-            <Stack.Screen name="(dashboard)" options={{ headerShown: false }} />
-            <Stack.Screen name="+not-found" />
-          </Stack>
-          <StatusBar style='dark' />
-          <Toast visible={visible} message={message} type={type} persist={persist} linkText={linkText} linkURL={linkURL}/>
-        </View>
+        <AppUpdatePolicyContext.Provider value={updatePolicy}>
+          <View style={{ flex: 1, backgroundColor: theme.colors.background }} onLayout={onRootLayout}>
+            <Stack>
+              <Stack.Protected guard={forceUpdate || !isAuthenticated}>
+                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              </Stack.Protected>
+              <Stack.Protected guard={!forceUpdate && isAuthenticated}>
+                <Stack.Screen name="(dashboard)" options={{ headerShown: false }} />
+              </Stack.Protected>
+              <Stack.Protected guard={!forceUpdate}>
+                <Stack.Screen name="+not-found" />
+                <Stack.Screen name="_sitemap" />
+              </Stack.Protected>
+            </Stack>
+            <StatusBar style='dark' />
+            <Toast visible={visible} message={message} type={type} persist={persist} linkText={linkText} linkURL={linkURL}/>
+          </View>
+        </AppUpdatePolicyContext.Provider>
       </ThemeProvider>
     </QueryClientProvider>
   );

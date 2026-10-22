@@ -12,6 +12,10 @@ interface AuthState {
   setPushNotificationToken: (token: string) => void
 };
 
+// A token alone or a tokenless pending-verification user is not a session.
+export const selectIsAuthenticated = (state: Pick<AuthState, 'accessToken' | 'user'>) =>
+  Boolean(state.accessToken && state.user);
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   accessToken: null,
   user: undefined,
