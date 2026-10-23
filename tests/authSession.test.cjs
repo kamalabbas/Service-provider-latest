@@ -13,7 +13,10 @@ const { MutationObserver, QueryClient, QueryObserver } = require('@tanstack/reac
 const root = path.resolve(__dirname, '..');
 const compiled = new Map();
 const clients = new Set();
+const mutationSubscriptions = new Set();
 test.afterEach(() => {
+  for (const unsubscribe of mutationSubscriptions) unsubscribe();
+  mutationSubscriptions.clear();
   for (const client of clients) client.clear();
   clients.clear();
 });
@@ -44,7 +47,7 @@ const until = async predicate => {
 };
 
 const policyRecord = state => JSON.stringify({ version: 1, state });
-function harness({ saved = 'A-refresh', signedIn = true, policy = policyRecord('allowed'), persistence = { token: saved, policy } } = {}) {
+function harness({ saved = 'A-refresh', signedIn = true, policy = policyRecord('allowed'), persistence = { token: saved, policy }, scheduleTimeout = setTimeout } = {}) {
   let activeStorage = 0;
   let maxActiveStorage = 0;
   const storage = [], refreshes = [], requests = [], toasts = [], navigation = [], registrations = [], logs = [];
@@ -127,8 +130,9 @@ function harness({ saved = 'A-refresh', signedIn = true, policy = policyRecord('
     },
     '@tanstack/react-query': { QueryClient, useQuery: options => options, useMutation: options => {
       const observer = new MutationObserver(queryClient, options);
-      return { ...options, mutateAsync: variables => observer.mutate(variables),
-        mutate: variables => { void observer.mutate(variables).catch(() => {}); },
+      mutationSubscriptions.add(observer.subscribe(() => {}));
+      return { ...options, mutateAsync: (variables, callbacks) => observer.mutate(variables, callbacks),
+        mutate: (variables, callbacks) => { void observer.mutate(variables, callbacks).catch(() => {}); },
       };
     } },
     'expo-router': { useRouter: () => router, useLocalSearchParams: () => ({ email: 'A@example.test', forgotPasswordToken: 'synthetic-reset-token' }), Link: 'Link' },
@@ -164,7 +168,7 @@ function harness({ saved = 'A-refresh', signedIn = true, policy = policyRecord('
     const module = { exports: {} };
     modules.set(file, module);
     vm.runInNewContext(compiled.get(file), {
-      module, exports: module.exports, setTimeout, clearTimeout, URL, URLSearchParams,
+      module, exports: module.exports, setTimeout: scheduleTimeout, clearTimeout, URL, URLSearchParams,
       process: { env: { EXPO_PUBLIC_BASE_URL: 'https://api.example.test' } },
       console: Object.fromEntries(['log', 'warn', 'error'].map(name => [name, (...args) => logs.push(args)])),
       require: id => {
@@ -624,9 +628,10 @@ test('logout snapshots the latest device token at invocation and cannot pick up 
 
 test('login and both email-verification callbacks persist sessions without automatic push registration', async () => {
   const h = harness({ saved: null, signedIn: false });
+  h.setAdapter(async config => h.ok(config, responseFor(account('B')).data));
   const auth = h.auth();
   for (const mutation of [auth.loginMutation, auth.verifyEmailMutation, auth.verifyNewEmailMutation]) {
-    await mutation.onSuccess(responseFor(account('B')).data);
+    await mutation.mutateAsync({ email: 'B@example.test', password: 'synthetic', otp: '123456' });
     assert.equal(h.disk, 'B-refresh');
     assert.equal(h.store.getState().user.id, 'B');
   }
@@ -637,19 +642,20 @@ test('login and both email-verification callbacks persist sessions without autom
 test('a login awaiting persistence cannot unblock logout or register stale push credentials', async () => {
   const h = harness({ saved: null, signedIn: false });
   const auth = h.auth();
+  h.setAdapter(async config => h.ok(config, responseFor(account('A')).data));
   const write = h.holdNext('set');
-  const login = auth.loginMutation.onSuccess(responseFor(account('A')).data);
+  const login = observe(auth.loginMutation.mutateAsync({ email: 'A@example.test', password: 'synthetic' }));
   await write.started;
   const logoutReply = deferred();
   h.setAdapter(() => logoutReply.promise);
   const logout = auth.logoutAndGoToLogin();
   assert.equal(h.session.isRefreshBlocked(), true);
   write.release();
-  await login;
-  await until(() => h.requests.length === 1);
+  assert.equal((await login).status, 'rejected');
+  await until(() => h.requests.length === 2);
   assert.equal(h.session.isRefreshBlocked(), true);
   assert.equal(h.registrations.length, 0);
-  logoutReply.resolve(h.ok(h.requests[0]));
+  logoutReply.resolve(h.ok(h.requests[1]));
   await logout;
   assert.equal(h.disk, null);
 });
@@ -2283,3 +2289,289 @@ for (const mutationName of ['loginMutation', 'verifyEmailMutation', 'verifyNewEm
     assert.equal(h.toasts.length, 0);
   });
 }
+
+const authPayload = {
+  email: 'old@example.test', password: 'synthetic', confirmPassword: 'synthetic',
+  otp: '123456', userId: 1, newEmail: 'new@example.test',
+  currentPassword: 'synthetic-old', newPassword: 'synthetic-new', forgotPasswordToken: 'synthetic-reset',
+};
+const authSuccessBody = (name, id = 'A') => name === 'registerMutation'
+  ? { success: true, data: { user: account(id).user } }
+  : name === 'verifyResetPasswordOtpMutation'
+    ? { success: true, data: { forgotPasswordToken: 'synthetic-reset' } }
+    : responseFor(account(id)).data;
+
+for (const name of ['loginMutation', 'registerMutation', 'verifyEmailMutation', 'verifyNewEmailMutation',
+  'changeEmailMutation', 'changePasswordMutation', 'sendForgetPasswordMutation', 'verifyResetPasswordOtpMutation', 'setNewPasswordMutation']) {
+  for (const transition of ['logout', 'new account']) {
+    test(`${name}: late HTTP success after ${transition} cannot publish data, persist, navigate, or call consumer callbacks`, async () => {
+      const h = harness(), reply = deferred(), callbacks = [];
+      h.setAdapter(() => reply.promise);
+      const pending = observe(h.auth()[name].mutateAsync(authPayload, {
+        onSuccess: () => callbacks.push('success'),
+        onError: () => callbacks.push('error'),
+        onSettled: () => callbacks.push('settled'),
+      }));
+      await until(() => h.requests.length === 1);
+      if (transition === 'logout') {
+        const logout = h.session.beginSessionLogout();
+        await h.session.clearSession(logout.generation);
+      } else {
+        await h.session.setAuthenticatedSession(account('B'));
+      }
+      const state = h.store.getState(), token = h.disk, policy = h.policy;
+      const writes = h.storage.length, policyWrites = h.policyStorage.length;
+      h.queryClient.setQueryData(['current-session'], 'preserve-this');
+      reply.resolve(h.ok(h.requests[0], authSuccessBody(name)));
+      const result = await pending;
+      assert.equal(result.status, 'rejected');
+      assert.ok(axios.isCancel(result.reason));
+      assert.equal(h.store.getState().user, state.user);
+      assert.equal(h.store.getState().accessToken, state.accessToken);
+      assert.equal(h.disk, token);
+      assert.equal(h.policy, policy);
+      assert.equal(h.storage.length, writes);
+      assert.equal(h.policyStorage.length, policyWrites);
+      assert.equal(h.queryClient.getQueryData(['current-session']), 'preserve-this');
+      assert.deepEqual(callbacks, []);
+      assert.deepEqual(h.navigation, []);
+      assert.deepEqual(h.toasts, []);
+      assert.deepEqual(h.logs, []);
+    });
+  }
+}
+
+test('the newer successful login wins across hook instances and reused input objects', async () => {
+  const h = harness({ signedIn: false, saved: null }), replies = [deferred(), deferred()];
+  let calls = 0;
+  h.setAdapter(() => replies[calls++].promise);
+  const first = observe(h.auth().loginMutation.mutateAsync(authPayload));
+  await until(() => h.requests.length === 1);
+  const second = observe(h.auth().loginMutation.mutateAsync(authPayload));
+  await until(() => h.requests.length === 2);
+  assert.notEqual(h.requests[0]._authenticationOperation.id, h.requests[1]._authenticationOperation.id);
+  assert.equal(h.requests[0]._sessionGeneration, h.requests[1]._sessionGeneration);
+  assert.deepEqual(JSON.parse(h.requests[0].data), authPayload, 'Operation metadata must not alter the backend body');
+  replies[1].resolve(h.ok(h.requests[1], responseFor(account('B')).data));
+  assert.equal((await second).status, 'fulfilled');
+  const nativeWrites = h.storage.length, policyWrites = h.policyStorage.length;
+  replies[0].resolve(h.ok(h.requests[0], responseFor(account('A')).data));
+  assert.ok(axios.isCancel((await first).reason));
+  assert.equal(h.store.getState().user.id, 'B');
+  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.disk, 'B-refresh');
+  assert.equal(h.storage.length, nativeWrites);
+  assert.equal(h.policyStorage.length, policyWrites);
+});
+
+test('a newer failed attempt still supersedes older successes without clearing the current session', async () => {
+  const h = harness(), replies = [deferred(), deferred()];
+  let calls = 0;
+  h.setAdapter(() => replies[calls++].promise);
+  const older = observe(h.auth().loginMutation.mutateAsync(authPayload));
+  await until(() => h.requests.length === 1);
+  const newer = observe(h.auth().loginMutation.mutateAsync(authPayload));
+  await until(() => h.requests.length === 2);
+  replies[1].reject(httpFailure(h.requests[1], 400));
+  await newer;
+  replies[0].resolve(h.ok(h.requests[0], responseFor(account('B')).data));
+  assert.ok(axios.isCancel((await older).reason));
+  assert.equal(h.store.getState().user.id, 'A');
+  assert.equal(h.store.getState().accessToken, 'A-access');
+  assert.equal(h.disk, 'A-refresh');
+  assert.equal(h.toasts.length, 1, 'Only the current failure may notify');
+  assert.equal(h.policyStorage.length, 0);
+});
+
+test('an older auth mutation paused before dispatch cannot become the newest attempt when resumed', async () => {
+  const h = harness({ signedIn: false, saved: null });
+  h.setAdapter(async config => h.ok(config, responseFor(account('B')).data));
+  const queued = h.holdNextMutation();
+  const old = observe(h.auth().loginMutation.mutateAsync({ ...authPayload, email: 'old@example.test' }));
+  await queued.started;
+  await h.auth().loginMutation.mutateAsync({ ...authPayload, email: 'new@example.test' });
+  queued.release();
+  assert.ok(axios.isCancel((await old).reason));
+  assert.equal(h.requests.length, 1);
+  assert.equal(JSON.parse(h.requests[0].data).email, 'new@example.test');
+  assert.equal(h.store.getState().user.id, 'B');
+});
+
+test('a success superseded between HTTP completion and mutation callback cannot publish user data', async () => {
+  const h = harness({ signedIn: false, saved: null }), barrier = deferred();
+  let reached = false;
+  h.queryClient.getMutationCache().config.onSuccess = async () => { reached = true; await barrier.promise; };
+  h.setAdapter(async config => h.ok(config, authSuccessBody('registerMutation')));
+  const pending = observe(h.auth().registerMutation.mutateAsync(authPayload));
+  await until(() => reached);
+  await h.session.setAuthenticatedSession(account('B'));
+  barrier.resolve();
+  assert.ok(axios.isCancel((await pending).reason));
+  assert.equal(h.store.getState().user.id, 'B');
+  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.disk, 'B-refresh');
+  assert.deepEqual(h.navigation, []);
+});
+
+for (const boundary of ['blocked policy', 'credential', 'allowed policy']) {
+  test(`superseding authentication during ${boundary} persistence cannot publish or leave restoration allowed`, async () => {
+    const h = harness({ signedIn: false, saved: null }), nextReply = deferred();
+    h.setAdapter(async config => h.requests.length === 1
+      ? h.ok(config, responseFor(account('A')).data) : nextReply.promise);
+    const held = h.holdNext(boundary === 'blocked policy' ? 'policySet' : 'set');
+    const old = observe(h.auth().loginMutation.mutateAsync(authPayload));
+    await held.started;
+    let nativeBoundary = held;
+    if (boundary === 'allowed policy') {
+      nativeBoundary = h.holdNext('policySet');
+      held.release();
+      await nativeBoundary.started;
+    }
+    const generation = h.session.getSessionGeneration();
+    const next = observe(h.auth().loginMutation.mutateAsync(authPayload));
+    await until(() => h.requests.length === 2);
+    assert.equal(h.session.getSessionGeneration(), generation, 'New intent alone must not rotate the session');
+    nativeBoundary.release();
+    assert.ok(axios.isCancel((await old).reason));
+    assert.equal(h.store.getState().user, null);
+    assert.equal(h.store.getState().accessToken, null);
+    assert.equal(h.policy, policyRecord('blocked'));
+    assert.equal(h.session.isRefreshBlocked(), true);
+    if (boundary === 'blocked policy') assert.equal(h.storage.filter(event => event.kind === 'set').length, 0);
+    const restarted = h.restart();
+    await restarted.restoreUser();
+    assert.equal(restarted.refreshes.length, 0, 'A stale native write must not authorize restoration');
+    nextReply.resolve(h.ok(h.requests[1], responseFor(account('B')).data));
+    assert.equal((await next).status, 'fulfilled');
+    assert.equal(h.store.getState().user.id, 'B');
+    assert.equal(h.store.getState().accessToken, 'B-access');
+    assert.equal(h.disk, 'B-refresh');
+    assert.equal(h.policy, policyRecord('allowed'));
+    assert.deepEqual(h.toasts, []);
+  });
+}
+
+test('a session setter rejects an already superseded operation before advancing or touching persistence', async () => {
+  const h = harness(), operation = h.session.beginAuthenticationOperation();
+  h.session.beginAuthenticationOperation();
+  const generation = h.session.getSessionGeneration();
+  assert.equal(await h.session.setAuthenticatedSession(account('B'), operation), null);
+  assert.equal(h.session.getSessionGeneration(), generation);
+  assert.equal(h.store.getState().user.id, 'A');
+  assert.deepEqual(h.storage, []);
+  assert.deepEqual(h.policyStorage, []);
+});
+
+test('auth response interception rejects superseded direct service calls within the same generation', async () => {
+  const h = harness(), reply = deferred();
+  h.setAdapter(() => reply.promise);
+  const pending = observe(h.authServices().register(authPayload));
+  await until(() => h.requests.length === 1);
+  const generation = h.session.getSessionGeneration();
+  h.session.beginAuthenticationOperation();
+  reply.resolve(h.ok(h.requests[0], authSuccessBody('registerMutation', 'B')));
+  assert.ok(axios.isCancel((await pending).reason));
+  assert.equal(h.session.getSessionGeneration(), generation);
+  assert.equal(h.store.getState().user.id, 'A');
+  assert.equal(h.store.getState().accessToken, 'A-access');
+});
+
+test('a stale credential 401 cannot refresh or notify even when the session generation is unchanged', async () => {
+  const h = harness(), reply = deferred();
+  h.setAdapter(() => reply.promise);
+  const pending = observe(h.auth().verifyNewEmailMutation.mutateAsync(authPayload));
+  await until(() => h.requests.length === 1);
+  h.session.beginAuthenticationOperation();
+  const failure = httpFailure(h.requests[0], 401);
+  reply.reject(failure);
+  assert.equal((await pending).reason, failure, 'Existing rejection identity remains intact');
+  assert.equal(h.refreshes.length, 0);
+  assert.deepEqual(h.toasts, []);
+  assert.equal(h.store.getState().accessToken, 'A-access');
+});
+
+test('consumer success/settled callbacks cannot run after a newer operation begins during settlement', async () => {
+  const h = harness(), barrier = deferred(), callbacks = [];
+  let reached = false;
+  h.queryClient.getMutationCache().config.onSettled = async () => { reached = true; await barrier.promise; };
+  h.setAdapter(async config => h.ok(config, { success: true, data: null }));
+  const pending = observe(h.auth().changeEmailMutation.mutateAsync(authPayload, {
+    onSuccess: () => callbacks.push('success'), onSettled: () => callbacks.push('settled'),
+  }));
+  await until(() => reached);
+  h.session.beginAuthenticationOperation();
+  barrier.resolve();
+  assert.ok(axios.isCancel((await pending).reason));
+  assert.deepEqual(callbacks, []);
+});
+
+test('normal registration and OTP retain callback payloads, pending identity, navigation, and confirmed credentials', async () => {
+  const h = harness({ signedIn: false, saved: null }), callbacks = [];
+  h.setAdapter(async config => h.ok(config, config.url === '/Auth/SignUp'
+    ? authSuccessBody('registerMutation') : responseFor(account('A')).data));
+  const auth = h.auth();
+  const registration = await auth.registerMutation.mutateAsync(authPayload, {
+    onSuccess: (data, variables) => callbacks.push([data.data.user.id, variables.email]),
+  });
+  assert.equal(registration.data.user.id, 'A');
+  assert.equal(h.store.getState().user.id, 'A');
+  assert.equal(h.store.getState().accessToken, null);
+  assert.deepEqual(h.navigation, [['push', '/(auth)/otp-register']]);
+  assert.deepEqual(callbacks, [['A', authPayload.email]]);
+  await auth.verifyEmailMutation.mutateAsync(authPayload);
+  assert.equal(h.store.getState().accessToken, 'A-access');
+  assert.equal(h.disk, 'A-refresh');
+  assert.equal(h.policy, policyRecord('allowed'));
+  assert.equal(h.registrations.length, 0);
+});
+
+test('password-reset delayed navigation is discarded after another authentication operation', async () => {
+  const timers = [], h = harness({ signedIn: false, saved: null, scheduleTimeout: callback => { timers.push(callback); return 0; } });
+  h.setAdapter(async config => h.ok(config, { success: true, data: null }));
+  await h.auth().setNewPasswordMutation.mutateAsync(authPayload);
+  assert.equal(timers.length, 1);
+  await h.session.setAuthenticatedSession(account('B'));
+  timers[0]();
+  assert.deepEqual(h.navigation, []);
+  assert.equal(h.store.getState().user.id, 'B');
+});
+
+for (const boundary of ['credential', 'allowed policy']) {
+  test(`a newer confirmed login owns persistence while an old ${boundary} write is still in flight`, async () => {
+    const h = harness({ signedIn: false, saved: null });
+    h.setAdapter(async config => h.ok(config, responseFor(account(h.requests.length === 1 ? 'A' : 'B')).data));
+    const credential = h.holdNext('set');
+    const old = observe(h.auth().verifyEmailMutation.mutateAsync(authPayload));
+    await credential.started;
+    let held = credential;
+    if (boundary === 'allowed policy') {
+      held = h.holdNext('policySet');
+      credential.release();
+      await held.started;
+    }
+    const generation = h.session.getSessionGeneration();
+    const newer = observe(h.auth().loginMutation.mutateAsync(authPayload));
+    await until(() => h.session.getSessionGeneration() === generation + 1);
+    held.release();
+    assert.ok(axios.isCancel((await old).reason));
+    assert.equal((await newer).status, 'fulfilled');
+    h.queryClient.setQueryData(['new-session'], 'B-private');
+    await tick();
+    assert.equal(h.store.getState().user.id, 'B');
+    assert.equal(h.store.getState().accessToken, 'B-access');
+    assert.equal(h.disk, 'B-refresh');
+    assert.equal(h.policy, policyRecord('allowed'));
+    assert.equal(h.session.isRefreshBlocked(), false);
+    assert.equal(h.queryClient.getQueryData(['new-session']), 'B-private');
+    assert.deepEqual(h.toasts, []);
+  });
+}
+
+test('normal password-reset navigation still executes when its operation remains current', async () => {
+  const timers = [], h = harness({ signedIn: false, saved: null, scheduleTimeout: callback => { timers.push(callback); return 0; } });
+  h.setAdapter(async config => h.ok(config, { success: true, data: null }));
+  await h.auth().setNewPasswordMutation.mutateAsync(authPayload);
+  timers[0]();
+  assert.deepEqual(h.navigation, [['replace', '/(auth)']]);
+  assert.deepEqual(h.toasts, [['Password has been reset successfully. Please login.', 'success']]);
+});

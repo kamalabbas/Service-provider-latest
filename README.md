@@ -136,6 +136,16 @@ QueryClient clearing cancels active queries and prevents their late results from
 
 Run the session and cache regression checks with `node tests/authSession.test.cjs`.
 
+## Authentication operation ordering
+
+Every `useAuth` authentication/credential mutation captures a unique operation ID and its session generation synchronously at `mutate`/`mutateAsync` invocation. New authentication operations supersede earlier ones across hook instances, including requests queued or paused by React Query. Request bodies and callback payloads retain their existing shapes; operation metadata is local Axios configuration. Direct auth service calls also acquire an identity when no captured operation is supplied. Logout/session-generation changes invalidate operations from the previous generation. Starting a request alone does not clear a confirmed session or rotate its generation; the newest attempt wins even if it fails.
+
+Axios checks the operation before dispatch and before returning a successful auth response. Superseded successes reject as cancellation; stale errors remain silent and cannot initiate refresh. Mutation callbacks check again after HTTP completion, including consumer callbacks and delayed password-reset navigation. Only a current token-bearing response may claim a new session generation. That winning operation then owns the generation throughout serialized persistence and callback completion. Normal same-account refresh remains coordinated by the existing session service and does not create a new authentication operation.
+
+Credential/policy persistence checks both identities before each native step and before publishing authentication. A superseded commit cannot initiate its remaining writes or publish a user. An already dispatched native call cannot be cancelled: if no newer session has taken ownership, the old commit serializes a `blocked` restore policy after its in-flight write. If a newer session owns the generation, its persistence sequence runs last and old cleanup cannot modify it. Tokens retained by a superseded native write do not authorize restoration under a confirmed blocked policy. Existing limitations still apply when native storage never settles, durable blocking fails, or the process exits before a durable block is written. Server-side effects of requests already dispatched cannot be undone by these client guards.
+
+Run `node --test tests/*.test.cjs` for regressions covering late login/registration/OTP responses, queued mutations, concurrent attempts with reused inputs, delayed callbacks, every persistence boundary, consumer callbacks, logout/account switching, and the existing refresh/cache/startup protections. Native boundaries and backend responses are controlled test substitutes; real-device/backend validation remains separate.
+
 ## Refresh failure policy
 
 Invalid/revoked refresh-token detection is pending backend contract confirmation. All refresh errors are treated as recoverable for now, including offline/timeout failures, HTTP 400/401/403/429/500/503 responses, and malformed success payloads. HTTP status alone and unverified error-code/message strings do not establish a terminal failure. A response explicitly reporting `success: false` is also a failed refresh, even if it contains token fields.

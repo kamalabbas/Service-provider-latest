@@ -1,10 +1,18 @@
 import { useAuthStore } from "@/stores/authStore";
-import { getSessionGeneration, isRefreshBlocked, refreshAccessToken } from "@/services/authSession";
+import { AuthenticationOperation, getSessionGeneration, isCurrentAuthenticationOperation, isRefreshBlocked, refreshAccessToken } from "@/services/authSession";
 import { useToastStore } from "@/stores/toastStore";
 import { ApiErrorAction, toAppError } from "@/services/apiError";
 import axios, { AxiosHeaders, AxiosRequestConfig, AxiosResponse, CanceledError, InternalAxiosRequestConfig, isAxiosError, isCancel } from "axios";
 
-type SessionRequestConfig = InternalAxiosRequestConfig & { _retry?: boolean; _sessionGeneration?: number };
+type SessionRequestConfig = InternalAxiosRequestConfig & {
+  _retry?: boolean;
+  _sessionGeneration?: number;
+  _authenticationOperation?: AuthenticationOperation;
+};
+
+const staleAuthentication = (config?: SessionRequestConfig) => Boolean(
+  config?._authenticationOperation && !isCurrentAuthenticationOperation(config._authenticationOperation)
+);
 
 type RequestPolicy = { action?: ApiErrorAction; refresh: boolean; silent?: boolean };
 const protectedRequest: RequestPolicy = { refresh: true };
@@ -48,7 +56,7 @@ export function notifyApiError(error: unknown, context: { action?: ApiErrorActio
   const generation = context.generation ?? config?._sessionGeneration;
   const policy = getRequestPolicy(config);
   const appError = toAppError(error, context.action ?? policy.action);
-  if (appError.kind === "cancelled" || context.silent || policy.silent ||
+  if (appError.kind === "cancelled" || context.silent || policy.silent || staleAuthentication(config) ||
       (generation !== undefined && generation !== getSessionGeneration())) return;
   useToastStore.getState().showToast(appError.message, "error");
 }
@@ -64,6 +72,11 @@ api.interceptors.request.use(
   (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
     const sessionConfig = config as InternalAxiosRequestConfig & SessionRequestConfig;
     const generation = getSessionGeneration();
+    if (staleAuthentication(sessionConfig)) {
+      const cancelled = new CanceledError("Authentication operation was superseded.");
+      cancelled.config = config;
+      throw cancelled;
+    }
     if (sessionConfig._sessionGeneration === undefined) {
       sessionConfig._sessionGeneration = generation;
     } else if (sessionConfig._sessionGeneration !== generation) {
@@ -94,14 +107,22 @@ api.interceptors.request.use(
 
 // --- Response Interceptor
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (staleAuthentication(response.config as SessionRequestConfig)) {
+      const cancelled = new CanceledError("Authentication operation was superseded.");
+      cancelled.config = response.config;
+      throw cancelled;
+    }
+    return response;
+  },
   async (error: unknown) => {
     const err = isAxiosError(error) ? error : undefined;
     const originalRequest = err?.config as SessionRequestConfig | undefined;
     const generation = originalRequest?._sessionGeneration;
     const policy = getRequestPolicy(originalRequest);
 
-    if (isCancel(error) || err?.code === "ERR_CANCELED" || (generation !== undefined && generation !== getSessionGeneration())) {
+    if (isCancel(error) || err?.code === "ERR_CANCELED" || staleAuthentication(originalRequest) ||
+        (generation !== undefined && generation !== getSessionGeneration())) {
       notifyApiError(error, { silent: true });
       return Promise.reject(error);
     }

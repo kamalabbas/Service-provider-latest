@@ -30,23 +30,86 @@ import {
   verifyNewEmail,
   verifyResetPasswordOtp,
 } from "@/services/authService";
-import { beginSessionLogout, clearSession, finishSessionLogout, getSessionGeneration, setAuthenticatedSession } from "@/services/authSession";
+import { AuthenticationOperation, beginAuthenticationOperation, beginSessionLogout, clearSession, finishSessionLogout, getSessionGeneration, isCurrentAuthenticationOperation, setAuthenticatedSession } from "@/services/authSession";
 import { notifyApiError } from "@/services/api";
 import { ApiErrorAction } from "@/services/apiError";
 import { useAuthStore } from "@/stores/authStore";
 import { useToastStore } from "@/stores/toastStore";
-import { useMutation } from "@tanstack/react-query";
+import { MutateOptions, useMutation, UseMutationResult } from "@tanstack/react-query";
+import { CanceledError, isCancel } from "axios";
 import { useRouter } from "expo-router";
 
-async function persistSession(params: Parameters<typeof setAuthenticatedSession>[0], action: ApiErrorAction) {
-  const operation = setAuthenticatedSession(params);
+const authenticationRequests = new WeakMap<object, AuthenticationOperation>();
+
+function assertCurrentOperation(operation?: AuthenticationOperation): asserts operation is AuthenticationOperation {
+  if (!operation || !isCurrentAuthenticationOperation(operation)) {
+    throw new CanceledError("Authentication operation was superseded.");
+  }
+}
+
+// Capture identity at invocation, before React Query can pause/queue dispatch.
+// Clone the request so reusing the same input object still creates distinct attempts.
+function useAuthenticationMutation<TData, TRequest extends object>(options: {
+  mutationFn: (request: TRequest, operation: AuthenticationOperation) => Promise<TData>;
+  onSuccess?: (data: TData, request: TRequest, operation: AuthenticationOperation) => void | Promise<void>;
+  onError?: (error: unknown) => void;
+}): UseMutationResult<TData, unknown, TRequest> {
+  const mutation = useMutation<TData, unknown, TRequest>({
+    mutationFn: (request) => {
+      const operation = authenticationRequests.get(request);
+      assertCurrentOperation(operation);
+      return options.mutationFn(request, operation);
+    },
+    onSuccess: async (data, request) => {
+      const operation = authenticationRequests.get(request);
+      assertCurrentOperation(operation);
+      await options.onSuccess?.(data, request, operation);
+      assertCurrentOperation(operation);
+    },
+    onError: (error, request) => {
+      const operation = authenticationRequests.get(request);
+      if (operation && isCurrentAuthenticationOperation(operation)) options.onError?.(error);
+    },
+  });
+  const prepare = (request: TRequest) => {
+    const operation = beginAuthenticationOperation();
+    const variables = { ...request };
+    authenticationRequests.set(variables, operation);
+    return { operation, variables };
+  };
+  const guardCallbacks = (callbacks: MutateOptions<TData, unknown, TRequest> | undefined, operation: AuthenticationOperation): typeof callbacks => callbacks && ({
+    onSuccess: (...args) => { if (isCurrentAuthenticationOperation(operation)) callbacks.onSuccess?.(...args); },
+    onError: (...args) => { if (isCurrentAuthenticationOperation(operation)) callbacks.onError?.(...args); },
+    onSettled: (...args) => { if (isCurrentAuthenticationOperation(operation)) callbacks.onSettled?.(...args); },
+  });
+  return {
+    ...mutation,
+    mutate: (request, callbacks) => {
+      const { operation, variables } = prepare(request);
+      mutation.mutate(variables, guardCallbacks(callbacks, operation));
+    },
+    mutateAsync: async (request, callbacks) => {
+      const { operation, variables } = prepare(request);
+      const data = await mutation.mutateAsync(variables, guardCallbacks(callbacks, operation));
+      assertCurrentOperation(operation);
+      return data;
+    },
+  };
+}
+
+async function persistSession(params: Parameters<typeof setAuthenticatedSession>[0], action: ApiErrorAction, authentication: AuthenticationOperation) {
+  assertCurrentOperation(authentication);
+  const operation = setAuthenticatedSession(params, authentication);
   const generation = getSessionGeneration();
   try {
-    return await operation;
+    const result = await operation;
+    assertCurrentOperation(authentication);
+    if (result === null) throw new CanceledError("Authentication operation was superseded.");
+    return result;
   } catch (error) {
     // Persistence failures have no Axios config. Bind their presentation to the
     // generation that attempted the write, and keep the original rejection.
-    notifyApiError(error, { action, generation });
+    notifyApiError(error, { action, generation, silent: !isCurrentAuthenticationOperation(authentication) });
     throw error;
   }
 }
@@ -61,10 +124,10 @@ export function useAuth() {
   // and unregistration semantics are confirmed. The root acquires the device token.
 
   // Login mutation
-  const loginMutation = useMutation<BaseResponse<LoginResponse>, unknown, LoginRequest>({
+  const loginMutation = useAuthenticationMutation<BaseResponse<LoginResponse>, LoginRequest>({
     mutationFn: login,
     onError: (error) => notifyApiError(error, { action: "signIn" }),
-    onSuccess: async (response) => {
+    onSuccess: async (response, _request, operation) => {
       try {
         if (response.data) {
           if (response.data.token?.accessToken && response.data.token?.refreshToken) {
@@ -72,7 +135,7 @@ export function useAuth() {
               user: response.data.user,
               accessToken: response.data.token.accessToken,
               refreshToken: response.data.token.refreshToken,
-            }, "signIn");
+            }, "signIn", operation);
             if (generation !== getSessionGeneration()) return;
           } else {
             setUser(response.data.user);
@@ -84,14 +147,14 @@ export function useAuth() {
           }
         }
       } catch (error) {
-        console.warn("Failed to complete sign-in.");
+        if (!isCancel(error)) console.warn("Failed to complete sign-in.");
         throw error;
       }
     },
   });
 
   // Register mutation
-  const registerMutation = useMutation<BaseResponse<RegisterResponse>, unknown, RegisterRequest>({
+  const registerMutation = useAuthenticationMutation<BaseResponse<RegisterResponse>, RegisterRequest>({
     mutationFn: register,
     onError: (error) => notifyApiError(error, { action: "register" }),
     onSuccess: (response) => {
@@ -103,7 +166,7 @@ export function useAuth() {
   });
 
   // Change Email mutation
-  const changeEmailMutation = useMutation<BaseResponse<VerifyEmailOtpResponse>, unknown, ChangeEmailRequest>({
+  const changeEmailMutation = useAuthenticationMutation<BaseResponse<VerifyEmailOtpResponse>, ChangeEmailRequest>({
     mutationFn: changeEmail,
     onError: (error) => notifyApiError(error, { action: "changeEmail" }),
     onSuccess: () => {
@@ -112,17 +175,17 @@ export function useAuth() {
   });
 
   // Verify new email mutation
-  const verifyNewEmailMutation = useMutation<BaseResponse<VerifyEmailOtpResponse>, unknown, VerifyNewEmailRequest>({
+  const verifyNewEmailMutation = useAuthenticationMutation<BaseResponse<VerifyEmailOtpResponse>, VerifyNewEmailRequest>({
     mutationFn: verifyNewEmail,
     onError: (error) => notifyApiError(error, { action: "verifyCode" }),
-    onSuccess: async (response) => {
+    onSuccess: async (response, _request, operation) => {
       if (response.data) {
         if (response.data.token?.accessToken && response.data.token?.refreshToken) {
           const generation = await persistSession({
             user: response.data.user,
             accessToken: response.data.token.accessToken,
             refreshToken: response.data.token.refreshToken,
-          }, "verifyCode");
+          }, "verifyCode", operation);
           if (generation !== getSessionGeneration()) return;
         } else {
           setUser(response.data.user);
@@ -133,17 +196,17 @@ export function useAuth() {
   });
 
   // Verify new email mutation
-  const verifyEmailMutation = useMutation<BaseResponse<VerifyEmailOtpResponse>, unknown, VerifyEmailOtpRequest>({
+  const verifyEmailMutation = useAuthenticationMutation<BaseResponse<VerifyEmailOtpResponse>, VerifyEmailOtpRequest>({
     mutationFn: verifyEmail,
     onError: (error) => notifyApiError(error, { action: "verifyCode" }),
-    onSuccess: async (response) => {
+    onSuccess: async (response, _request, operation) => {
       if (response.data) {
         if (response.data.token?.accessToken && response.data.token?.refreshToken) {
           const generation = await persistSession({
             user: response.data.user,
             accessToken: response.data.token.accessToken,
             refreshToken: response.data.token.refreshToken,
-          }, "verifyCode");
+          }, "verifyCode", operation);
           if (generation !== getSessionGeneration()) return;
         } else {
           setUser(response.data.user);
@@ -154,7 +217,7 @@ export function useAuth() {
   });
 
   // Send Forget Password mutation
-  const sendForgetPasswordMutation = useMutation<BaseResponse<SendForgotPasswordOtpResponse>, unknown, sendForgotPasswordOtpRequest>({
+  const sendForgetPasswordMutation = useAuthenticationMutation<BaseResponse<SendForgotPasswordOtpResponse>, sendForgotPasswordOtpRequest>({
     mutationFn: sendForgotPasswordOtp,
     onError: (error) => notifyApiError(error, { action: "sendCode" }),
     onSuccess: (_response, variables) => {
@@ -170,7 +233,7 @@ export function useAuth() {
   });
 
   // Verify Reset Password mutation
-  const verifyResetPasswordOtpMutation = useMutation<BaseResponse<VerifyResetPasswordOtpResponse>, unknown, VerifyResetPasswordOtpRequest>({
+  const verifyResetPasswordOtpMutation = useAuthenticationMutation<BaseResponse<VerifyResetPasswordOtpResponse>, VerifyResetPasswordOtpRequest>({
     mutationFn: verifyResetPasswordOtp,
     onError: (error) => notifyApiError(error, { action: "verifyCode" }),
     onSuccess: (response) => {
@@ -182,19 +245,19 @@ export function useAuth() {
   });
 
   // Reset Password mutation
-  const setNewPasswordMutation = useMutation<BaseResponse<setNewPasswordResponse>, unknown, setNewPasswordRequest>({
+  const setNewPasswordMutation = useAuthenticationMutation<BaseResponse<setNewPasswordResponse>, setNewPasswordRequest>({
     mutationFn: setNewPassword,
     onError: (error) => notifyApiError(error, { action: "resetPassword" }),
-    onSuccess: () => {
+    onSuccess: (_response, _request, operation) => {
       showToast("Password has been reset successfully. Please login.", "success");
       setTimeout(() => {
-        router.replace("/(auth)");
+        if (isCurrentAuthenticationOperation(operation)) router.replace("/(auth)");
       }, 1000);
     },
   });
 
   // Change Password mutation
-  const changePasswordMutation = useMutation<BaseResponse<ChangePasswordResponse>, unknown, ChangePasswordRequest>({
+  const changePasswordMutation = useAuthenticationMutation<BaseResponse<ChangePasswordResponse>, ChangePasswordRequest>({
     mutationFn: changePassword,
     onError: (error) => notifyApiError(error, { action: "changePassword" }),
     onSuccess: () => {

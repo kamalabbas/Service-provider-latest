@@ -16,6 +16,22 @@ let refreshTokenOperations: Promise<void> = Promise.resolve();
 let pendingTokenDeletionGeneration: number | null = null;
 let tokenDeletionPromise: Promise<boolean> | null = null;
 let blockedPolicyPromise: Promise<boolean> | null = null;
+let authenticationOperationId = 0;
+
+// Operations order user intent within a generation. Starting a request leaves
+// current authentication and the existing session-generation rules intact.
+export interface AuthenticationOperation {
+  id: number;
+  generation: number;
+}
+
+export const beginAuthenticationOperation = (): AuthenticationOperation => ({
+  id: ++authenticationOperationId,
+  generation: sessionGeneration,
+});
+
+export const isCurrentAuthenticationOperation = (operation: AuthenticationOperation) =>
+  operation.id === authenticationOperationId && operation.generation === sessionGeneration;
 
 type AuthenticatedSession = { user: User; accessToken: string; refreshToken: string };
 
@@ -109,22 +125,25 @@ const clearSessionOnce = (generation: number): Promise<boolean> => {
   return operation;
 };
 
-const applyAuthenticatedSession = async (params: AuthenticatedSession, generation: number, explicitLogin = false): Promise<boolean> => {
-  if (generation !== sessionGeneration) return false;
+const applyAuthenticatedSession = async (params: AuthenticatedSession, generation: number, explicitLogin = false, authentication?: AuthenticationOperation): Promise<boolean> => {
+  const current = () => generation === sessionGeneration &&
+    (!authentication || isCurrentAuthenticationOperation(authentication));
+  if (!current()) return false;
 
   // Do not expose credentials that have not been confirmed persisted.
   await runRefreshTokenOperation(generation, async () => {
+    if (!current()) return;
     if (explicitLogin) await writeRestorePolicy("blocked");
-    if (generation !== sessionGeneration) return;
+    if (!current()) return;
     await setRefreshToken(params.refreshToken);
-    if (generation !== sessionGeneration) return;
+    if (!current()) return;
     if (explicitLogin) {
       try {
         await writeRestorePolicy("allowed");
       } catch (error) {
         // A rejected write may have changed the file. Re-establish denial before
         // reporting failure; never let rollback touch a superseding session.
-        if (generation === sessionGeneration) {
+        if (current()) {
           try { await writeRestorePolicy("blocked"); } catch {
             console.warn("Failed sign-in restore-policy rollback; persistent state remains unconfirmed.");
           }
@@ -133,28 +152,43 @@ const applyAuthenticatedSession = async (params: AuthenticatedSession, generatio
       }
     }
   });
-  if (generation !== sessionGeneration) return false;
+  if (!current()) return false;
 
   refreshBlocked = false;
   restoreAttempted = true;
   useAuthStore.setState({ user: params.user, accessToken: params.accessToken });
-  return generation === sessionGeneration;
+  return true;
 };
 
-export const setAuthenticatedSession = async (params: AuthenticatedSession): Promise<number | null> => {
+export const setAuthenticatedSession = async (params: AuthenticatedSession, authentication?: AuthenticationOperation): Promise<number | null> => {
+  if (authentication && !isCurrentAuthenticationOperation(authentication)) return null;
   const generation = advanceSession();
+  // The winning request now owns this new generation through persistence and
+  // callbacks. Other requests retain their original generation and become stale.
+  if (authentication) authentication.generation = generation;
   // A failed account switch must not fall back to the previous saved account.
   refreshBlocked = true;
   restoreAttempted = true;
   clearInMemorySession(generation);
 
+  let applied = false;
+  const current = () => generation === sessionGeneration &&
+    (!authentication || isCurrentAuthenticationOperation(authentication));
   try {
-    const applied = await applyAuthenticatedSession(params, generation, true);
-    return applied && generation === sessionGeneration ? generation : null;
+    applied = await applyAuthenticatedSession(params, generation, true, authentication);
+    return applied && current() ? generation : null;
   } catch (error) {
-    if (generation !== sessionGeneration) return null;
+    if (!current()) return null;
     clearInMemorySession(generation);
     throw error;
+  } finally {
+    if (!applied && generation === sessionGeneration && authentication &&
+        !isCurrentAuthenticationOperation(authentication)) {
+      // A native write already in flight cannot be cancelled. If a newer request
+      // supersedes this commit without yet creating a session, serialize a block
+      // after the old write. Never touch a newer session's policy or credentials.
+      await persistBlockedPolicy(generation);
+    }
   }
 };
 
