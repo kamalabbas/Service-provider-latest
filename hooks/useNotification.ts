@@ -23,6 +23,8 @@ export interface SendNotificationRequest {
 }
 
 export function useNotification() {
+    // Explicit API helper only. Automatic registration from login/OTP/restore
+    // is disabled until the backend token ownership contract is confirmed.
     const registerNotification = useMutation<BaseResponse<null>, unknown, RegisterNotificationRequest>({
         mutationFn: async (payload: RegisterNotificationRequest) => {
             return await postData<RegisterNotificationRequest, BaseResponse<null>>("/PushNotification/Register", payload);

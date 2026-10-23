@@ -37,7 +37,6 @@ import { useAuthStore } from "@/stores/authStore";
 import { useToastStore } from "@/stores/toastStore";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
-import { useNotification } from "./useNotification";
 
 async function persistSession(params: Parameters<typeof setAuthenticatedSession>[0], action: ApiErrorAction) {
   const operation = setAuthenticatedSession(params);
@@ -58,10 +57,8 @@ export function useAuth() {
   const router = useRouter();
 
   const setUser = useAuthStore((s) => s.setUser);
-  const pushNotificationToken = useAuthStore((s) => s.pushNotificationToken);
-
-  // register for push notifications
-  const { mutate: registerForPushNotifications } = useNotification().registerNotification;
+  // Automatic push registration is deferred until backend ownership/transfer
+  // and unregistration semantics are confirmed. The root acquires the device token.
 
   // Login mutation
   const loginMutation = useMutation<BaseResponse<LoginResponse>, unknown, LoginRequest>({
@@ -77,13 +74,6 @@ export function useAuth() {
               refreshToken: response.data.token.refreshToken,
             }, "signIn");
             if (generation !== getSessionGeneration()) return;
-
-            if (pushNotificationToken) {
-              registerForPushNotifications({
-                expoPushToken: pushNotificationToken,
-                userId: response.data.user?.id,
-              });
-            }
           } else {
             setUser(response.data.user);
             if (response.data.user.statusCode === "PENDING_VERIFICATION") {
@@ -137,13 +127,6 @@ export function useAuth() {
         } else {
           setUser(response.data.user);
         }
-
-        if (pushNotificationToken) {
-          registerForPushNotifications({
-            expoPushToken: pushNotificationToken,
-            userId: response.data.user?.id,
-          });
-        }
       }
       showToast("Email updated successfully", "success");
     },
@@ -164,13 +147,6 @@ export function useAuth() {
           if (generation !== getSessionGeneration()) return;
         } else {
           setUser(response.data.user);
-        }
-
-        if (pushNotificationToken) {
-          registerForPushNotifications({
-            expoPushToken: pushNotificationToken,
-            userId: response.data.user?.id,
-          });
         }
       }
       showToast("Email updated successfully", "success");
@@ -237,6 +213,7 @@ export function useAuth() {
 
   // Logout helper (decoupled)
   const logoutUser = async () => {
+    const pushNotificationToken = useAuthStore.getState().pushNotificationToken;
     const { generation, refreshToken, accessToken } = beginSessionLogout();
     let storedRefreshToken;
     let durableLogout = false;

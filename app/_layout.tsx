@@ -9,6 +9,7 @@ import 'react-native-reanimated';
 
 import { Toast } from '@/components/ui/Toast';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import usePushNotification from '@/hooks/usePushNotification';
 import { initializeTheme, useThemeStore } from '@/stores/theme';
 import { useToastStore } from '@/stores/toastStore';
 import { selectIsAuthenticated, useAuthStore } from '@/stores/authStore';
@@ -49,6 +50,8 @@ function initializeApp() {
 }
 
 export default function RootLayout() {
+  // Acquisition/listeners run before sign-in and never gate session startup.
+  usePushNotification();
   const [appReady, setAppReady] = useState(false);
   const mounted = useRef(false);
   const splashDismissalRequested = useRef(false);

@@ -8,8 +8,9 @@ interface AuthState {
   setAccessToken: (token: string) => void;
   setUser: (user: User) => void;
   clearAuth: () => void;
+  // Installation-scoped; keeping a device token does not register any account.
   pushNotificationToken: string | null,
-  setPushNotificationToken: (token: string) => void
+  setPushNotificationToken: (token: string | null) => void
 };
 
 // A token alone or a tokenless pending-verification user is not a session.

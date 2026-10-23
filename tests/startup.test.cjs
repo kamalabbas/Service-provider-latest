@@ -12,6 +12,7 @@ const { QueryClient, QueryObserver } = require('@tanstack/react-query');
 const React = require('react');
 const jsxRuntime = require('react/jsx-runtime');
 const { StackRouter } = require('@react-navigation/routers');
+const { notifications, response: notificationResponse } = require('./helpers/notifications.cjs');
 
 const root = path.resolve(__dirname, '..');
 const compiled = new Map();
@@ -89,6 +90,7 @@ const routeConfig = names => ({ routeNames: names, routeParamList: {}, routeGetI
 const stackRouter = StackRouter({});
 
 function harness(options = {}) {
+  const push = notifications(options.push);
   const modules = new Map(), mounts = [];
   const logs = [], refreshes = [], storage = [], themeStorage = [], toasts = [], splash = [], links = [];
   let token = options.saved === undefined ? 'saved-refresh' : options.saved;
@@ -137,7 +139,10 @@ function harness(options = {}) {
   const external = {
     react,
     'react/jsx-runtime': jsxRuntime,
-    'react-native': { Platform: { OS: 'ios' }, View: 'View', StyleSheet: { create: styles => styles } },
+    'react-native': { Platform: { OS: 'ios' }, AppState: push.AppState, View: 'View', StyleSheet: { create: styles => styles } },
+    'expo-notifications': push.Notifications,
+    'expo-constants': push.Constants,
+    'expo-device': push.Device,
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }) },
     'react-native-reanimated': {},
     '@react-navigation/native': {
@@ -221,9 +226,13 @@ function harness(options = {}) {
       process: { env: { EXPO_PUBLIC_BASE_URL: options.noBackend ? '' : 'https://api.example.test' } },
       console: { warn: (...args) => logs.push(args), log: (...args) => logs.push(args) },
       require: id => {
-        if (id === '@/stores/authStore' && file.startsWith('app/')) {
+        if (id === '@/stores/authStore' && (file.startsWith('app/') || file.startsWith('hooks/'))) {
           const authModule = load('stores/authStore.ts');
           return { ...authModule, useAuthStore: Object.assign(select => select(authModule.useAuthStore.getState()), authModule.useAuthStore) };
+        }
+        if (id === '@/stores/notificationStore' && file.startsWith('hooks/')) {
+          const notificationModule = load('stores/notificationStore.ts');
+          return { ...notificationModule, useNotificationStore: select => select(notificationModule.useNotificationStore.getState()) };
         }
         if (id === '@/stores/theme') {
           const themeModule = load('stores/theme.ts');
@@ -242,13 +251,16 @@ function harness(options = {}) {
   }
   const store = load('stores/authStore.ts').useAuthStore;
   const themeStore = load('stores/theme.ts').useThemeStore;
+  const notificationStore = load('stores/notificationStore.ts').useNotificationStore;
   const session = load('services/authSession.ts');
   const queryClient = load('services/queryClient.ts').queryClient;
   const updateContext = load('hooks/useAppUpdatePolicy.ts').AppUpdatePolicyContext;
   store.subscribe(() => { for (const instance of mounts) if (instance.active) instance.dirty = true; });
   themeStore.subscribe(() => { for (const instance of mounts) if (instance.active) instance.dirty = true; });
+  notificationStore.subscribe(() => { for (const instance of mounts) if (instance.active) instance.dirty = true; });
   const h = {
-    store, themeStore, session, queryClient, refreshes, storage, themeStorage, toasts, splash, logs, links,
+    store, themeStore, notificationStore, push, session, queryClient, refreshes, storage, themeStorage, toasts, splash, logs, links,
+    takeNotificationResponse: ready => load('services/pushNotifications.ts').takeNotificationResponse(ready),
     get restoreCalls() { return restoreCalls; },
     get token() { return token; },
     get policy() { return policy; },
@@ -337,9 +349,73 @@ test('no-backend startup renders signed out without reading or changing persiste
   assert.equal(h.restoreCalls, 0);
   assert.deepEqual(h.storage, []);
   assert.equal(h.token, 'saved-refresh');
+  assert.equal(h.push.active('received'), 0);
+  assert.equal(h.push.count('expoToken'), 0);
   assert.ok(findView(root.tree));
   root.layout();
   assert.deepEqual(h.splash, ['prevent', 'hide']);
+});
+
+test('restored sessions acquire push tokens without mounting login or blocking startup on push acquisition', async () => {
+  const token = deferred();
+  const h = harness({ push: { getToken: () => token.promise } });
+  const root = h.mount();
+  await until(() => h.refreshes.length === 1);
+  assert.equal(h.push.active('received'), 1);
+  h.refreshes[0].resolve(response);
+  await h.flush();
+  assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found', '_sitemap']);
+  assert.equal(h.store.getState().pushNotificationToken, null);
+  root.layout();
+  assert.deepEqual(h.splash, ['prevent', 'hide']);
+  token.resolve({ data: 'restored-session-device-token' });
+  await h.flush();
+  assert.equal(h.store.getState().pushNotificationToken, 'restored-session-device-token');
+  assert.equal(h.push.count('expoToken'), 1);
+  assert.equal(h.restoreCalls, 1);
+});
+
+test('root notification ownership survives effect replay/remount and queues a cold-start tap until session readiness', async () => {
+  const tap = notificationResponse('cold-start');
+  const h = harness({ push: { lastResponse: tap } });
+  const root = h.mount();
+  root.replayEffects();
+  root.render();
+  await until(() => h.refreshes.length === 1);
+  assert.equal(h.takeNotificationResponse(false), null);
+  assert.equal(h.takeNotificationResponse(true), null);
+  h.push.emit('response', tap);
+  root.unmount();
+  assert.equal(h.push.active('received'), 0);
+  const remount = h.mount();
+  h.refreshes[0].resolve(response);
+  await h.flush();
+  assert.ok(findView(remount.tree));
+  assert.equal(h.takeNotificationResponse(true), tap);
+  assert.equal(h.takeNotificationResponse(true), null);
+  assert.equal(h.push.maxima.received, 1);
+  assert.equal(h.push.maxima.response, 1);
+  assert.equal(h.push.maxima.token, 1);
+  assert.equal(h.push.count('expoToken'), 1);
+  assert.equal(root.lateUpdates, 0);
+});
+
+test('notification permission/token failures preserve session restoration, navigation, and splash readiness', async () => {
+  for (const push of [
+    { permission: { status: 'denied', granted: false, canAskAgain: false } },
+    { getToken: async () => { throw new Error('Native acquisition unavailable'); } },
+  ]) {
+    const h = harness({ push }), root = h.mount();
+    await until(() => h.refreshes.length === 1);
+    h.refreshes[0].resolve(response);
+    await h.flush();
+    assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found', '_sitemap']);
+    assert.equal(h.store.getState().accessToken, 'A-access');
+    root.layout();
+    assert.deepEqual(h.splash, ['prevent', 'hide']);
+    assert.equal(h.store.getState().pushNotificationToken, null);
+    assert.equal(h.push.active('response'), 1);
+  }
 });
 
 test('slow theme restoration holds the splash and first content uses the saved dark theme', async () => {

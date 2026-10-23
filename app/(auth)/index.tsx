@@ -12,7 +12,6 @@ import * as yup from "yup";
 import { Logo } from "@/components/ui/Logo";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { useAuth } from "@/hooks/useAuth";
-import usePushNotification from "@/hooks/usePushNotification";
 import { LoginRequest } from "@/interfaces/auth.interface";
 import React from "react";
 
@@ -24,9 +23,6 @@ const schema = yup
   .required();
 
 export default function Index() {
-  // get expo push token
-  usePushNotification();
-
   // Form setup
   const {
     control,

@@ -181,7 +181,8 @@ function harness({ saved = 'A-refresh', signedIn = true, policy = policyRecord('
           { getState: () => ({ showToast: (...args) => toasts.push(args) }) },
         ) };
         if (file.startsWith('hooks/') && id === '@/stores/authStore') {
-          return { useAuthStore: select => select(load('stores/authStore.ts').useAuthStore.getState()) };
+          const authStore = load('stores/authStore.ts').useAuthStore;
+          return { useAuthStore: Object.assign(select => select(authStore.getState()), authStore) };
         }
         if (file === 'hooks/useAuth.ts' && id === './useNotification') {
           return { useNotification: () => ({ registerNotification: { mutate: payload => registrations.push(payload) } }) };
@@ -605,7 +606,23 @@ test('a queued logout mutation cannot dispatch against a newer account', async (
   assert.equal(h.navigation.length, 0);
 });
 
-test('login and both email-verification callbacks still persist sessions and register push tokens', async () => {
+test('logout snapshots the latest device token at invocation and cannot pick up later token changes', async () => {
+  const h = harness();
+  const auth = h.auth();
+  h.store.getState().setPushNotificationToken('latest-device-token');
+  const read = h.holdNext('get');
+  const logout = auth.logoutUser();
+  await read.started;
+  h.store.getState().setPushNotificationToken('later-device-token');
+  read.release();
+  await logout;
+  assert.equal(h.requests.length, 1);
+  assert.equal(JSON.parse(h.requests[0].data).expoPushToken, 'latest-device-token');
+  assert.equal(h.store.getState().pushNotificationToken, 'later-device-token');
+  assert.equal(h.registrations.length, 0);
+});
+
+test('login and both email-verification callbacks persist sessions without automatic push registration', async () => {
   const h = harness({ saved: null, signedIn: false });
   const auth = h.auth();
   for (const mutation of [auth.loginMutation, auth.verifyEmailMutation, auth.verifyNewEmailMutation]) {
@@ -613,7 +630,8 @@ test('login and both email-verification callbacks still persist sessions and reg
     assert.equal(h.disk, 'B-refresh');
     assert.equal(h.store.getState().user.id, 'B');
   }
-  assert.equal(h.registrations.length, 3);
+  assert.equal(h.registrations.length, 0);
+  assert.ok(h.requests.every(request => request.url !== '/PushNotification/Register'));
 });
 
 test('a login awaiting persistence cannot unblock logout or register stale push credentials', async () => {
