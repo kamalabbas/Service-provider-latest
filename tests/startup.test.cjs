@@ -90,8 +90,9 @@ const stackRouter = StackRouter({});
 
 function harness(options = {}) {
   const modules = new Map(), mounts = [];
-  const logs = [], refreshes = [], storage = [], toasts = [], splash = [], links = [];
+  const logs = [], refreshes = [], storage = [], themeStorage = [], toasts = [], splash = [], links = [];
   let token = options.saved === undefined ? 'saved-refresh' : options.saved;
+  let savedTheme = options.savedTheme ?? null;
   let policy = JSON.stringify({ version: 1, state: 'allowed' });
   let fonts = [true, null], current, restoreCalls = 0, appVersionData;
   const sameDeps = (a, b) => a && b && a.length === b.length && a.every((value, i) => Object.is(value, b[i]));
@@ -136,7 +137,7 @@ function harness(options = {}) {
   const external = {
     react,
     'react/jsx-runtime': jsxRuntime,
-    'react-native': { View: 'View', StyleSheet: { create: styles => styles } },
+    'react-native': { Platform: { OS: 'ios' }, View: 'View', StyleSheet: { create: styles => styles } },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }) },
     'react-native-reanimated': {},
     '@react-navigation/native': {
@@ -161,8 +162,7 @@ function harness(options = {}) {
       },
     },
     '@/components/ui/Toast': { Toast: 'Toast' },
-    '@/hooks/useColorScheme': { useColorScheme: () => 'light' },
-    '@/stores/theme': { useThemeStore: select => select({ preference: 'system' }) },
+    '@/hooks/useColorScheme': { useColorScheme: () => options.systemScheme ?? 'light' },
     '@/stores/toastStore': { useToastStore: select => select ? select(toastState) : toastState },
     '@/hooks/useThemeColor': { useThemeColor: () => '#fff' },
     '@/hooks/useAppVersion': { __esModule: true, default: () => appVersionData },
@@ -173,19 +173,30 @@ function harness(options = {}) {
     '../assets/fonts/SpaceMono-Regular.ttf': 'font-asset',
     '@tanstack/react-query': { QueryClient, QueryClientProvider: 'QueryClientProvider' },
     zustand: require('zustand'),
+    'zustand/middleware': require('zustand/middleware'),
     axios: { post: (url, body, config) => {
       const pending = deferred();
       refreshes.push({ url, body, config, ...pending });
       return pending.promise;
     } },
     'expo-secure-store': {
-      getItemAsync: async () => {
+      getItemAsync: async key => {
+        if (key === 'theme-preference') {
+          themeStorage.push('read');
+          return options.readTheme ? options.readTheme() : savedTheme;
+        }
         storage.push('read-token');
         if (options.tokenReadError) throw options.tokenReadError;
         return token;
       },
-      setItemAsync: async (key, value) => { storage.push('write-token'); token = value; },
-      deleteItemAsync: async () => { storage.push('delete-token'); token = null; },
+      setItemAsync: async (key, value) => {
+        if (key === 'theme-preference') { themeStorage.push('write'); savedTheme = value; return; }
+        storage.push('write-token'); token = value;
+      },
+      deleteItemAsync: async key => {
+        if (key === 'theme-preference') { themeStorage.push('remove'); savedTheme = null; return; }
+        storage.push('delete-token'); token = null;
+      },
     },
     'expo-file-system/legacy': {
       documentDirectory: 'file:///app-private/documents/',
@@ -206,13 +217,17 @@ function harness(options = {}) {
     const module = { exports: {} };
     modules.set(file, module);
     vm.runInNewContext(compiled.get(file), {
-      module, exports: module.exports,
+      module, exports: module.exports, Promise,
       process: { env: { EXPO_PUBLIC_BASE_URL: options.noBackend ? '' : 'https://api.example.test' } },
       console: { warn: (...args) => logs.push(args), log: (...args) => logs.push(args) },
       require: id => {
         if (id === '@/stores/authStore' && file.startsWith('app/')) {
           const authModule = load('stores/authStore.ts');
           return { ...authModule, useAuthStore: Object.assign(select => select(authModule.useAuthStore.getState()), authModule.useAuthStore) };
+        }
+        if (id === '@/stores/theme') {
+          const themeModule = load('stores/theme.ts');
+          return { ...themeModule, useThemeStore: Object.assign(select => select(themeModule.useThemeStore.getState()), themeModule.useThemeStore) };
         }
         if (Object.hasOwn(external, id)) return external[id];
         if (id.startsWith('@/components/')) {
@@ -226,12 +241,14 @@ function harness(options = {}) {
     return module.exports;
   }
   const store = load('stores/authStore.ts').useAuthStore;
+  const themeStore = load('stores/theme.ts').useThemeStore;
   const session = load('services/authSession.ts');
   const queryClient = load('services/queryClient.ts').queryClient;
   const updateContext = load('hooks/useAppUpdatePolicy.ts').AppUpdatePolicyContext;
   store.subscribe(() => { for (const instance of mounts) if (instance.active) instance.dirty = true; });
+  themeStore.subscribe(() => { for (const instance of mounts) if (instance.active) instance.dirty = true; });
   const h = {
-    store, session, queryClient, refreshes, storage, toasts, splash, logs, links,
+    store, themeStore, session, queryClient, refreshes, storage, themeStorage, toasts, splash, logs, links,
     get restoreCalls() { return restoreCalls; },
     get token() { return token; },
     get policy() { return policy; },
@@ -322,6 +339,65 @@ test('no-backend startup renders signed out without reading or changing persiste
   assert.equal(h.token, 'saved-refresh');
   assert.ok(findView(root.tree));
   root.layout();
+  assert.deepEqual(h.splash, ['prevent', 'hide']);
+});
+
+test('slow theme restoration holds the splash and first content uses the saved dark theme', async () => {
+  const pending = deferred();
+  const h = harness({ noBackend: true, readTheme: () => pending.promise });
+  const root = h.mount();
+  await h.flush();
+  assert.equal(h.store.getState().user, null, 'Session startup can finish independently');
+  assert.equal(root.tree, null, 'Do not display the default light theme during storage reads');
+  assert.deepEqual(h.splash, ['prevent']);
+  root.replayEffects();
+  root.unmount();
+  const remounted = h.mount();
+  assert.deepEqual(h.themeStorage, ['read'], 'Root remounts must share the pending theme read');
+  pending.resolve(JSON.stringify({ state: { preference: 'dark' }, version: 0 }));
+  await h.flush();
+  assert.equal(root.lateUpdates, 0);
+  assert.equal(findView(remounted.tree).props.style.backgroundColor, '#000');
+  assert.deepEqual(h.screens(remounted), ['(auth)', '+not-found', '_sitemap']);
+  assert.deepEqual(h.splash, ['prevent']);
+  remounted.layout();
+  assert.deepEqual(h.splash, ['prevent', 'hide']);
+});
+
+for (const failure of ['corrupt', 'unavailable']) {
+  test(`${failure} theme storage releases its gate while session restoration still controls routing`, async () => {
+    const h = harness({
+      savedTheme: '{invalid',
+      ...(failure === 'unavailable' ? { readTheme: async () => { throw new Error('Storage unavailable'); } } : {}),
+    });
+    const root = h.mount();
+    await until(() => h.refreshes.length === 1);
+    await h.flush();
+    assert.equal(root.tree, null, 'Theme failure must not bypass session restoration');
+    assert.deepEqual(h.splash, ['prevent']);
+    h.refreshes[0].resolve(response);
+    await h.flush();
+    assert.equal(findView(root.tree).props.style.backgroundColor, '#fff');
+    assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found', '_sitemap']);
+    root.layout();
+    assert.deepEqual(h.splash, ['prevent', 'hide']);
+    assert.ok(h.logs.some(args => args[0].startsWith('Could not restore the theme preference')));
+  });
+}
+
+test('root navigation theme updates at runtime and restores existing system preference', async () => {
+  const h = harness({ noBackend: true, systemScheme: 'dark', savedTheme: JSON.stringify({ state: { preference: 'system' }, version: 0 }) });
+  const root = h.mount();
+  await h.flush();
+  assert.equal(findElement(root.tree, 'ThemeProvider').props.value.colors.background, '#000');
+  root.layout();
+  h.themeStore.getState().setPreference('light');
+  await h.flush();
+  assert.equal(findElement(root.tree, 'ThemeProvider').props.value.colors.background, '#fff');
+  h.themeStore.getState().setPreference('dark');
+  await h.flush();
+  assert.equal(findView(root.tree).props.style.backgroundColor, '#000');
+  assert.equal(h.restoreCalls, 0);
   assert.deepEqual(h.splash, ['prevent', 'hide']);
 });
 

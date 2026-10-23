@@ -9,7 +9,7 @@ import 'react-native-reanimated';
 
 import { Toast } from '@/components/ui/Toast';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { useThemeStore } from '@/stores/theme';
+import { initializeTheme, useThemeStore } from '@/stores/theme';
 import { useToastStore } from '@/stores/toastStore';
 import { selectIsAuthenticated, useAuthStore } from '@/stores/authStore';
 
@@ -69,8 +69,9 @@ export default function RootLayout() {
     const complete = () => {
       if (active) setAppReady(true);
     };
-    // Both outcomes release startup; a rejected operation must not strand splash.
-    void initializeApp().then(complete, complete);
+    // Wait for both attempts, even on failure, so neither default theme colors
+    // nor routes appear while saved preferences or the session are restoring.
+    void Promise.allSettled([initializeApp(), initializeTheme()]).then(complete);
     return () => {
       active = false;
       mounted.current = false;
