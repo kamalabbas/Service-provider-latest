@@ -268,7 +268,7 @@ Removed:
 
 The lockfile lost 16 entries and gained none. Every retained package version is unchanged; no package was upgraded or added. `npm ls --depth=0` passes without missing or extraneous packages.
 
-Core Expo/navigation/native support, authentication, query/state/form packages remain. Camera/image picker and date picker support retained primitives. Blur, haptics, and web browser packages support retained generic components.
+Core Expo/navigation/native support, authentication, query/state/form packages remain. Camera/image picker and date picker support retained primitives. Blur, haptics, and native in-app browser packages support retained generic components.
 
 ## Validation
 
@@ -280,12 +280,10 @@ Core Expo/navigation/native support, authentication, query/state/form packages r
 | Routes/navigation | 14 declarations and 19 navigation destinations resolve |
 | Legacy business code/endpoints/hosts scan | No matches in application source |
 | Dependency integrity | `npm ls --depth=0` passes; retained versions unchanged |
-| `expo export --platform all --output-dir .expo/cleanup-export --max-workers 2` | Android, iOS, and web export successfully |
+| Android/iOS JavaScript export | Both native platforms export successfully |
 | Retained auth API bindings | All 12 request bindings checked |
 | Auth behavior | Synthetic checks pass for registration, pending-email login, token login/OTP, recovery, logout |
 | Navigation behavior | Synthetic checks pass for signed-in/out routing, OTP access, bootstrap waiting, forced-update state |
-| Web serving | Root/auth URLs and the JavaScript bundle served over local HTTP |
-| Interactive browser smoke test | Blocked: no connected browser is available |
 | Native binary builds/device launch/push delivery | Not verified; Firebase inputs and ownership remain unresolved |
 
 Synthetic checks executed the actual auth service/hook and navigation callbacks with mocked transport, session, and React hook boundaries. They do not establish live backend compatibility or complete end-to-end authentication. No application backend was contacted.

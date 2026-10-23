@@ -38,7 +38,7 @@ function configurationWarnings(config, env, projectRoot) {
     warnings.push("EXPO_PUBLIC_BASE_URL is unset; backend-dependent features remain disabled. Supply an approved URL locally or in the selected EAS environment.");
   }
   if (!config.android?.googleServicesFile || !fs.existsSync(path.resolve(projectRoot, config.android.googleServicesFile))) {
-    warnings.push("Android Firebase input is missing. Config inspection, web, and JavaScript exports can continue; native Android builds require a matching google-services file. See README.");
+    warnings.push("Android Firebase input is missing. Config inspection and JavaScript exports can continue; native Android builds require a matching google-services file. See README.");
   }
   return warnings;
 }

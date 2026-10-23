@@ -4,6 +4,7 @@
     "slug": "service-provider",
     "version": "1.0.1",
     "orientation": "portrait",
+    "platforms": ["android", "ios"],
     "icon": "./assets/images/service-provider-icon.png",
     "scheme": "service-provider",
     "userInterfaceStyle": "automatic",

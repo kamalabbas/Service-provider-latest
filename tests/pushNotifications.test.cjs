@@ -154,7 +154,7 @@ test('denial without canAskAgain never prompts and iOS provisional authorization
   assert.equal(provisional.native.count('requestPermission'), 0);
 });
 
-for (const options of [{ platform: 'web' }, { noBackend: true }, { physical: false }, { expoGo: true }, { missingProject: true }]) {
+for (const options of [{ noBackend: true }, { physical: false }, { expoGo: true }, { missingProject: true }]) {
   test(`unsupported/unconfigured environment: ${JSON.stringify(options)}`, async () => {
     const h = harness(options);
     h.start();
@@ -163,8 +163,7 @@ for (const options of [{ platform: 'web' }, { noBackend: true }, { physical: fal
     assert.equal(h.native.count('expoToken'), 0);
     assert.equal(h.native.count('requestPermission'), 0);
     assert.equal(h.store.getState().tokenStatus, 'unavailable');
-    if (options.platform === 'web' || options.noBackend) assert.equal(h.native.active('received'), 0);
-    if (options.platform === 'web') assert.equal(h.native.handler, undefined);
+    if (options.noBackend) assert.equal(h.native.active('received'), 0);
   });
 }
 

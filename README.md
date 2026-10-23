@@ -1,6 +1,6 @@
 # Service Provider
 
-A reusable React Native / Expo application shell. Product features and onboarding will be implemented after the Service Provider BRDs and API contracts are approved.
+An Android/iOS React Native / Expo application shell. Product features and onboarding will be implemented after the Service Provider BRDs and API contracts are approved.
 
 ## Local development
 
@@ -17,12 +17,13 @@ Other commands:
 ```sh
 npm run android
 npm run ios
-npm run web
 npm run lint
 npx tsc --noEmit
 ```
 
 Native builds require the appropriate Android/iOS toolchain. iOS builds require macOS or EAS.
+
+`app.json` restricts supported platforms to Android and iOS. Shared Expo Router components and native external-link handling remain available. `expo-web-browser` provides the native in-app browser; `react-dom` remains pinned to React's version because Expo Router's Radix/vaul dependencies require its peer. Neither package enables an application Web target.
 
 ## Environment and build configuration
 
@@ -61,10 +62,10 @@ npm run config:check -- --platform android
 npm run config:check -- --platform ios
 npm run test:config
 npx expo config --type public
-npx expo export --platform all
+npx expo export --platform android --platform ios
 ```
 
-The first command permits missing API/Firebase inputs and explains which capabilities are unavailable. Native Android validation requires matching Firebase input. `npm run android`/`ios` run their platform checks before invoking Expo; direct Android prebuild also registers a native-only validation mod. EAS's [pre-install lifecycle hook](https://docs.expo.dev/build-reference/npm-hooks/) checks the explicit profile/variant, required API URL, Android Firebase input, and the existing development-client prerequisite before native work. Custom EAS workflows must invoke this check explicitly if they bypass standard lifecycle hooks. Config inspection, web, TypeScript/lint, and JavaScript-only exports do not require native Firebase files or a backend. Expo may additionally warn about the retained missing `android.googleServicesFile`; it remains intentionally configured for future native builds.
+The first command permits missing API/Firebase inputs and explains which capabilities are unavailable. Native Android validation requires matching Firebase input. `npm run android`/`ios` run their platform checks before invoking Expo; direct Android prebuild also registers a native-only validation mod. EAS's [pre-install lifecycle hook](https://docs.expo.dev/build-reference/npm-hooks/) checks the explicit profile/variant, required API URL, Android Firebase input, and the existing development-client prerequisite before native work. Custom EAS workflows must invoke this check explicitly if they bypass standard lifecycle hooks. Config inspection, TypeScript/lint, and JavaScript-only exports do not require native Firebase files or a backend. Expo may additionally warn about the retained missing `android.googleServicesFile`; it remains intentionally configured for future native builds.
 
 The `development` profile still requests a custom development client, but `expo-dev-client` is absent from the existing dependencies. Its native preflight reports this requirement. Installing it needs separate approval; no dependencies were added or upgraded. The `dev` profile remains an internal standalone build, not a custom development client. JavaScript exports do not validate signing, Firebase project/credentials, push delivery, device network/TLS configuration, or native binaries. Cloud builds/submission also remain pending EAS slug/ownership reconciliation.
 
@@ -101,7 +102,7 @@ Signed-out protected deep links fall back to Sign In. After explicit login, Home
 
 The root's existing version check is shared through `AppUpdatePolicyContext`. Nested layouts and the update screen consume that value without starting another check. Version loading/failure remains nonblocking; normal routes are available until a force policy is known. Once known, guards exclude normal routes, not-found, and Expo's generated sitemap. The existing update screen reads policy content directly, so no imperative redirect or URL-parameter handoff is required. Clearing the force policy restores normal route availability. Soft-update feedback still appears once after startup readiness.
 
-The unused `useProtectedRoute` hook and the fully replaced `useUserStateRedirect` hook have been removed. Navigation protection tests are included in `node tests/startup.test.cjs`. They execute the real application layouts, installed Expo guard-filtering code, React Navigation's stack state engine, and a request-capable React Query probe with mocked native/UI boundaries. Android/iOS deep-link delivery, native mounting/unmounting, back gestures, and web navigation still need device/browser verification. Client route guards do not replace backend authorization.
+The unused `useProtectedRoute` hook and the fully replaced `useUserStateRedirect` hook have been removed. Navigation protection tests are included in `node tests/startup.test.cjs`. They execute the real application layouts, installed Expo guard-filtering code, React Navigation's stack state engine, and a request-capable React Query probe with mocked native/UI boundaries. Android/iOS deep-link delivery, native mounting/unmounting, and back gestures still need device verification. Client route guards do not replace backend authorization.
 
 ## API errors and notifications
 
@@ -181,7 +182,7 @@ The display name is **Service Provider** (**Service Provider - Dev** for develop
 
 EAS project `02557e69-e417-490c-81ea-6d46a925c66a`, its ownership, and Firebase ownership are retained. No cloud projects, app registrations, credentials, or remote variables were changed. Before cloud builds/submission, the existing owners must reconcile the `service-provider` slug with that EAS project, register/configure the approved native identifiers and signing/store records, and supply Android Firebase clients/files for both packages within the existing Firebase project. Do not reassign cloud ownership as part of this naming change.
 
-The native identifiers create separate applications with their own installation storage; existing sessions, theme preferences, and push tokens are not migrated from an older installation. Rebuild/install the native apps and update external deep links/callback allowlists to `service-provider://` where applicable; no old-scheme alias or new routes are introduced. After renaming, restart Metro with `npm start -- --clear` and use `expo export --clear` for fresh exports so cached Expo constants do not retain the previous scheme. The EAS profile/variant matrix and validation policy remain unchanged. Neither `google-services.json` nor `google-services.dev.json` is supplied. Native Android builds reject missing/mismatched Firebase input; local config/web/JavaScript checks remain usable. Signing, native builds, installed-app deep links, and push delivery require owner/device verification.
+The native identifiers create separate applications with their own installation storage; existing sessions, theme preferences, and push tokens are not migrated from an older installation. Rebuild/install the native apps and update external deep links/callback allowlists to `service-provider://` where applicable; no old-scheme alias or new routes are introduced. After renaming, restart Metro with `npm start -- --clear` and use `expo export --clear` for fresh exports so cached Expo constants do not retain the previous scheme. The EAS profile/variant matrix and validation policy remain unchanged. Neither `google-services.json` nor `google-services.dev.json` is supplied. Native Android builds reject missing/mismatched Firebase input; local configuration and JavaScript checks remain usable. Signing, native builds, installed-app deep links, and push delivery require owner/device verification.
 
 ## Deferred decisions
 
@@ -193,7 +194,7 @@ See [the cleanup report](docs/cleanup-report.md) for the file inventory and vali
 
 ## Push notification lifecycle
 
-The root layout owns notification listeners and starts permission/token acquisition before sign-in. Push setup never gates fonts, theme hydration, session restoration, splash dismissal, protected routes, or the update policy. Web and an unset `EXPO_PUBLIC_BASE_URL` do not start this lifecycle. Token acquisition additionally requires a physical native device, a configured EAS project, and a native build rather than Expo Go. It uses the retained EAS project and the approved Service Provider native identities; build-variant validation remains unchanged. `expo-notifications` is included in the config-plugin list for native notification configuration.
+The root layout owns notification listeners and starts permission/token acquisition before sign-in. Push setup never gates fonts, theme hydration, session restoration, splash dismissal, protected routes, or the update policy. An unset `EXPO_PUBLIC_BASE_URL` does not start this lifecycle. Token acquisition additionally requires a physical native device, a configured EAS project, and a native build rather than Expo Go. It uses the retained EAS project and the approved Service Provider native identities; build-variant validation remains unchanged. `expo-notifications` is included in the config-plugin list for native notification configuration.
 
 The Expo token belongs to the installation. It remains in the existing auth store's `pushNotificationToken` field for logout compatibility, independently of account authentication, and is reacquired in a fresh process. The old SecureStore `push_token` entry is no longer read or written. Concurrent acquisition attempts share one operation, root remounts do not repeat permission prompts, and native token changes resolve the latest Expo token before publishing it. Foregrounding checks for permission changes and can retry a failed acquisition without prompting again or fetching another Expo token when the current one is still usable. Authentication becoming available can also retry a missing token. Denial and native/Expo errors leave authentication untouched and produce no alerts or token/payload logs.
 

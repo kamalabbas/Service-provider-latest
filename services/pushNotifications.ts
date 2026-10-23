@@ -6,19 +6,16 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { AppState, Platform } from 'react-native';
 
-const isNative = Platform.OS === 'android' || Platform.OS === 'ios';
-const enabled = () => isNative && Boolean(process.env.EXPO_PUBLIC_BASE_URL);
+const enabled = () => Boolean(process.env.EXPO_PUBLIC_BASE_URL);
 
-if (isNative) {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
-}
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 let acquisition: Promise<string | null> | null = null;
 let startupAttempted = false;

@@ -1,6 +1,6 @@
 // Run with: node --test tests/*.test.cjs
-// Exercise the installed Zustand middleware and real theme modules. Device and
-// browser storage boundaries are deterministic substitutes, not native devices.
+// Exercise the installed Zustand middleware and real theme modules.
+// Storage boundaries are deterministic substitutes, not native devices.
 /* global __dirname */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -66,12 +66,6 @@ function harness(platform, options = {}) {
         return load(`${id.slice(2)}.ts`);
       },
     };
-    if (platform === 'web' && !options.noStorage) {
-      Object.defineProperty(context, 'localStorage', { get: () => {
-        if (options.storageGetterError) throw new Error('Browser storage denied');
-        return { getItem: read, setItem: write, removeItem: remove };
-      } });
-    }
     vm.runInNewContext(compiled.get(file), context, { filename: file });
     return module.exports;
   }
@@ -79,10 +73,10 @@ function harness(platform, options = {}) {
   return { store, initializeTheme, values, calls, warnings, load, setScheme: value => { scheme = value; } };
 }
 
-for (const platform of ['android', 'ios', 'web']) {
+for (const platform of ['android', 'ios']) {
   test(`${platform}: first launch retains light and does not write a default over storage`, async () => {
     const h = harness(platform);
-    assert.deepEqual(h.calls, [], 'Module loading must be safe for static rendering');
+    assert.deepEqual(h.calls, [], 'Module loading must not access storage before initialization');
     const first = h.initializeTheme();
     assert.equal(h.initializeTheme(), first, 'Repeated initialization must share restoration');
     await first;
@@ -97,7 +91,6 @@ for (const platform of ['android', 'ios', 'web']) {
       await h.initializeTheme();
       h.store.getState().setPreference(preference);
       assert.equal(h.store.getState().preference, preference);
-      if (platform === 'web') assert.equal(h.values.get('theme-preference'), saved(preference), 'Web saves synchronously');
       await tick();
       assert.equal(h.values.get('theme-preference'), saved(preference));
       const restarted = harness(platform, { values: h.values });
@@ -156,16 +149,6 @@ for (const platform of ['android', 'ios', 'web']) {
     h.setScheme(null);
     assert.equal(useThemeColor({}, 'text'), Colors.light.text);
     await tick();
-  });
-}
-
-for (const options of [{ noStorage: true }, { storageGetterError: true }]) {
-  test(`web: ${Object.keys(options)[0]} does not block initialization or runtime themes`, async () => {
-    const h = harness('web', options);
-    await h.initializeTheme();
-    h.store.getState().setPreference('dark');
-    assert.equal(h.store.getState().preference, 'dark');
-    assert.equal(h.warnings.length, 2);
   });
 }
 

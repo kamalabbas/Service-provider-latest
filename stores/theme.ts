@@ -1,5 +1,4 @@
 import * as SecureStore from 'expo-secure-store';
-import { Platform } from 'react-native';
 import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 
@@ -10,33 +9,19 @@ interface ThemeState {
   setPreference: (pref: ThemePreference) => void;
 }
 
-// Keep browser writes synchronous and serialize native writes so rapid changes
-// cannot leave an older preference saved after the newest one.
+// Serialize native writes so rapid changes cannot leave an older preference
+// saved after the newest one.
 let pendingWrite = Promise.resolve();
 function updateStorage(operation: () => void | Promise<void>) {
   const warn = () => console.warn('Could not save the theme preference.');
-  if (Platform.OS === 'web') {
-    try {
-      operation();
-    } catch {
-      warn();
-    }
-    return;
-  }
   pendingWrite = pendingWrite.then(operation).catch(warn);
   return pendingWrite;
 }
 
 const themeStorage: StateStorage = {
-  getItem: (name) => Platform.OS === 'web'
-    ? localStorage.getItem(name)
-    : SecureStore.getItemAsync(name),
-  setItem: (name, value) => updateStorage(() => Platform.OS === 'web'
-    ? localStorage.setItem(name, value)
-    : SecureStore.setItemAsync(name, value)),
-  removeItem: (name) => updateStorage(() => Platform.OS === 'web'
-    ? localStorage.removeItem(name)
-    : SecureStore.deleteItemAsync(name)),
+  getItem: (name) => SecureStore.getItemAsync(name),
+  setItem: (name, value) => updateStorage(() => SecureStore.setItemAsync(name, value)),
+  removeItem: (name) => updateStorage(() => SecureStore.deleteItemAsync(name)),
 };
 
 export const useThemeStore = create<ThemeState>()(
@@ -49,8 +34,7 @@ export const useThemeStore = create<ThemeState>()(
       name: 'theme-preference',
       storage: createJSONStorage(() => themeStorage),
       partialize: ({ preference }) => ({ preference }),
-      // Hydrate after mounting, including on Web where static rendering has no
-      // localStorage. The root waits for this attempt before displaying content.
+      // The root waits for hydration before displaying content.
       skipHydration: true,
       merge: (persistedState, currentState) => {
         const saved = persistedState as { preference?: unknown } | null | undefined;

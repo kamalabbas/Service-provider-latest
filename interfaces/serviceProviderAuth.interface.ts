@@ -19,7 +19,7 @@ export interface VerifyEmailRequest {
   code: string;
 }
 
-/** Shared access-token payload, also returned by browser sign-in/refresh. */
+/** Access-token fields shared by the mobile authentication payload. */
 export interface AccessTokenResponse {
   accessToken: string;
   /** UTC ISO 8601 timestamp, preserved as the API's date-time string. */
@@ -39,7 +39,6 @@ export interface MobileSignOutRequest extends RefreshTokenRequest {
   installationId: string;
 }
 
-export type AccessTokenResponseApiResponse = ApiResponse<AccessTokenResponse>;
 export type MobileAuthResponseApiResponse = ApiResponse<MobileAuthResponse>;
 
 /** Registration, verification, resend, and sign-out use this envelope. */
