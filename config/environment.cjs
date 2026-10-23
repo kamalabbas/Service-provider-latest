@@ -69,7 +69,7 @@ function nativeConfigurationErrors(config, env, projectRoot, platform, { easProf
     }
     const clients = Array.isArray(googleServices?.client) ? googleServices.client : [];
     if (!clients.some(client => client?.client_info?.android_client_info?.package_name === config.android.package)) {
-      errors.push(`Android Firebase package mismatch: the selected file must contain a client for ${config.android.package}. Existing native identities have not been changed.`);
+      errors.push(`Android Firebase package mismatch: the selected file must contain a client for ${config.android.package}. Supply a matching file from the existing Firebase project owner.`);
     }
   }
   return errors;

@@ -5,12 +5,12 @@
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/service-provider-icon.png",
-    "scheme": "familytree",
+    "scheme": "service-provider",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.kimzaster.familytree",
+      "bundleIdentifier": "com.kimzaster.serviceprovider",
       "buildNumber": "1",
       "splash": {
         "backgroundColor": "#0F172A",
@@ -25,7 +25,7 @@
     },
     "android": {
       "edgeToEdgeEnabled": true,
-      "package": "com.kimzaster.familytree",
+      "package": "com.kimzaster.serviceprovider",
       "googleServicesFile": "./google-services.json",
       "splash": {
         "backgroundColor": "#0F172A",

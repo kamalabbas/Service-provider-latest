@@ -2,6 +2,8 @@
 
 Completed 19 October 2026. This inventory covers Task 2 relative to the project after genealogy removal.
 
+This is a historical cleanup snapshot. The identity follow-up below records the subsequently approved Task 15 naming; other inventories and validation results describe Task 2. See README for current infrastructure and configuration.
+
 ## Result
 
 Removed **80 legacy source files and 53 image assets**, modified **38 files**, and added **4 files**. The application now contains generic authentication, a minimal Home/Menu, email/password settings, and reusable infrastructure. No Service Provider business features were added.
@@ -294,24 +296,25 @@ The 14 lint warnings concern retained toast effect dependencies, notification im
 
 Export reports the expected unresolved `android.googleServicesFile` warning. Development config still rejects the missing Firebase file. A successful JS/Hermes export does not establish a successful native binary build.
 
-## Remaining legacy identity references
+## Identity follow-up (Task 15)
 
-The only legacy identity strings in application configuration are the approved exceptions in `app.json`:
+Task 2 deferred the native identities and URL scheme. Task 15 subsequently approved these Service Provider replacements in `app.json`:
 
-- Android package: `com.kimzaster.familytree`.
-- iOS bundle identifier: `com.kimzaster.familytree`.
-- URL scheme: `familytree`.
+- Android package: `com.kimzaster.serviceprovider` (`com.kimzaster.serviceprovider.dev` for development).
+- iOS bundle identifier: `com.kimzaster.serviceprovider` (`com.kimzaster.serviceprovider.dev` for development).
+- URL scheme, Expo slug, and npm package name: `service-provider`.
+- Display name: Service Provider (Service Provider - Dev for development).
 
-Their documentation appears here and in README. EAS project `02557e69-e417-490c-81ea-6d46a925c66a` is also intentionally retained. No replacement production package/bundle/Firebase/EAS identity was invented. The workspace directory name was not changed.
+EAS project `02557e69-e417-490c-81ea-6d46a925c66a`, Firebase ownership, and Firebase file references are retained. No cloud configuration or ownership was changed. The workspace directory requires a manual rename to `service-provider` after closing the active tools; Git history and unrelated external paths remain untouched.
 
-Neither Firebase input file is supplied. The new Expo slug needs reconciliation with the retained EAS project by its owner before cloud builds/submission. Remote EAS variables and credentials were not inspected. No app was published or submitted.
+Neither Firebase input file is supplied. The existing owners must supply clients/files matching the approved packages, arrange signing/store records, and reconcile the Expo slug with the retained EAS project before cloud builds/submission. Remote EAS variables and credentials were not inspected. No app was published or submitted.
 
 ## Deferred decisions
 
 - Service Provider API hosts and compatibility of auth, push, and version endpoints.
 - Provider profiles, onboarding, approval states, roles, authorization.
 - Support/content pages, media upload behavior, location/lookup schemas.
-- Native IDs, deep-link scheme, EAS/Firebase ownership/configuration, store URLs, push routing.
+- Native IDs and deep-link scheme were later approved in Task 15 as recorded above; EAS/Firebase configuration, store URLs, and push routing still require external follow-up.
 - Final branding assets and version-policy representation.
 - Later infrastructure/security enhancements, including logging, refresh failure policy, cache/session lifecycle, password rules, and native theme persistence.
 

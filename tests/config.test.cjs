@@ -65,9 +65,9 @@ test("an unset local variant uses dev without altering base identity", t => {
   assert.equal(config.extra.appVariant, "dev");
   assert.equal(config.name, "Service Provider - Dev");
   assert.equal(base.name, "Service Provider");
-  assert.equal(base.android.package, "com.kimzaster.familytree");
-  assert.equal(base.ios.bundleIdentifier, "com.kimzaster.familytree");
-  assert.equal(base.scheme, "familytree");
+  assert.equal(base.android.package, "com.kimzaster.serviceprovider");
+  assert.equal(base.ios.bundleIdentifier, "com.kimzaster.serviceprovider");
+  assert.equal(base.scheme, "service-provider");
   assert.equal(base.extra.eas.projectId, "02557e69-e417-490c-81ea-6d46a925c66a");
   assert.equal(config.extra.eas.projectId, base.extra.eas.projectId);
   assert.equal(config.scheme, base.scheme);
@@ -87,6 +87,8 @@ for (const [profile, variant, environment, suffix] of [
     assert.equal(config.android.package, base.android.package + suffix);
     assert.equal(config.ios.bundleIdentifier, base.ios.bundleIdentifier + suffix);
     assert.equal(config.name, suffix ? "Service Provider - Dev" : "Service Provider");
+    assert.equal(config.scheme, "service-provider");
+    assert.equal(config.extra.eas.projectId, base.extra.eas.projectId);
     assert.equal(Object.hasOwn(eas.build[profile].env, "EXPO_PUBLIC_BASE_URL"), false);
   });
 }
