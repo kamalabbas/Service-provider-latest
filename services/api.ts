@@ -2,6 +2,7 @@ import { useAuthStore } from "@/stores/authStore";
 import { AuthenticationOperation, getSessionGeneration, isCurrentAuthenticationOperation, isRefreshBlocked, refreshAccessToken } from "@/services/authSession";
 import { useToastStore } from "@/stores/toastStore";
 import { ApiErrorAction, toAppError } from "@/services/apiError";
+import type { ApiResponse } from "@/interfaces/serviceProviderApi.interface";
 import axios, { AxiosHeaders, AxiosRequestConfig, AxiosResponse, CanceledError, InternalAxiosRequestConfig, isAxiosError, isCancel } from "axios";
 
 type SessionRequestConfig = InternalAxiosRequestConfig & {
@@ -163,27 +164,30 @@ api.interceptors.response.use(
   },
 );
 
+// Helpers return the complete HTTP body, preserving envelope metadata and null data.
+// TResponse is the full body type: use ApiResponse<Payload> for typed business data,
+// or an explicit legacy/raw response type. No runtime envelope validation is applied.
 // GET request
-export const getData = async <T>(url: string, config?: AxiosRequestConfig): Promise<T> => {
-  const response: AxiosResponse<T> = await api.get(url, config);
+export const getData = async <TResponse = ApiResponse<unknown>>(url: string, config?: AxiosRequestConfig): Promise<TResponse> => {
+  const response: AxiosResponse<TResponse> = await api.get(url, config);
   return response.data;
 };
 
 // POST request
-export const postData = async <T, U>(url: string, data: T, config?: AxiosRequestConfig): Promise<U> => {
-  const response: AxiosResponse<U> = await api.post(url, data, config);
+export const postData = async <TRequest, TResponse = ApiResponse<unknown>>(url: string, data: TRequest, config?: AxiosRequestConfig): Promise<TResponse> => {
+  const response: AxiosResponse<TResponse> = await api.post(url, data, config);
   return response.data;
 };
 
 // PUT request
-export const putData = async <T, U>(url: string, data: T, config?: AxiosRequestConfig): Promise<U> => {
-  const response: AxiosResponse<U> = await api.put(url, data, config);
+export const putData = async <TRequest, TResponse = ApiResponse<unknown>>(url: string, data: TRequest, config?: AxiosRequestConfig): Promise<TResponse> => {
+  const response: AxiosResponse<TResponse> = await api.put(url, data, config);
   return response.data;
 };
 
 // DELETE request
-export const deleteData = async <T>(url: string, config?: AxiosRequestConfig): Promise<T> => {
-  const response: AxiosResponse<T> = await api.delete(url, config);
+export const deleteData = async <TResponse = ApiResponse<unknown>>(url: string, config?: AxiosRequestConfig): Promise<TResponse> => {
+  const response: AxiosResponse<TResponse> = await api.delete(url, config);
   return response.data;
 };
 

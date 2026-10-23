@@ -2183,6 +2183,36 @@ test('the same error notifies once while independent attempts may notify again',
 });
 
 for (const method of ['getData', 'postData', 'putData', 'deleteData']) {
+  for (const [shape, payload] of [
+    ['detail', { data: { id: 101 } }],
+    ['array', { data: [{ id: 101 }] }],
+    ['empty array', { data: [] }],
+    ['page', { data: { items: [{ id: 101 }], page: 1, pageSize: 20, hasMore: false } }],
+    ['null data', { data: null }],
+    ['omitted data', {}],
+  ]) {
+    test(`${method} preserves the full Service Provider ${shape} success envelope`, async () => {
+      const h = harness();
+      const generation = h.session.getSessionGeneration();
+      const body = { traceId: 'example-request-trace', code: 'Success', ...payload };
+      h.setAdapter(async config => h.ok(config, body));
+      const helper = h.apiHelpers()[method];
+      const result = await helper('/api/contract-test', {});
+      assert.equal(result, body, 'Return the envelope without unwrapping, cloning, or normalizing it');
+      assert.equal(result.traceId, 'example-request-trace');
+      assert.equal(result.code, 'Success');
+      assert.equal(result.data, payload.data);
+      assert.equal(Object.hasOwn(result, 'data'), Object.hasOwn(payload, 'data'));
+      assert.equal(h.requests.length, 1);
+      assert.equal(h.requests[0].headers.get('Authorization'), 'Bearer A-access');
+      assert.equal(h.refreshes.length, 0);
+      assert.equal(h.storage.length, 0);
+      assert.equal(h.session.getSessionGeneration(), generation);
+      assert.equal(h.store.getState().accessToken, 'A-access');
+      assert.equal(h.toasts.length, 0);
+    });
+  }
+
   test(`${method} returns HTTP 2xx success:false bodies unchanged and preserves rejection identity`, async () => {
     const h = harness();
     const body = { success: false, message: 'Unconfirmed backend semantics', data: null };
@@ -2194,6 +2224,55 @@ for (const method of ['getData', 'postData', 'putData', 'deleteData']) {
     h.setAdapter(async config => { throw (failure = httpFailure(config, 500)); });
     assert.equal((await observe(helper('/private', {}))).reason, failure);
     assert.equal(h.toasts.length, 1);
+  });
+}
+
+test('the response interceptor retains the HTTP response around a Service Provider envelope', async () => {
+  const h = harness();
+  const body = { traceId: 'body-trace', code: 'Success', data: null };
+  h.setAdapter(async config => ({ ...h.ok(config, body), headers: { 'x-trace-id': 'header-trace' } }));
+  const result = await h.api.get('/api/contract-test');
+  assert.equal(result.status, 200);
+  assert.equal(result.data, body);
+  assert.equal(result.headers.get('x-trace-id'), 'header-trace');
+  assert.equal(result.config.url, '/api/contract-test');
+  assert.equal(h.toasts.length, 0);
+});
+
+test('Service Provider null data survives the existing legacy refresh and one retry', async () => {
+  const h = harness();
+  const body = { traceId: 'retry-trace', code: 'Success', data: null };
+  h.setAdapter(async config => {
+    if (!config._retry) throw h.unauthorized(config);
+    return h.ok(config, body);
+  });
+  const pending = h.apiHelpers().getData('/api/contract-test');
+  await until(() => h.refreshes.length === 1);
+  assert.equal(h.refreshes[0].url, 'https://api.example.test/Auth/Refresh');
+  assert.equal(h.refreshes[0].body.refreshToken, 'A-refresh');
+  h.refreshes[0].resolve(responseFor(account('A', '-renewed')));
+  assert.equal(await pending, body);
+  assert.equal(h.requests.length, 2);
+  assert.equal(h.requests[1].headers.get('Authorization'), 'Bearer A-access-renewed');
+  assert.equal(h.refreshes.length, 1);
+  assert.equal(h.disk, 'A-refresh-renewed');
+  assert.equal(h.store.getState().accessToken, 'A-access-renewed');
+  assert.equal(h.toasts.length, 0);
+});
+
+for (const [name, body, config] of [
+  ['health object', { status: 'Healthy' }, {}],
+  ['text', 'Healthy', { responseType: 'text' }],
+  ['binary', new ArrayBuffer(4), { responseType: 'arraybuffer' }],
+  ['malformed envelope', { traceId: 123, code: null, data: {} }, {}],
+]) {
+  test(`successful ${name} bodies remain unchanged without envelope validation`, async () => {
+    const h = harness();
+    h.setAdapter(async request => h.ok(request, body));
+    assert.equal(await h.apiHelpers().getData('/contract-test', config), body);
+    assert.equal(h.requests[0].responseType, config.responseType);
+    assert.equal(h.refreshes.length, 0);
+    assert.equal(h.toasts.length, 0);
   });
 }
 
