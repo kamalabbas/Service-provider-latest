@@ -94,13 +94,13 @@ The shared Zustand selector `selectIsAuthenticated` requires both an in-memory a
 
 | State after startup readiness | Available routes |
 | --- | --- |
-| Signed out, no force policy | Sign in, registration, email OTP, password recovery/reset, not-found, and generated sitemap |
-| Authenticated, no force policy | Home/Menu and credential settings, not-found, and generated sitemap |
+| Signed out, no force policy | Sign in, registration, email OTP, password recovery/reset, and not-found |
+| Authenticated, no force policy | Home/Menu and credential settings, and not-found |
 | Confirmed force policy, either session state | Only `/(auth)/forced-update` |
 
 Signed-out protected deep links fall back to Sign In. After explicit login, Home opens without resuming the denied link. Signed-in navigation to ordinary auth routes falls back to Home. The dashboard also returns no descendants when authentication is absent or a force policy is active, covering removal of an existing native route after logout or access loss. Clearing authentication still uses the existing generation, cache-cancellation, persistence, and refresh-recovery mechanisms.
 
-The root's existing version check is shared through `AppUpdatePolicyContext`. Nested layouts and the update screen consume that value without starting another check. Version loading/failure remains nonblocking; normal routes are available until a force policy is known. Once known, guards exclude normal routes, not-found, and Expo's generated sitemap. The existing update screen reads policy content directly, so no imperative redirect or URL-parameter handoff is required. Clearing the force policy restores normal route availability. Soft-update feedback still appears once after startup readiness.
+The root's existing version check is shared through `AppUpdatePolicyContext`. Nested layouts and the update screen consume that value without starting another check. Version loading/failure remains nonblocking; normal routes are available until a force policy is known. Once known, guards exclude normal routes and not-found. Expo Router sitemap generation is disabled for this native app, and the root does not declare a generated `_sitemap` screen. The existing update screen reads policy content directly, so no imperative redirect or URL-parameter handoff is required. Clearing the force policy restores normal route availability. Soft-update feedback still appears once after startup readiness.
 
 The unused `useProtectedRoute` hook and the fully replaced `useUserStateRedirect` hook have been removed. Navigation protection tests are included in `node tests/startup.test.cjs`. They execute the real application layouts, installed Expo guard-filtering code, React Navigation's stack state engine, and a request-capable React Query probe with mocked native/UI boundaries. Android/iOS deep-link delivery, native mounting/unmounting, and back gestures still need device verification. Client route guards do not replace backend authorization.
 

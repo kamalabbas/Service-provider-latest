@@ -120,7 +120,6 @@ export default function RootLayout() {
               </Stack.Protected>
               <Stack.Protected guard={!forceUpdate}>
                 <Stack.Screen name="+not-found" />
-                <Stack.Screen name="_sitemap" />
               </Stack.Protected>
             </Stack>
             <StatusBar style='dark' />

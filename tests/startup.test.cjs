@@ -12,9 +12,24 @@ const { QueryClient, QueryObserver } = require('@tanstack/react-query');
 const React = require('react');
 const jsxRuntime = require('react/jsx-runtime');
 const { StackRouter } = require('@react-navigation/routers');
+const { getRoutes } = require('expo-router/build/getRoutes');
 const { notifications, response: notificationResponse } = require('./helpers/notifications.cjs');
 
 const root = path.resolve(__dirname, '..');
+// Discover actual route filenames while stubbing native component exports.
+const routeContext = () => ({ default: () => null });
+routeContext.keys = () => fs.readdirSync(path.join(root, 'app'), { recursive: true })
+  .filter(file => /\.[jt]sx?$/.test(file))
+  .map(file => `./${file.replaceAll('\\', '/')}`);
+const routerOptions = require('../app.json').expo.plugins.find(plugin => Array.isArray(plugin) && plugin[0] === 'expo-router')[1];
+const rootRoutes = getRoutes(routeContext, { ...routerOptions, skipGenerated: true, ignoreEntryPoints: true });
+
+test('native route generation omits the sitemap', () => {
+  for (const platform of ['android', 'ios']) {
+    const routes = getRoutes(routeContext, { ...routerOptions, platform, ignoreEntryPoints: true });
+    assert.equal(routes.children.some(route => route.route === '_sitemap'), false);
+  }
+});
 const compiled = new Map();
 const runtimes = new Set();
 const tick = () => new Promise(resolve => setImmediate(resolve));
@@ -271,11 +286,16 @@ function harness(options = {}) {
     },
     screens(instance) {
       const navigator = findElement(instance.tree, Stack) ?? findElement(instance.tree, Tabs);
-      return navigator ? Array.from(filterScreens(navigator.props.children).screens, screen => screen.name) : [];
+      const names = navigator ? Array.from(filterScreens(navigator.props.children).screens, screen => screen.name) : [];
+      if (instance.file === 'app/_layout.tsx') {
+        for (const name of names) assert.ok(rootRoutes.children.some(route => route.route === name), `Root screen ${name} must exist in Expo Router's discovered routes`);
+      }
+      return names;
     },
     mount(file = 'app/_layout.tsx') {
       const Component = load(file).default;
       const instance = {
+        file,
         slots: [], effects: [], cursor: 0, active: true, dirty: false, lateUpdates: 0, tree: null,
         render() {
           assert.ok(instance.active, 'Cannot render an unmounted layout');
@@ -334,7 +354,7 @@ test('cold start waits for successful restoration and native root layout before 
   await h.flush();
   assert.ok(findView(root.tree));
   assert.equal(h.store.getState().accessToken, 'A-access');
-  assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found', '_sitemap']);
+  assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found']);
   assert.deepEqual(h.splash, ['prevent'], 'State readiness alone must not dismiss splash');
   root.layout(); root.layout(); root.render(); root.layout();
   await h.flush();
@@ -364,7 +384,7 @@ test('restored sessions acquire push tokens without mounting login or blocking s
   assert.equal(h.push.active('received'), 1);
   h.refreshes[0].resolve(response);
   await h.flush();
-  assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found', '_sitemap']);
+  assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found']);
   assert.equal(h.store.getState().pushNotificationToken, null);
   root.layout();
   assert.deepEqual(h.splash, ['prevent', 'hide']);
@@ -409,7 +429,7 @@ test('notification permission/token failures preserve session restoration, navig
     await until(() => h.refreshes.length === 1);
     h.refreshes[0].resolve(response);
     await h.flush();
-    assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found', '_sitemap']);
+    assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found']);
     assert.equal(h.store.getState().accessToken, 'A-access');
     root.layout();
     assert.deepEqual(h.splash, ['prevent', 'hide']);
@@ -434,7 +454,7 @@ test('slow theme restoration holds the splash and first content uses the saved d
   await h.flush();
   assert.equal(root.lateUpdates, 0);
   assert.equal(findView(remounted.tree).props.style.backgroundColor, '#000');
-  assert.deepEqual(h.screens(remounted), ['(auth)', '+not-found', '_sitemap']);
+  assert.deepEqual(h.screens(remounted), ['(auth)', '+not-found']);
   assert.deepEqual(h.splash, ['prevent']);
   remounted.layout();
   assert.deepEqual(h.splash, ['prevent', 'hide']);
@@ -454,7 +474,7 @@ for (const failure of ['corrupt', 'unavailable']) {
     h.refreshes[0].resolve(response);
     await h.flush();
     assert.equal(findView(root.tree).props.style.backgroundColor, '#fff');
-    assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found', '_sitemap']);
+    assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found']);
     root.layout();
     assert.deepEqual(h.splash, ['prevent', 'hide']);
     assert.ok(h.logs.some(args => args[0].startsWith('Could not restore the theme preference')));
@@ -501,7 +521,7 @@ test('font failure uses the existing shell with system fonts, while still waitin
   h.refreshes[0].resolve(response);
   await h.flush();
   assert.ok(findView(root.tree));
-  assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found', '_sitemap']);
+  assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found']);
   root.layout();
   assert.deepEqual(h.splash, ['prevent', 'hide']);
   assert.ok(h.logs.some(args => args[0] === 'Custom font loading failed; using system fonts.'));
@@ -871,17 +891,17 @@ test('soft-update feedback waits for startup readiness and appears once across r
   for (let i = 0; i < 10; i++) { h.setUpdatePolicy({ ...forcePolicy, action: 'soft' }); root.render(); }
   assert.equal(h.toasts.length, 1);
   assert.deepEqual(h.toasts[0], [forcePolicy.message, 'error', true, 'Update', forcePolicy.updateUrl]);
-  assert.deepEqual(h.screens(root), ['(auth)', '+not-found', '_sitemap']);
+  assert.deepEqual(h.screens(root), ['(auth)', '+not-found']);
 });
 
 test('unavailable or pending version policy never becomes another startup gate', async () => {
   const h = harness({ noBackend: true }), root = h.mount();
   await h.flush();
-  assert.deepEqual(h.screens(root), ['(auth)', '+not-found', '_sitemap']);
+  assert.deepEqual(h.screens(root), ['(auth)', '+not-found']);
   await h.session.setAuthenticatedSession(account); await h.flush();
   assert.equal((await protectedProbe(h, root)).requests, 1);
   h.setUpdatePolicy(undefined); await h.flush();
-  assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found', '_sitemap']);
+  assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found']);
 });
 
 test('repeated login/logout transitions consistently prune history without repeating restoration', async () => {
