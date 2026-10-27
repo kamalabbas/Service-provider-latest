@@ -1,35 +1,35 @@
+import { Radius, Spacing, Typography } from "@/constants/Theme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToastStore } from "@/stores/toastStore";
 import { yupResolver } from "@hookform/resolvers/yup";
 import React, { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { StyleSheet, Text } from "react-native";
+import { StyleSheet, Text, View, ViewStyle } from "react-native";
 import OTPTextInput from "react-native-otp-textinput";
 import * as yup from "yup";
-import { ThemedView } from "../ThemedView";
+import { ThemedText } from "../ThemedText";
 import { PrimaryButton } from "./PrimaryButton";
-import { Logo } from "./Logo";
 
 const RESEND_COOLDOWN_SECONDS = 60;
 
 export interface OTPComponentProps {
   isPending?: boolean;
-  email?: string; 
+  email?: string;
   onSubmit: (data: { otp: string }) => void | Promise<void>;
   // Return false when no code was sent, so the resend countdown does not start.
   reSendOtp?: () => boolean | void | Promise<boolean | void>;
+  submitLabel?: string;
 }
 
-export function OTPComponent({ isPending, email, onSubmit, reSendOtp }: OTPComponentProps) {
-  // Yup schema
-  const schema = yup
-    .object({
-      otp: yup.string().length(6, "OTP must be 6 digits").required("OTP is required"),
-    })
-    .required();
+const schema = yup
+  .object({
+    otp: yup.string().length(6, "Enter all 6 digits of the code").required("Enter the 6-digit code"),
+  })
+  .required();
 
+export function OTPComponent({ isPending, email, onSubmit, reSendOtp, submitLabel = "Verify" }: OTPComponentProps) {
   // react-hook-form
-  const { control, handleSubmit } = useForm({
+  const { control, handleSubmit, formState: { errors } } = useForm({
     resolver: yupResolver(schema),
     defaultValues: { otp: "" },
   });
@@ -40,9 +40,10 @@ export function OTPComponent({ isPending, email, onSubmit, reSendOtp }: OTPCompo
   // theme colors
   const tint = useThemeColor({}, "tint");
   const border = useThemeColor({}, "borderColor");
-  const bg = useThemeColor({}, "background");
+  const surface = useThemeColor({}, "surface");
   const textColor = useThemeColor({}, "text");
-  const muted = useThemeColor({}, "optionSeparator");
+  const muted = useThemeColor({}, "textMuted");
+  const errorColor = useThemeColor({}, "error");
 
   // States for resend otp
   const [resendDisabled, setResendDisabled] = useState(false);
@@ -91,9 +92,11 @@ export function OTPComponent({ isPending, email, onSubmit, reSendOtp }: OTPCompo
     };
   }, []);
 
+  const canResend = !resendDisabled && !!process.env.EXPO_PUBLIC_BASE_URL;
+  const counting = resendDisabled && resendInterval.current;
+
   return (
-    <ThemedView style={styles.container}>
-      <Logo />
+    <View style={styles.container}>
       <Controller
         control={control}
         name="otp"
@@ -102,101 +105,75 @@ export function OTPComponent({ isPending, email, onSubmit, reSendOtp }: OTPCompo
             inputCount={6}
             handleTextChange={onChange}
             defaultValue={value}
-            tintColor={tint}
-            offTintColor={border}
+            tintColor={errors.otp ? errorColor : tint}
+            offTintColor={errors.otp ? errorColor : border}
             containerStyle={styles.otpContainer}
+            // The library types this as a ViewStyle, but applies it to each TextInput.
             textInputStyle={{
               ...styles.otpInput,
-              borderColor: border,
-              backgroundColor: bg,
-            }}
+              color: textColor,
+              backgroundColor: surface,
+            } as ViewStyle}
             keyboardType="number-pad"
           />
         )}
       />
+      {errors.otp?.message ? (
+        <ThemedText type="caption" tone="error" style={styles.error}>{errors.otp.message}</ThemedText>
+      ) : null}
       <PrimaryButton
-        title={isPending ? "Verifying..." : "Verify OTP"}
+        title={isPending ? "Verifying..." : submitLabel}
         onPress={handleSubmit(onSubmit)}
         disabled={isPending || !process.env.EXPO_PUBLIC_BASE_URL}
         loading={isPending}
-        style={styles.Button}
+        style={styles.button}
       />
-      <Text style={[styles.resendContainer, { color: textColor }]}>
-        {"Didn't receive an OTP? "}
-        <Text style={resendDisabled ? [styles.resendTextDisabled, { color: muted }] : [styles.resendText, { color: tint }]} onPress={!resendDisabled && process.env.EXPO_PUBLIC_BASE_URL ? handleResendOtp : undefined}>
-          Resend it
+      <Text style={[styles.resend, { color: muted }]}>
+        {"Didn't receive a code? "}
+        <Text
+          style={[styles.resendAction, { color: canResend ? tint : muted }]}
+          onPress={canResend ? handleResendOtp : undefined}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canResend }}
+        >
+          {counting ? `Resend in ${resendTimer}s` : "Resend code"}
         </Text>
-        {resendDisabled && resendInterval.current && (
-          <Text style={[styles.counterText, { color: muted }]}> ({resendTimer}s)</Text>
-        )}
       </Text>
-    </ThemedView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 48,
-  },
-  logo: {
-    width: 220,
-    height: 200,
-    marginBottom: 16,
-    alignSelf: "center",
+    width: "100%",
   },
   otpContainer: {
-    marginVertical: 16,
-    alignSelf: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.sm,
   },
   otpInput: {
-    borderRadius: 8,
+    width: 48,
+    height: 56,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    width: 40,
-    height: 48,
-    fontSize: 20,
+    borderBottomWidth: 1,
+    ...Typography.title,
     textAlign: "center",
-    marginHorizontal: 4,
+    marginHorizontal: 0,
   },
-  title: {
-    marginBottom: 24,
+  error: {
+    textAlign: "center",
+    marginTop: Spacing.xs,
   },
   button: {
-    padding: 16,
-    borderRadius: 8,
-    width: "100%",
-    alignItems: "center",
-    marginVertical: 16,
+    marginTop: Spacing.xl,
   },
-  buttonText: {
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-  resendContainer: {
-    marginTop: 8,
+  resend: {
+    ...Typography.callout,
+    marginTop: Spacing.xl,
     textAlign: "center",
-    fontSize: 15,
   },
-  resendText: {
-    textDecorationLine: "underline",
-    fontWeight: "bold",
-  },
-  resendTextDisabled: {
-    textDecorationLine: "underline",
-    fontWeight: "bold",
-  },
-  counterText: {
-    fontSize: 15,
-  },
-  registerLink: {
-    fontSize: 15,
+  resendAction: {
     fontWeight: "600",
-    marginTop: 4,
-    textAlign: "center",
-  },
-  Button: {
-    marginTop: 12,
-    marginBottom: 8,
   },
 });

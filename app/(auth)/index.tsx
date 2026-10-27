@@ -1,29 +1,30 @@
 import { FormInput } from "@/components/form/FormInput";
 import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
-import { useThemeColor } from "@/hooks/useThemeColor";
+import { AuthLayout } from "@/components/ui/AuthLayout";
+import { BackToLogin } from "@/components/ui/BackToLogin";
+import { Notice } from "@/components/ui/Notice";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { yupResolver } from "@hookform/resolvers/yup";
-import { Link, useLocalSearchParams } from "expo-router";
+import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { Controller, useForm } from "react-hook-form";
 import { StyleSheet, View } from "react-native";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import * as yup from "yup";
 
-import { Logo } from "@/components/ui/Logo";
-import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { useAuth } from "@/hooks/useAuth";
 import { LoginRequest } from "@/interfaces/auth.interface";
 import React from "react";
 
 const schema = yup
   .object({
-    email: yup.string().email("Invalid email").required("Email is required"),
+    email: yup.string().email("Enter a valid email address").required("Email is required"),
     // Sign-in accepts any nonblank password; the backend applies its own checks.
     password: yup.string().trim().required("Password is required"),
   })
   .required();
 
 export default function Index() {
+  const router = useRouter();
+
   // Email verification returns here with the verified address.
   const { email: verifiedEmail } = useLocalSearchParams<{ email?: string }>();
 
@@ -37,11 +38,6 @@ export default function Index() {
     defaultValues: { email: verifiedEmail ?? "", password: "" },
   });
 
-  // Theme colors
-  const textColor = useThemeColor({}, "text");
-  const backgroundColor = useThemeColor({}, "background");
-  const tint = useThemeColor({}, "tint");
-
   // Login mutation
   const { mutate: loginMutate, isPending } = useAuth().loginMutation;
 
@@ -51,108 +47,78 @@ export default function Index() {
   };
 
   return (
-    <KeyboardAwareScrollView
-      style={{ flex: 1, backgroundColor: backgroundColor }}
-      contentContainerStyle={{ flexGrow: 1, backgroundColor: backgroundColor }}
-      keyboardShouldPersistTaps="handled"
-      enableOnAndroid={true}
-      enableResetScrollToCoords={false}
-      extraScrollHeight={24}
+    <AuthLayout
+      title="Welcome back"
+      subtitle="Sign in to your account to continue."
+      footer={
+        <BackToLogin messageText="Don't have an account?" LinkText="Create account" onPress={() => router.push("/(auth)/register")} />
+      }
     >
-      <ThemedView style={styles.container}>
-        <Logo />
-        <View style={styles.form}>
-          <Controller
-            control={control}
-            name="email"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <FormInput
-                label="Email"
-                placeholder="Enter your email"
-                autoCapitalize="none"
-                keyboardType="email-address"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={errors.email?.message as string}
-              />
-            )}
+      <Controller
+        control={control}
+        name="email"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <FormInput
+            label="Email"
+            placeholder="name@example.com"
+            leftIcon="mail-outline"
+            autoCapitalize="none"
+            autoComplete="email"
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            value={value}
+            onChangeText={onChange}
+            onBlur={onBlur}
+            error={errors.email?.message as string}
           />
-          <Controller
-            control={control}
-            name="password"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <FormInput
-                label="Password"
-                placeholder="Enter your password"
-                secureTextEntry
-                showPasswordRule={false}
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={errors.password?.message as string}
-              />
-            )}
+        )}
+      />
+      <Controller
+        control={control}
+        name="password"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <FormInput
+            label="Password"
+            placeholder="Enter your password"
+            leftIcon="lock-closed-outline"
+            secureTextEntry
+            showPasswordRule={false}
+            autoComplete="current-password"
+            textContentType="password"
+            value={value}
+            onChangeText={onChange}
+            onBlur={onBlur}
+            error={errors.password?.message as string}
           />
+        )}
+      />
 
-          <View style={styles.forgotPasswordLinkContainer}>
-            <Link href="/(auth)/forgot-password" style={[styles.forgotLink, { color: tint }]}>
-              Forgot password?
-            </Link>
-          </View>
+      <View style={styles.forgot}>
+        <Link href="/(auth)/forgot-password">
+          <ThemedText type="link">Forgot password?</ThemedText>
+        </Link>
+      </View>
 
-          {!process.env.EXPO_PUBLIC_BASE_URL && (
-            <ThemedText style={{ marginBottom: 16 }}>Sign-in will be available when the service is connected.</ThemedText>
-          )}
-          <PrimaryButton title={isPending ? "Logging in..." : "Login"} onPress={handleSubmit(onSubmit)} disabled={isPending || !process.env.EXPO_PUBLIC_BASE_URL} loading={isPending} />
-
-          <View style={styles.signupContainer}>
-            <ThemedText style={[styles.switchText, { color: textColor }]}>{"Don't have an account? "}</ThemedText>
-            <Link href="/(auth)/register" style={[styles.registerLink, { color: tint }]}>
-              Register
-            </Link>
-          </View>
-        </View>
-      </ThemedView>
-    </KeyboardAwareScrollView>
+      {!process.env.EXPO_PUBLIC_BASE_URL && (
+        <Notice message="Sign-in will be available when the service is connected." style={styles.notice} />
+      )}
+      <PrimaryButton
+        title={isPending ? "Signing in..." : "Sign in"}
+        onPress={handleSubmit(onSubmit)}
+        disabled={isPending || !process.env.EXPO_PUBLIC_BASE_URL}
+        loading={isPending}
+      />
+    </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
+  forgot: {
+    alignItems: "flex-end",
+    marginTop: -4,
+    marginBottom: 24,
   },
-  form: {
-    width: "100%",
-  },
-  forgotPasswordLinkContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
+  notice: {
     marginBottom: 16,
-  },
-  forgotLink: {
-    fontWeight: "bold",
-    textDecorationLine: "underline",
-    fontSize: 14,
-  },
-  signupContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 8,
-  },
-
-  registerLink: {
-    fontWeight: "bold",
-    textDecorationLine: "underline",
-    fontSize: 14,
-  },
-  switchText: {
-    fontSize: 14,
-    fontWeight: "500",
   },
 });

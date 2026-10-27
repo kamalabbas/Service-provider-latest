@@ -1,4 +1,4 @@
-import { useThemeColor } from "@/hooks/useThemeColor";
+import { Spacing } from "@/constants/Theme";
 import { Pressable, StyleSheet, View } from "react-native";
 import { ThemedText } from "../ThemedText";
 
@@ -8,39 +8,22 @@ export interface Props {
     onPress: () => void;
 }
 
-export const BackToLogin = ({ LinkText = 'Return to Login', messageText, onPress }: Props) => {
-    const linkColor = useThemeColor({}, "tint");
-    const switchTextColor = useThemeColor({}, "text")
-
-    return (
-        <View style={styles.container}>
-            <ThemedText>
-                {messageText && <ThemedText style={[styles.switchText, { color: switchTextColor }]}>{messageText}</ThemedText>} {}
-            </ThemedText>
-            <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1 }]}>
-                <ThemedText style={[ styles.messageText ,{ color: linkColor }]}>{LinkText}</ThemedText>
-            </Pressable>
-        </View>
-    );
-}
+// A centered "message + link" line used in auth screen footers.
+export const BackToLogin = ({ LinkText = 'Return to Login', messageText, onPress }: Props) => (
+    <View style={styles.container}>
+        {messageText ? <ThemedText type="callout" tone="muted">{messageText} </ThemedText> : null}
+        <Pressable onPress={onPress} hitSlop={8} accessibilityRole="link" style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+            <ThemedText type="link">{LinkText}</ThemedText>
+        </Pressable>
+    </View>
+);
 
 const styles = StyleSheet.create({
     container: {
-        padding: 16,
+        paddingVertical: Spacing.lg,
         alignItems: "center",
         flexDirection: "row",
         justifyContent: "center",
+        flexWrap: "wrap",
     },
-    switchText: {
-        fontSize: 14,
-        fontWeight: "500",
-        textAlign: "center",
-    },
-    messageText: {
-        fontWeight: "bold",
-        textDecorationLine: "underline",
-        fontSize: 14,
-        textAlign: "center",
-    },
-
 });

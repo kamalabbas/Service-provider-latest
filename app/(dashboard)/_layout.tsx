@@ -2,6 +2,7 @@ import { IconSymbol } from "@/components/ui/IconSymbol";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { selectIsAuthenticated, selectNeedsProfileSetup, useAuthStore } from "@/stores/authStore";
 import { Tabs } from "expo-router";
+import { StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function DashboardLayout() {
@@ -26,14 +27,15 @@ export default function DashboardLayout() {
         tabBarInactiveTintColor: tabInactive,
         tabBarStyle: {
           backgroundColor: tabBackground,
-          borderTopWidth: 1,
+          borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: tabBorder,
           elevation: 0,
           shadowOpacity: 0,
-          height: 60 + insets.bottom,
-          paddingBottom: insets.bottom,
+          height: 64 + insets.bottom,
+          paddingTop: 8,
+          paddingBottom: insets.bottom + 4,
         },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: "600" },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "600", marginTop: 2 },
       }}
     >
       <Tabs.Screen
@@ -46,8 +48,8 @@ export default function DashboardLayout() {
       <Tabs.Screen
         name="(menu)"
         options={{
-          title: "Menu",
-          tabBarIcon: ({ color, size }) => <IconSymbol name="line.3.horizontal" color={color} size={size} />,
+          title: "Account",
+          tabBarIcon: ({ color, size }) => <IconSymbol name="person" color={color} size={size} />,
         }}
       />
     </Tabs>

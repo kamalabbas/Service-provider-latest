@@ -1,63 +1,74 @@
 import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
+import { Layout, Radius, Spacing, Typography } from "@/constants/Theme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { PASSWORD_RULE_TEXT } from "@/utility/passwordPolicy";
-import { forwardRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, TextInputProps, View } from "react-native";
+import Ionicons from "@expo/vector-icons/Ionicons";
+import { ComponentProps, forwardRef, useState } from "react";
+import { Pressable, StyleSheet, TextInput, TextInputProps, View } from "react-native";
 
 interface FormInputProps extends TextInputProps {
   label?: string;
   error?: string;
   labelStyle?: object;
   showPasswordRule?: boolean;
+  /** Optional leading icon, e.g. "mail-outline". */
+  leftIcon?: ComponentProps<typeof Ionicons>["name"];
+  helperText?: string;
 }
 
 export const FormInput = forwardRef<TextInput, FormInputProps>(
-  ({ label, error, labelStyle, style, secureTextEntry, showPasswordRule = true, ...props }, ref) => {
+  ({ label, error, labelStyle, style, secureTextEntry, showPasswordRule = true, leftIcon, helperText, onFocus, onBlur, ...props }, ref) => {
   const [showPassword, setShowPassword] = useState(false);
+  const [focused, setFocused] = useState(false);
   const isPasswordField = !!secureTextEntry;
 
   // Theme colors
   const borderColor = useThemeColor({}, "borderColor");
-  const backgroundColor = useThemeColor({}, "background");
+  const surface = useThemeColor({}, "surface");
   const textColor = useThemeColor({}, "text");
   const errorColor = useThemeColor({}, "error");
   const placeholderColor = useThemeColor({}, "placeholder");
   const mutedTextColor = useThemeColor({}, "textMuted");
   const tint = useThemeColor({}, "tint");
 
+  const frameColor = error ? errorColor : focused ? tint : borderColor;
+  const helper = helperText ?? (isPasswordField && showPasswordRule ? PASSWORD_RULE_TEXT : undefined);
+
   return (
-    <ThemedView style={[styles.container, styles.transparentBackground]}>
-      {label && <ThemedText style={[styles.label, { color: textColor }, labelStyle]}>{label}</ThemedText>}
-      <View>
+    <View style={styles.container}>
+      {label && <ThemedText type="label" style={[styles.label, labelStyle]}>{label}</ThemedText>}
+      <View style={[styles.field, { borderColor: frameColor, backgroundColor: surface }, focused && !error && styles.focused]}>
+        {leftIcon ? <Ionicons name={leftIcon} size={20} color={focused ? tint : mutedTextColor} style={styles.leftIcon} /> : null}
         <TextInput
           ref={ref}
-          style={[
-            styles.input,
-            { borderColor, backgroundColor, color: textColor },
-            style,
-            isPasswordField && styles.passwordInput,
-            error && { borderColor: errorColor },
-          ]}
+          style={[styles.input, { color: textColor }, style]}
           placeholderTextColor={placeholderColor}
           secureTextEntry={isPasswordField ? !showPassword : secureTextEntry}
+          onFocus={(event) => { setFocused(true); onFocus?.(event); }}
+          onBlur={(event) => { setFocused(false); onBlur?.(event); }}
           {...props}
         />
-
         {isPasswordField && (
           <Pressable
             style={styles.passwordToggle}
             onPress={() => setShowPassword((prev) => !prev)}
+            hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel={showPassword ? "Hide password" : "Show password"}
           >
-            <ThemedText style={[styles.passwordToggleText, { color: tint }]}>{showPassword ? "Hide" : "Show"}</ThemedText>
+            <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={mutedTextColor} />
           </Pressable>
         )}
       </View>
-      {isPasswordField && showPasswordRule && <ThemedText style={[styles.passwordRule, { color: mutedTextColor }]}>{PASSWORD_RULE_TEXT}</ThemedText>}
-      {!!error && <Text style={[styles.error, { color: errorColor }]}>{error}</Text>}
-    </ThemedView>
+      {error ? (
+        <View style={styles.message} accessibilityLiveRegion="polite">
+          <Ionicons name="alert-circle" size={14} color={errorColor} style={styles.messageIcon} />
+          <ThemedText type="caption" tone="error" style={styles.messageText}>{error}</ThemedText>
+        </View>
+      ) : helper ? (
+        <ThemedText type="footnote" style={[styles.helper, { color: mutedTextColor }]}>{helper}</ThemedText>
+      ) : null}
+    </View>
   );
 });
 
@@ -66,42 +77,47 @@ FormInput.displayName = "FormInput";
 const styles = StyleSheet.create({
   container: {
     width: "100%",
-    marginBottom: 10,
-  },
-  transparentBackground: {
-    backgroundColor: "transparent",
+    marginBottom: Spacing.lg,
   },
   label: {
-    paddingBottom: 6,
-    fontWeight: "600",
-    fontSize: 14,
+    marginBottom: Spacing.sm,
+  },
+  field: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: Layout.controlHeight,
+    borderWidth: 1,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+  },
+  focused: {
+    borderWidth: 1.5,
+  },
+  leftIcon: {
+    marginRight: Spacing.sm,
   },
   input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  passwordInput: {
-    paddingRight: 64,
+    flex: 1,
+    ...Typography.body,
+    paddingVertical: Spacing.md,
   },
   passwordToggle: {
-    position: "absolute",
-    right: 12,
-    top: 0,
-    bottom: 0,
-    justifyContent: "center",
+    marginLeft: Spacing.sm,
+    padding: Spacing.xs,
   },
-  passwordToggleText: {
-    fontSize: 13,
-    fontWeight: "600",
+  message: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: Spacing.sm,
   },
-  passwordRule: {
-    marginTop: 4,
-    fontSize: 12,
+  messageIcon: {
+    marginTop: 2,
+    marginRight: Spacing.xs,
   },
-  error: {
-    marginTop: 4,
-    fontSize: 13,
+  messageText: {
+    flex: 1,
+  },
+  helper: {
+    marginTop: Spacing.sm,
   },
 });

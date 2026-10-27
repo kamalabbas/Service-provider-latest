@@ -5,11 +5,11 @@ interface ToastState {
   id: number;
   visible: boolean;
   message: string;
-  type: 'success' | 'error';
+  type: 'success' | 'error' | 'info';
   persist: boolean,
   linkText: string,
   linkURL: string,
-  showToast: (message: string, type?: 'success' | 'error', persist?: boolean, linkText?: string, linkURL?: string) => void;
+  showToast: (message: string, type?: 'success' | 'error' | 'info', persist?: boolean, linkText?: string, linkURL?: string) => void;
   hideToast: () => void;
 }
 

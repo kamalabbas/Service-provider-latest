@@ -1,10 +1,8 @@
 import { FormInput } from "@/components/form/FormInput";
-import { ThemedView } from "@/components/ThemedView";
+import { AuthLayout } from "@/components/ui/AuthLayout";
 import { BackToLogin } from "@/components/ui/BackToLogin";
-import { Logo } from "@/components/ui/Logo";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { useAuth } from "@/hooks/useAuth";
-import { useThemeColor } from "@/hooks/useThemeColor";
 import { setNewPasswordRequest } from "@/interfaces/auth.interface";
 import { useToastStore } from "@/stores/toastStore";
 import { newPasswordSchema } from "@/utility/passwordPolicy";
@@ -12,7 +10,6 @@ import { yupResolver } from "@hookform/resolvers/yup";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Controller, useForm } from "react-hook-form";
 import { StyleSheet } from "react-native";
-import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import * as yup from "yup";
 
 // Yup schema for form validation
@@ -22,7 +19,7 @@ const schema = yup
     confirmPassword: yup
       .string()
       .oneOf([yup.ref("password")], "Passwords must match")
-      .required("Confirm password is required"),
+      .required("Confirm your new password"),
   })
   .required();
 
@@ -44,9 +41,6 @@ export default function SetNewPasswordScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const forgotPasswordToken = (params as any)?.forgotPasswordToken;
-
-  // Theme colors
-  const backgroundColor = useThemeColor({}, "background");
 
   // APi Request Hook
   const { mutate: setNewPassword, isPending } = useAuth().setNewPasswordMutation;
@@ -72,66 +66,62 @@ export default function SetNewPasswordScreen() {
   };
 
   return (
-    <KeyboardAwareScrollView
-      style={{ flex: 1, backgroundColor: backgroundColor }}
-      contentContainerStyle={{ flexGrow: 1, backgroundColor: backgroundColor }}
-      keyboardShouldPersistTaps="handled"
-      enableOnAndroid={true}
-      enableResetScrollToCoords={false}
-      extraScrollHeight={24}
+    <AuthLayout
+      title="Set a new password"
+      subtitle="Choose a strong password you haven't used before."
+      footer={<BackToLogin messageText="Changed your mind?" LinkText="Back to sign in" onPress={() => router.replace("/(auth)")} />}
     >
-      <ThemedView style={styles.container}>
-        <Logo />
-        <Controller
-          control={control}
-          name="password"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <FormInput
-              label="New Password"
-              placeholder="Enter new password"
-              secureTextEntry
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              error={errors.password?.message as string}
-            />
-          )}
-        />
-        <Controller
-          control={control}
-          name="confirmPassword"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <FormInput
-              label="Confirm Password"
-              placeholder="Re-enter new password"
-              secureTextEntry
-              value={value}
-              onChangeText={onChange}
-              onBlur={onBlur}
-              error={errors.confirmPassword?.message as string}
-            />
-          )}
-        />
+      <Controller
+        control={control}
+        name="password"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <FormInput
+            label="New password"
+            placeholder="Create a new password"
+            leftIcon="lock-closed-outline"
+            secureTextEntry
+            autoComplete="new-password"
+            textContentType="newPassword"
+            value={value}
+            onChangeText={onChange}
+            onBlur={onBlur}
+            error={errors.password?.message as string}
+          />
+        )}
+      />
+      <Controller
+        control={control}
+        name="confirmPassword"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <FormInput
+            label="Confirm new password"
+            placeholder="Re-enter your new password"
+            leftIcon="lock-closed-outline"
+            secureTextEntry
+            showPasswordRule={false}
+            autoComplete="new-password"
+            textContentType="newPassword"
+            value={value}
+            onChangeText={onChange}
+            onBlur={onBlur}
+            error={errors.confirmPassword?.message as string}
+          />
+        )}
+      />
 
-        <PrimaryButton
-          title={isPending ? "Saving..." : "Set Password"}
-          onPress={handleSubmit(onSubmit)}
-          disabled={isPending || !process.env.EXPO_PUBLIC_BASE_URL}
-          loading={isPending}
-          style={{ marginTop: 12 }}
-        />
-
-        <BackToLogin LinkText="Return to Login" onPress={() => router.replace("/(auth)")} />
-      </ThemedView>
-    </KeyboardAwareScrollView>
+      <PrimaryButton
+        title={isPending ? "Saving..." : "Update password"}
+        onPress={handleSubmit(onSubmit)}
+        disabled={isPending || !process.env.EXPO_PUBLIC_BASE_URL}
+        loading={isPending}
+        style={styles.submit}
+      />
+    </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignContent: "center",
-    justifyContent: "center",
-    padding: 24,
+  submit: {
+    marginTop: 8,
   },
 });

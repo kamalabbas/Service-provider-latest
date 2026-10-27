@@ -2,6 +2,8 @@ import { FormInput } from "@/components/form/FormInput";
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { Spacing } from "@/constants/Theme";
 import { useAuth } from "@/hooks/useAuth";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useAuthStore } from "@/stores/authStore";
@@ -10,11 +12,16 @@ import { newPasswordSchema } from "@/utility/passwordPolicy";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { StyleSheet, TouchableOpacity, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import * as yup from "yup";
 
 type ActiveTab = "email" | "password";
+
+const TABS = [
+  { label: "Email", value: "email" },
+  { label: "Password", value: "password" },
+] as const;
 
 type EmailFormValues = {
   email: string;
@@ -51,10 +58,6 @@ const passwordSchema = yup
 
 export default function ChangeEmailPasswordScreen() {
   const backgroundColor = useThemeColor({}, "muted");
-  const textColor = useThemeColor({}, "text");
-  const tabBg = useThemeColor({}, "primaryLight");
-  const tabActiveBg = useThemeColor({}, "primary");
-  const tabActiveText = useThemeColor({}, "buttonText");
 
   const { changeEmailMutation, verifyNewEmailMutation, changePasswordMutation } = useAuth();
   const showToast = useToastStore((s) => s.showToast);
@@ -177,25 +180,19 @@ export default function ChangeEmailPasswordScreen() {
 
   return (
     <ThemedView style={{ flex: 1, backgroundColor }}>
-      <View style={styles.tabsContainer}>
-        <TouchableOpacity
-          style={[styles.tab, { backgroundColor: activeTab === "email" ? tabActiveBg : tabBg }]}
-          onPress={() => setActiveTab("email")}
-        >
-          <ThemedText style={[styles.tabText, activeTab === "email" && [styles.tabTextActive, { color: tabActiveText }]]}>Change Email</ThemedText>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, { backgroundColor: activeTab === "password" ? tabActiveBg : tabBg }]}
-          onPress={() => {
-            setActiveTab("password");
+      <SegmentedControl
+        style={styles.tabsContainer}
+        options={TABS}
+        value={activeTab}
+        onChange={(tab) => {
+          setActiveTab(tab);
+          if (tab === "password") {
             setOtpSent(false);
             setPendingEmail("");
             resetOtpForm();
-          }}
-        >
-          <ThemedText style={[styles.tabText, activeTab === "password" && [styles.tabTextActive, { color: tabActiveText }]]}>Change Password</ThemedText>
-        </TouchableOpacity>
-      </View>
+          }
+        }}
+      />
 
       {activeTab === "email" && (
         <KeyboardAwareScrollView
@@ -205,24 +202,23 @@ export default function ChangeEmailPasswordScreen() {
           enableResetScrollToCoords={false}
         >
           <ThemedView style={[styles.container, { backgroundColor }]}>
-            <ThemedText type="title" style={styles.title}>
+            <ThemedText type="subtitle" style={styles.title}>
               Change Email
             </ThemedText>
-            <ThemedText style={[styles.description, { color: textColor }]}>Enter your new email address and request a PIN to verify it.</ThemedText>
+            <ThemedText type="callout" tone="muted" style={styles.description}>Enter your new email address and request a PIN to verify it.</ThemedText>
 
             <Controller
               control={emailControl}
               name="email"
               render={({ field }) => (
                 <FormInput
-                  label="New Email"
-                  labelStyle={{ backgroundColor }}
+                  label="New email"
+                  leftIcon="mail-outline"
                   placeholder="example@mail.com"
                   keyboardType="email-address"
                   autoCapitalize="none"
                   value={field.value}
                   onChangeText={field.onChange}
-                  style={{ backgroundColor }}
                   error={emailErrors.email?.message as string | undefined}
                 />
               )}
@@ -238,19 +234,18 @@ export default function ChangeEmailPasswordScreen() {
 
             {otpSent && (
               <View style={{ marginTop: 20 }}>
-                <ThemedText style={[styles.description, { color: textColor }]}>Enter the PIN sent to {pendingEmail}</ThemedText>
+                <ThemedText type="callout" tone="muted" style={styles.description}>Enter the PIN sent to {pendingEmail}</ThemedText>
                 <Controller
                   control={otpControl}
                   name="otp"
                   render={({ field }) => (
                     <FormInput
-                      label="PIN"
-                      labelStyle={{ backgroundColor }}
+                      label="Verification code"
+                      leftIcon="keypad-outline"
                       placeholder="Enter PIN"
                       keyboardType="numeric"
                       value={field.value}
                       onChangeText={field.onChange}
-                      style={{ backgroundColor }}
                       error={otpErrors.otp?.message as string | undefined}
                     />
                   )}
@@ -277,23 +272,23 @@ export default function ChangeEmailPasswordScreen() {
           enableResetScrollToCoords={false}
         >
           <ThemedView style={[styles.container, { backgroundColor }]}>
-            <ThemedText type="title" style={styles.title}>
+            <ThemedText type="subtitle" style={styles.title}>
               Change Password
             </ThemedText>
-            <ThemedText style={[styles.description, { color: textColor }]}>Enter your current password and set a new one.</ThemedText>
+            <ThemedText type="callout" tone="muted" style={styles.description}>Enter your current password and set a new one.</ThemedText>
 
             <Controller
               control={passwordControl}
               name="currentPassword"
               render={({ field }) => (
                 <FormInput
-                  label="Current Password"
-                  labelStyle={{ backgroundColor }}
+                  label="Current password"
+                  leftIcon="lock-closed-outline"
+                  showPasswordRule={false}
                   placeholder="Enter current password"
                   secureTextEntry
                   value={field.value}
                   onChangeText={field.onChange}
-                  style={{ backgroundColor }}
                   error={passwordErrors.currentPassword?.message as string | undefined}
                 />
               )}
@@ -304,13 +299,12 @@ export default function ChangeEmailPasswordScreen() {
               name="newPassword"
               render={({ field }) => (
                 <FormInput
-                  label="New Password"
-                  labelStyle={{ backgroundColor }}
+                  label="New password"
+                  leftIcon="lock-closed-outline"
                   placeholder="Enter new password"
                   secureTextEntry
                   value={field.value}
                   onChangeText={field.onChange}
-                  style={{ backgroundColor }}
                   error={passwordErrors.newPassword?.message as string | undefined}
                 />
               )}
@@ -321,13 +315,13 @@ export default function ChangeEmailPasswordScreen() {
               name="confirmPassword"
               render={({ field }) => (
                 <FormInput
-                  label="Confirm Password"
-                  labelStyle={{ backgroundColor }}
+                  label="Confirm new password"
+                  leftIcon="lock-closed-outline"
+                  showPasswordRule={false}
                   placeholder="Re-enter new password"
                   secureTextEntry
                   value={field.value}
                   onChangeText={field.onChange}
-                  style={{ backgroundColor }}
                   error={passwordErrors.confirmPassword?.message as string | undefined}
                 />
               )}
@@ -349,34 +343,17 @@ export default function ChangeEmailPasswordScreen() {
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
+    padding: Spacing.xl,
     flex: 1,
   },
   title: {
-    fontSize: 22,
-    fontWeight: "700",
-    marginBottom: 10,
+    marginBottom: Spacing.xs,
   },
   description: {
-    fontSize: 14,
-    marginBottom: 20,
+    marginBottom: Spacing.xl,
   },
   tabsContainer: {
-    flexDirection: "row",
-    paddingHorizontal: 16,
-    marginTop: 16,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: "center",
-    marginHorizontal: 4,
-  },
-  tabText: {
-    fontSize: 14,
-  },
-  tabTextActive: {
-    fontWeight: "700",
+    marginHorizontal: Spacing.xl,
+    marginTop: Spacing.lg,
   },
 });

@@ -1,4 +1,5 @@
-import { ThemedView } from "@/components/ThemedView";
+import { ThemedText } from "@/components/ThemedText";
+import { AuthLayout } from "@/components/ui/AuthLayout";
 import { BackToLogin } from "@/components/ui/BackToLogin";
 import { OTPComponent } from "@/components/ui/OTPComponent";
 import { useAuth } from "@/hooks/useAuth";
@@ -7,7 +8,6 @@ import { resendVerification } from "@/services/authService";
 import { notifyApiError } from "@/services/api";
 import { useToastStore } from "@/stores/toastStore";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { StyleSheet } from "react-native";
 
 export default function OtpRegisterScreen() {
   // Registration and unverified sign-in pass the original email.
@@ -48,7 +48,16 @@ export default function OtpRegisterScreen() {
   }
 
   return (
-    <ThemedView style={styles.container}>
+    <AuthLayout
+      hasHeader
+      title="Verify your email"
+      subtitle={
+        <ThemedText type="callout" tone="muted" style={{ marginTop: 8 }}>
+          Enter the 6-digit code we sent to <ThemedText type="callout" style={{ fontWeight: "600" }}>{email || "your email"}</ThemedText>.
+        </ThemedText>
+      }
+      footer={<BackToLogin messageText="Wrong account?" LinkText="Back to sign in" onPress={() => router.replace("/(auth)")} />}
+    >
       <OTPComponent
         isPending={isPending}
         email={email}
@@ -66,15 +75,6 @@ export default function OtpRegisterScreen() {
           }
         }}
       />
-      <BackToLogin LinkText="Return to Login" onPress={() => router.replace("/(auth)")} />
-    </ThemedView>
+    </AuthLayout>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 48,
-  },
-});

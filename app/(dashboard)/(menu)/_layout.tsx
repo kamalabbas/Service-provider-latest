@@ -1,10 +1,23 @@
+import { useThemeColor } from "@/hooks/useThemeColor";
 import { Stack } from "expo-router";
 
 export default function MenuLayout() {
+  const background = useThemeColor({}, "muted");
+  const text = useThemeColor({}, "text");
+
   return (
-    <Stack>
-      <Stack.Screen name="index" options={{ title: "Menu", headerShown: false }} />
-      <Stack.Screen name="changeEmailPassword" options={{ title: "Email & Password" }} />
+    <Stack
+      screenOptions={{
+        headerShadowVisible: false,
+        headerStyle: { backgroundColor: background },
+        headerTintColor: text,
+        headerTitleStyle: { fontWeight: "600" },
+        headerBackButtonDisplayMode: "minimal",
+        contentStyle: { backgroundColor: background },
+      }}
+    >
+      <Stack.Screen name="index" options={{ title: "Account", headerShown: false }} />
+      <Stack.Screen name="changeEmailPassword" options={{ title: "Email & password" }} />
     </Stack>
   );
 }
