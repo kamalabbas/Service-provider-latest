@@ -9,7 +9,7 @@ interface NotificationState {
   pendingResponse: {
     response: NotificationResponse;
     generation: number;
-    userId: number | null;
+    userId: string | null;
   } | null;
 }
 

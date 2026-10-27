@@ -13,7 +13,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import usePushNotification from '@/hooks/usePushNotification';
 import { initializeTheme, useThemeStore } from '@/stores/theme';
 import { useToastStore } from '@/stores/toastStore';
-import { selectIsAuthenticated, useAuthStore } from '@/stores/authStore';
+import { selectIsAuthenticated, selectNeedsProfileSetup, useAuthStore } from '@/stores/authStore';
 
 import { restoreUser } from '@/utility/restoreUser';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -125,6 +125,7 @@ export default function RootLayout() {
   }, [ready]);
 
   const isAuthenticated = useAuthStore(selectIsAuthenticated);
+  const needsSetup = useAuthStore(selectNeedsProfileSetup);
 
   if (!ready) return null;
 
@@ -136,7 +137,10 @@ export default function RootLayout() {
             <Stack.Protected guard={!isAuthenticated}>
               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
             </Stack.Protected>
-            <Stack.Protected guard={isAuthenticated}>
+            <Stack.Protected guard={needsSetup}>
+              <Stack.Screen name="(setup)" options={{ headerShown: false }} />
+            </Stack.Protected>
+            <Stack.Protected guard={isAuthenticated && !needsSetup}>
               <Stack.Screen name="(dashboard)" options={{ headerShown: false }} />
             </Stack.Protected>
             <Stack.Screen name="+not-found" />

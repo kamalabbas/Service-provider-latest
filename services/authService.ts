@@ -8,24 +8,23 @@ import {
   ChangePasswordRequest,
   ChangePasswordResponse,
   LoginRequest,
-  LoginResponse,
-  LogoutRequest,
-  refreshTokenRequest,
-  refreshTokenResponse,
   RegisterRequest,
-  RegisterResponse,
-  sendEmailOtpRequest,
-  SendVerifyEmailResponse as sendEmailOtpResponse,
   sendForgotPasswordOtpRequest,
   SendForgotPasswordOtpResponse,
   setNewPasswordRequest,
   setNewPasswordResponse,
-  VerifyEmailOtpRequest,
   VerifyEmailOtpResponse,
   VerifyNewEmailRequest,
   VerifyResetPasswordOtpRequest,
   VerifyResetPasswordOtpResponse,
 } from "@/interfaces/auth.interface";
+import {
+  MobileAuthResponseApiResponse,
+  MobileSignOutRequest,
+  ObjectApiResponse,
+  ResendVerificationRequest,
+  VerifyEmailRequest,
+} from "@/interfaces/serviceProviderAuth.interface";
 
 // Operation metadata is local Axios configuration, never part of the wire body.
 function postAuthentication<T, U>(url: string, body: T, operation = beginAuthenticationOperation()) {
@@ -36,14 +35,27 @@ function postAuthentication<T, U>(url: string, body: T, operation = beginAuthent
   return postData<T, U>(url, body, config);
 }
 
+// Guide 01: account access.
 export const login = async (body: LoginRequest, operation?: AuthenticationOperation) => {
-  return await postAuthentication<LoginRequest, BaseResponse<LoginResponse>>("/Auth/SignIn", body, operation);
+  return await postAuthentication<LoginRequest, MobileAuthResponseApiResponse>("/api/auth/mobile/sign-in", body, operation);
 };
 
 export const register = (body: RegisterRequest, operation?: AuthenticationOperation) => {
-  return postAuthentication<RegisterRequest, BaseResponse<RegisterResponse>>("/Auth/SignUp", body, operation);
+  return postAuthentication<RegisterRequest, ObjectApiResponse>("/api/auth/register", body, operation);
 };
 
+export const verifyEmail = (body: VerifyEmailRequest, operation?: AuthenticationOperation) => {
+  return postAuthentication<VerifyEmailRequest, ObjectApiResponse>("/api/auth/verify-email", body, operation);
+};
+
+export const resendVerification = (body: ResendVerificationRequest, operation?: AuthenticationOperation) => {
+  return postAuthentication<ResendVerificationRequest, ObjectApiResponse>("/api/auth/resend-verification", body, operation);
+};
+
+export const logout = (body: MobileSignOutRequest, config?: AxiosRequestConfig) =>
+  postData<MobileSignOutRequest, ObjectApiResponse>("/api/auth/mobile/sign-out", body, config);
+
+// Legacy credential endpoints; not in the Service Provider backend contract.
 export const changeEmail = (body: ChangeEmailRequest, operation?: AuthenticationOperation) => {
   return postAuthentication<ChangeEmailRequest, BaseResponse<VerifyEmailOtpResponse>>("/Auth/Credentials/ChangeEmail", body, operation);
 };
@@ -52,18 +64,11 @@ export const verifyNewEmail = (body: VerifyNewEmailRequest, operation?: Authenti
   return postAuthentication<VerifyNewEmailRequest, BaseResponse<VerifyEmailOtpResponse>>("/Auth/Credentials/VerifyNewEmail", body, operation);
 };
 
-export const verifyEmail = (body: VerifyEmailOtpRequest, operation?: AuthenticationOperation) => {
-  return postAuthentication<VerifyEmailOtpRequest, BaseResponse<VerifyEmailOtpResponse>>("/Auth/VerifyEmailOtp", body, operation);
+export const changePassword = (body: ChangePasswordRequest, operation?: AuthenticationOperation) => {
+  return postAuthentication<ChangePasswordRequest, BaseResponse<ChangePasswordResponse>>("/Auth/Credentials/ChangePassword", body, operation);
 };
 
-export const sendEmailOtp = (body: sendEmailOtpRequest, operation?: AuthenticationOperation) => {
-  return postAuthentication<sendEmailOtpRequest, BaseResponse<sendEmailOtpResponse>>("/Auth/SendEmailOtp", body, operation);
-};
-
-export const refreshToken = (body: refreshTokenRequest) => {
-  return postData<refreshTokenRequest, BaseResponse<refreshTokenResponse>>("/Auth/Refresh", body);
-};
-
+// Legacy password recovery; migrates with guide 02.
 export const sendForgotPasswordOtp = (body: sendForgotPasswordOtpRequest, operation?: AuthenticationOperation) => {
   return postAuthentication<sendForgotPasswordOtpRequest, BaseResponse<SendForgotPasswordOtpResponse>>("/Auth/SendForgotPasswordOtp", body, operation);
 };
@@ -76,16 +81,11 @@ export const setNewPassword = (body: setNewPasswordRequest, operation?: Authenti
   return postAuthentication<setNewPasswordRequest, BaseResponse<setNewPasswordResponse>>("/Auth/ResetPassword", body, operation);
 };
 
-export const changePassword = (body: ChangePasswordRequest, operation?: AuthenticationOperation) => {
-  return postAuthentication<ChangePasswordRequest, BaseResponse<ChangePasswordResponse>>("/Auth/Credentials/ChangePassword", body, operation);
-};
-
-export const logout = (body: LogoutRequest, config?: AxiosRequestConfig) => postData<LogoutRequest, any>("/Auth/Logout", body, config);
-
 export default {
   login,
   register,
-  refreshToken,
+  verifyEmail,
+  resendVerification,
   sendForgotPasswordOtp,
   verifyResetPasswordOtp,
   setNewPassword,

@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useAuthStore } from "@/stores/authStore";
 import { useToastStore } from "@/stores/toastStore";
+import { newPasswordSchema } from "@/utility/passwordPolicy";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -40,7 +41,7 @@ const otpSchema = yup.object({
 const passwordSchema = yup
   .object({
     currentPassword: yup.string().required("Current password is required"),
-    newPassword: yup.string().min(8, "Password must be at least 8 characters").required("New password is required"),
+    newPassword: newPasswordSchema("New password is required"),
     confirmPassword: yup
       .string()
       .oneOf([yup.ref("newPassword")], "Passwords must match")

@@ -10,6 +10,8 @@ import { ThemedView } from "../ThemedView";
 import { PrimaryButton } from "./PrimaryButton";
 import { Logo } from "./Logo";
 
+const RESEND_COOLDOWN_SECONDS = 60;
+
 export interface OTPComponentProps {
   isPending?: boolean;
   email?: string; 
@@ -44,7 +46,8 @@ export function OTPComponent({ isPending, email, onSubmit, reSendOtp }: OTPCompo
 
   // States for resend otp
   const [resendDisabled, setResendDisabled] = useState(false);
-  const [resendTimer, setResendTimer] = useState(120);
+  // The backend allows one resend per minute.
+  const [resendTimer, setResendTimer] = useState(RESEND_COOLDOWN_SECONDS);
   const resendInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleResendOtp = async () => {
@@ -64,7 +67,7 @@ export function OTPComponent({ isPending, email, onSubmit, reSendOtp }: OTPCompo
       return;
     }
 
-    setResendTimer(120);
+    setResendTimer(RESEND_COOLDOWN_SECONDS);
     resendInterval.current = setInterval(() => {
       setResendTimer((prev) => {
         if (prev <= 1) {
@@ -73,7 +76,7 @@ export function OTPComponent({ isPending, email, onSubmit, reSendOtp }: OTPCompo
             resendInterval.current = null;
           }
           setResendDisabled(false);
-          return 120;
+          return RESEND_COOLDOWN_SECONDS;
         }
         return prev - 1;
       });

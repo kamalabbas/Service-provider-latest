@@ -6,6 +6,7 @@ import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { useAuth } from "@/hooks/useAuth";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { RegisterRequest } from "@/interfaces/auth.interface";
+import { newPasswordSchema } from "@/utility/passwordPolicy";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useRouter } from "expo-router";
 import { Controller, useForm } from "react-hook-form";
@@ -17,13 +18,7 @@ import * as yup from "yup";
 const schema = yup
   .object({
     email: yup.string().email("Invalid email").required("Email is required"),
-    password: yup
-      .string()
-      .min(8, "Password must be at least 8 characters")
-      .matches(/[a-z]/, "Password must contain at least one lowercase letter")
-      .matches(/[A-Z]/, "Password must contain at least one uppercase letter")
-      .matches(/[^a-zA-Z0-9]/, "Password must contain at least one special character")
-      .required("Password is required"),
+    password: newPasswordSchema(),
     confirmPassword: yup
       .string()
       .oneOf([yup.ref("password")], "Passwords must match")

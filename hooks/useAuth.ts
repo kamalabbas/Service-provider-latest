@@ -3,21 +3,25 @@ import {
   ChangePasswordRequest,
   ChangePasswordResponse,
   LoginRequest,
-  LoginResponse,
-  LogoutRequest,
   RegisterRequest,
-  RegisterResponse,
   sendForgotPasswordOtpRequest,
   SendForgotPasswordOtpResponse,
   setNewPasswordRequest,
   setNewPasswordResponse,
-  VerifyEmailOtpRequest,
   VerifyEmailOtpResponse,
   VerifyNewEmailRequest,
   VerifyResetPasswordOtpRequest,
   VerifyResetPasswordOtpResponse,
 } from "@/interfaces/auth.interface";
 import { BaseResponse } from "@/interfaces/baseResponse.interface";
+import {
+  MobileAuthResponseApiResponse,
+  MobileSignOutRequest,
+  ObjectApiResponse,
+  VerifyEmailRequest,
+} from "@/interfaces/serviceProviderAuth.interface";
+import { sessionUserFrom } from "@/utility/accessToken";
+import { getInstallationId } from "@/utility/installationId";
 import {
   changeEmail,
   changePassword,
@@ -32,7 +36,7 @@ import {
 } from "@/services/authService";
 import { AuthenticationOperation, beginAuthenticationOperation, beginSessionLogout, clearSession, finishSessionLogout, getSessionGeneration, isCurrentAuthenticationOperation, setAuthenticatedSession } from "@/services/authSession";
 import { notifyApiError } from "@/services/api";
-import { ApiErrorAction } from "@/services/apiError";
+import { ApiErrorAction, toAppError } from "@/services/apiError";
 import { useAuthStore } from "@/stores/authStore";
 import { useToastStore } from "@/stores/toastStore";
 import { MutateOptions, useMutation, UseMutationResult } from "@tanstack/react-query";
@@ -52,7 +56,7 @@ function assertCurrentOperation(operation?: AuthenticationOperation): asserts op
 function useAuthenticationMutation<TData, TRequest extends object>(options: {
   mutationFn: (request: TRequest, operation: AuthenticationOperation) => Promise<TData>;
   onSuccess?: (data: TData, request: TRequest, operation: AuthenticationOperation) => void | Promise<void>;
-  onError?: (error: unknown) => void;
+  onError?: (error: unknown, request: TRequest) => void;
 }): UseMutationResult<TData, unknown, TRequest> {
   const mutation = useMutation<TData, unknown, TRequest>({
     mutationFn: (request) => {
@@ -68,7 +72,7 @@ function useAuthenticationMutation<TData, TRequest extends object>(options: {
     },
     onError: (error, request) => {
       const operation = authenticationRequests.get(request);
-      if (operation && isCurrentAuthenticationOperation(operation)) options.onError?.(error);
+      if (operation && isCurrentAuthenticationOperation(operation)) options.onError?.(error, request);
     },
   });
   const prepare = (request: TRequest) => {
@@ -119,33 +123,35 @@ export function useAuth() {
 
   const router = useRouter();
 
-  const setUser = useAuthStore((s) => s.setUser);
   // Automatic push registration is deferred until backend ownership/transfer
   // and unregistration semantics are confirmed. The root acquires the device token.
 
+  const openEmailVerification = (email: string) =>
+    router.push({ pathname: "/(auth)/otp-register", params: { email } });
+
   // Login mutation
-  const loginMutation = useAuthenticationMutation<BaseResponse<LoginResponse>, LoginRequest>({
+  const loginMutation = useAuthenticationMutation<MobileAuthResponseApiResponse, LoginRequest>({
     mutationFn: login,
-    onError: (error) => notifyApiError(error, { action: "signIn" }),
-    onSuccess: async (response, _request, operation) => {
+    onError: (error, request) => {
+      notifyApiError(error, { action: "signIn" });
+      // A valid but unverified account receives 403 at sign-in (guides 00/01).
+      if (toAppError(error).status === 403) openEmailVerification(request.email);
+    },
+    onSuccess: async (response, request, operation) => {
       try {
-        if (response.data) {
-          if (response.data.token?.accessToken && response.data.token?.refreshToken) {
-            const generation = await persistSession({
-              user: response.data.user,
-              accessToken: response.data.token.accessToken,
-              refreshToken: response.data.token.refreshToken,
-            }, "signIn", operation);
-            if (generation !== getSessionGeneration()) return;
-          } else {
-            setUser(response.data.user);
-            if (response.data.user.statusCode === "PENDING_VERIFICATION") {
-              router.replace("/(auth)/otp-register");
-            } else {
-              showToast("Sign-in did not return a session. Please try again.", "error");
-            }
-          }
+        const data = response.data;
+        // Mobile sign-in returns tokens only; identity comes from the access token.
+        const user = data ? sessionUserFrom(data, request.email) : null;
+        if (!data?.refreshToken || !user) {
+          showToast("Sign-in did not return a session. Please try again.", "error");
+          return;
         }
+        const generation = await persistSession({
+          user,
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
+        }, "signIn", operation);
+        if (generation !== getSessionGeneration()) return;
       } catch (error) {
         if (!isCancel(error)) console.warn("Failed to complete sign-in.");
         throw error;
@@ -153,16 +159,16 @@ export function useAuth() {
     },
   });
 
-  // Register mutation
-  const registerMutation = useAuthenticationMutation<BaseResponse<RegisterResponse>, RegisterRequest>({
+  // Register mutation. Registration does not sign in; verification comes next.
+  const registerMutation = useAuthenticationMutation<ObjectApiResponse, RegisterRequest>({
     mutationFn: register,
-    onError: (error) => notifyApiError(error, { action: "register" }),
-    onSuccess: (response) => {
-      if (response.data) {
-        setUser(response.data.user);
-        router.push("/(auth)/otp-register");
-      }
+    onError: (error, request) => {
+      notifyApiError(error, { action: "register" });
+      // The account may already exist when only email delivery failed: offer resend.
+      const appError = toAppError(error);
+      if (appError.status === 503 && appError.code === "EMAIL_DELIVERY_FAILED") openEmailVerification(request.email);
     },
+    onSuccess: (_response, request) => openEmailVerification(request.email),
   });
 
   // Change Email mutation
@@ -179,40 +185,30 @@ export function useAuth() {
     mutationFn: verifyNewEmail,
     onError: (error) => notifyApiError(error, { action: "verifyCode" }),
     onSuccess: async (response, _request, operation) => {
-      if (response.data) {
-        if (response.data.token?.accessToken && response.data.token?.refreshToken) {
-          const generation = await persistSession({
-            user: response.data.user,
-            accessToken: response.data.token.accessToken,
-            refreshToken: response.data.token.refreshToken,
-          }, "verifyCode", operation);
-          if (generation !== getSessionGeneration()) return;
-        } else {
-          setUser(response.data.user);
-        }
+      const token = response.data?.token;
+      const current = useAuthStore.getState().user;
+      const user = token?.accessToken
+        ? sessionUserFrom({ accessToken: token.accessToken, profileCompletionRequired: current?.profileCompletionRequired ?? false })
+        : null;
+      if (token?.refreshToken && user) {
+        const generation = await persistSession({
+          user,
+          accessToken: token.accessToken,
+          refreshToken: token.refreshToken,
+        }, "verifyCode", operation);
+        if (generation !== getSessionGeneration()) return;
       }
       showToast("Email updated successfully", "success");
     },
   });
 
-  // Verify new email mutation
-  const verifyEmailMutation = useAuthenticationMutation<BaseResponse<VerifyEmailOtpResponse>, VerifyEmailOtpRequest>({
+  // Registration email verification. It issues no tokens: sign in afterwards.
+  const verifyEmailMutation = useAuthenticationMutation<ObjectApiResponse, VerifyEmailRequest>({
     mutationFn: verifyEmail,
     onError: (error) => notifyApiError(error, { action: "verifyCode" }),
-    onSuccess: async (response, _request, operation) => {
-      if (response.data) {
-        if (response.data.token?.accessToken && response.data.token?.refreshToken) {
-          const generation = await persistSession({
-            user: response.data.user,
-            accessToken: response.data.token.accessToken,
-            refreshToken: response.data.token.refreshToken,
-          }, "verifyCode", operation);
-          if (generation !== getSessionGeneration()) return;
-        } else {
-          setUser(response.data.user);
-        }
-      }
-      showToast("Email updated successfully", "success");
+    onSuccess: (_response, request) => {
+      showToast("Email verified. Please sign in.", "success");
+      router.replace({ pathname: "/(auth)", params: { email: request.email } });
     },
   });
 
@@ -267,16 +263,15 @@ export function useAuth() {
 
   // Logout mutation
   const logoutMutation = useMutation({
-    mutationFn: ({ generation, request, accessToken }: { generation: number; request: LogoutRequest; accessToken: string | null }) => {
+    mutationFn: ({ generation, request, accessToken }: { generation: number; request: MobileSignOutRequest; accessToken: string | null }) => {
       // React Query may defer execution until after another account has signed in.
-      if (generation !== getSessionGeneration()) return Promise.resolve();
+      if (generation !== getSessionGeneration()) return Promise.resolve(undefined);
       return logout(request, accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : undefined);
     },
   });
 
   // Logout helper (decoupled)
   const logoutUser = async () => {
-    const pushNotificationToken = useAuthStore.getState().pushNotificationToken;
     const { generation, refreshToken, accessToken } = beginSessionLogout();
     let storedRefreshToken;
     let durableLogout = false;
@@ -295,9 +290,12 @@ export function useAuth() {
     // signed out, and local cleanup does not wait for network availability.
     if (storedRefreshToken) {
       try {
+        // Sign-out also unregisters this installation's push destination.
+        // The installation ID itself is kept across sign-outs.
+        const installationId = await getInstallationId();
         await logoutMutation.mutateAsync({
           generation, accessToken,
-          request: { refreshToken: storedRefreshToken, expoPushToken: pushNotificationToken ?? undefined },
+          request: { refreshToken: storedRefreshToken, installationId },
         });
       } catch {
         // A server error cannot restore access or establish confirmed revocation.

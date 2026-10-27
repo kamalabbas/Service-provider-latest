@@ -17,6 +17,11 @@ interface AuthState {
 export const selectIsAuthenticated = (state: Pick<AuthState, 'accessToken' | 'user'>) =>
   Boolean(state.accessToken && state.user);
 
+// Guide 01: profileCompletionRequired routes to initial type/profile setup.
+// Normal application screens stay unavailable until a refreshed full session.
+export const selectNeedsProfileSetup = (state: Pick<AuthState, 'accessToken' | 'user'>) =>
+  selectIsAuthenticated(state) && state.user?.profileCompletionRequired === true;
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   accessToken: null,
   user: undefined,

@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { setNewPasswordRequest } from "@/interfaces/auth.interface";
 import { useToastStore } from "@/stores/toastStore";
+import { newPasswordSchema } from "@/utility/passwordPolicy";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Controller, useForm } from "react-hook-form";
@@ -17,7 +18,7 @@ import * as yup from "yup";
 // Yup schema for form validation
 const schema = yup
   .object({
-    password: yup.string().min(8, "Password must be at least 8 characters").required("Password is required"),
+    password: newPasswordSchema(),
     confirmPassword: yup
       .string()
       .oneOf([yup.ref("password")], "Passwords must match")

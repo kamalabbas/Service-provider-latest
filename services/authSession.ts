@@ -1,6 +1,7 @@
-import { refreshTokenRequest, refreshTokenResponse } from "@/interfaces/auth.interface";
-import { BaseResponse } from "@/interfaces/baseResponse.interface";
+import { refreshTokenRequest } from "@/interfaces/auth.interface";
+import { MobileAuthResponseApiResponse } from "@/interfaces/serviceProviderAuth.interface";
 import { User } from "@/interfaces/user.interface";
+import { sessionUserFrom } from "@/utility/accessToken";
 import { queryClient } from "@/services/queryClient";
 import { useAuthStore } from "@/stores/authStore";
 import { getRefreshToken, removeRefreshToken, setRefreshToken } from "@/utility/secureStore";
@@ -242,7 +243,7 @@ export const refreshAccessToken = async (): Promise<string | null> => {
         if (!apiOrigin) throw new Error('The API origin is not configured.');
         const payload: refreshTokenRequest = { refreshToken: refreshTok };
         requestedRefresh = true;
-        const response = await axios.post<BaseResponse<refreshTokenResponse>>(`${apiOrigin}/Auth/Refresh`, payload, {
+        const response = await axios.post<MobileAuthResponseApiResponse>(`${apiOrigin}/api/auth/mobile/refresh`, payload, {
           timeout: 60000,
           headers: {
             "Content-Type": "application/json",
@@ -252,11 +253,14 @@ export const refreshAccessToken = async (): Promise<string | null> => {
         if (generation !== sessionGeneration) return null;
 
         const data = response.data?.data;
-        const newAccessToken = data?.token?.accessToken;
-        const newRefreshToken = data?.token?.refreshToken;
-        const user = data?.user;
+        const newAccessToken = data?.accessToken;
+        const newRefreshToken = data?.refreshToken;
+        // The response carries no user; keep the known email for the same account.
+        const previous = useAuthStore.getState().user;
+        const user = data && typeof newAccessToken === "string" ? sessionUserFrom(data) : null;
+        if (user && !user.email && previous?.id === user.id) user.email = previous.email;
 
-        if (response.data?.success === false || typeof newAccessToken !== "string" || !newAccessToken || typeof newRefreshToken !== "string" || !newRefreshToken || !user) {
+        if (typeof newAccessToken !== "string" || !newAccessToken || typeof newRefreshToken !== "string" || !newRefreshToken || !user) {
           throw new Error("Invalid refresh response");
         }
 

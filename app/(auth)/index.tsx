@@ -3,7 +3,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { yupResolver } from "@hookform/resolvers/yup";
-import { Link } from "expo-router";
+import { Link, useLocalSearchParams } from "expo-router";
 import { Controller, useForm } from "react-hook-form";
 import { StyleSheet, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
@@ -18,11 +18,15 @@ import React from "react";
 const schema = yup
   .object({
     email: yup.string().email("Invalid email").required("Email is required"),
-    password: yup.string().min(8, "Password must be at least 8 characters").required("Password is required"),
+    // Sign-in accepts any nonblank password; the backend applies its own checks.
+    password: yup.string().trim().required("Password is required"),
   })
   .required();
 
 export default function Index() {
+  // Email verification returns here with the verified address.
+  const { email: verifiedEmail } = useLocalSearchParams<{ email?: string }>();
+
   // Form setup
   const {
     control,
@@ -30,7 +34,7 @@ export default function Index() {
     formState: { errors },
   } = useForm({
     resolver: yupResolver(schema),
-    defaultValues: { email: "", password: "" },
+    defaultValues: { email: verifiedEmail ?? "", password: "" },
   });
 
   // Theme colors

@@ -58,7 +58,10 @@ export function toAppError(error: unknown, action?: ApiErrorAction): AppError {
   if (error.response) {
     const status = error.response.status;
     let message = fallback;
-    if (status === 403) message = "You don't have permission to complete this request.";
+    // Sign-in is anonymous, so its 403 means the account's email is unverified.
+    if (status === 403) message = action === "signIn"
+      ? "Please verify your email before signing in."
+      : "You don't have permission to complete this request.";
     else if (status === 404) message = "The requested record is unavailable.";
     else if (status === 413) message = "The selected file is too large.";
     else if (status === 429) message = "Too many requests. Please wait and try again.";

@@ -1,5 +1,5 @@
 // Compile-only fixtures: these requests are never invoked by the test runner.
-import type { LoginRequest, LoginResponse } from "../interfaces/auth.interface";
+import type { LoginRequest, VerifyResetPasswordOtpResponse } from "../interfaces/auth.interface";
 import type { BaseResponse } from "../interfaces/baseResponse.interface";
 import type { ApiPage, ApiResponse } from "../interfaces/serviceProviderApi.interface";
 import { deleteData, getData, postData, putData } from "../services/api";
@@ -21,7 +21,7 @@ export function requests(body: LoginRequest) {
     typedPost: postData<LoginRequest, ApiResponse<Detail>>("/contract-test", body),
     typedPut: putData<LoginRequest, ApiResponse<Detail>>("/contract-test", body),
     typedDelete: deleteData<ApiResponse<Detail>>("/contract-test"),
-    legacy: postData<LoginRequest, BaseResponse<LoginResponse>>("/Auth/SignIn", body),
+    legacy: postData<LoginRequest, BaseResponse<VerifyResetPasswordOtpResponse>>("/Auth/VerifyForgotPasswordOtp", body),
     text: getData<string>("/health/live", { responseType: "text" }),
     binary: getData<ArrayBuffer>("/contract-test", { responseType: "arraybuffer" }),
   };
@@ -44,6 +44,6 @@ export type NoPayload = Assert<Equal<Responses["noPayload"]["data"], null | unde
 export type TypedPost = Assert<Equal<Responses["typedPost"], ApiResponse<Detail>>>;
 export type TypedPut = Assert<Equal<Responses["typedPut"], ApiResponse<Detail>>>;
 export type TypedDelete = Assert<Equal<Responses["typedDelete"], ApiResponse<Detail>>>;
-export type LegacyLogin = Assert<Equal<Responses["legacy"], BaseResponse<LoginResponse>>>;
+export type LegacyRecovery = Assert<Equal<Responses["legacy"], BaseResponse<VerifyResetPasswordOtpResponse>>>;
 export type RawText = Assert<Equal<Responses["text"], string>>;
 export type RawBinary = Assert<Equal<Responses["binary"], ArrayBuffer>>;

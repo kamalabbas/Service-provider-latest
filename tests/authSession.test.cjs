@@ -20,14 +20,29 @@ test.afterEach(() => {
   for (const client of clients) client.clear();
   clients.clear();
 });
+// Access tokens are unsigned JWTs: the app derives identity from their claims.
+const jwt = label => {
+  const sub = label.split('-')[0];
+  const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+  return `${encode({ alg: 'none' })}.${encode({ sub, email: `${sub}@example.test`, access_level: 'full', jti: label })}.signature`;
+};
+const userFor = id => ({ id, email: `${id}@example.test`, accessLevel: 'full', roles: [], permissions: [], profileCompletionRequired: false });
 const account = (id, suffix = '') => ({
-  user: { id, email: `${id}@example.test` },
-  accessToken: `${id}-access${suffix}`,
+  user: userFor(id),
+  accessToken: jwt(`${id}-access${suffix}`),
   refreshToken: `${id}-refresh${suffix}`,
 });
-const responseFor = ({ user, accessToken, refreshToken }) => ({
-  data: { success: true, data: { user, token: { accessToken, refreshToken } } },
+const responseFor = ({ accessToken, refreshToken }, profileCompletionRequired = false) => ({
+  data: { traceId: 'example-trace', code: 'Success', data: {
+    accessToken, expiresAtUtc: '2030-01-01T00:05:00Z',
+    refreshToken, refreshTokenExpiresAtUtc: '2030-01-06T00:00:00Z', profileCompletionRequired,
+  } },
 });
+const legacySessionBody = ({ accessToken, refreshToken }) => ({ success: true, data: { token: { accessToken, refreshToken } } });
+const sessionBody = (mutationName, value) => mutationName === 'verifyNewEmailMutation' ? legacySessionBody(value) : responseFor(value).data;
+// Objects from the module sandbox have another realm's prototypes.
+const plain = value => JSON.parse(JSON.stringify(value));
+const emptyBody = { traceId: 'example-trace', code: 'Success', data: null };
 const deferred = () => {
   let resolve, reject;
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
@@ -63,7 +78,14 @@ function harness({ saved = 'A-refresh', signedIn = true, policy = policyRecord('
       skipEffect: () => finished.resolve({ skipEffect: true }),
     };
   };
+  const installation = new Map();
   const nativeStorage = async (kind, key, value) => {
+    // The installation ID is separate, non-secret state that survives sign-out.
+    if (key === 'installation_id') {
+      if (kind === 'get') return installation.get(key) ?? null;
+      if (kind === 'set') installation.set(key, value);
+      return;
+    }
     assert.equal(key, 'refresh_token');
     storage.push({ kind, value });
     storageEvents.push({ kind, value });
@@ -258,7 +280,7 @@ test('normal login persists credentials and normal logout clears the session', a
   const generation = await h.session.setAuthenticatedSession(account('A'));
   assert.equal(generation, h.session.getSessionGeneration());
   assert.equal(h.disk, 'A-refresh');
-  assert.equal(h.store.getState().accessToken, 'A-access');
+  assert.equal(h.store.getState().accessToken, jwt('A-access'));
   await h.session.clearSession();
   assert.equal(h.disk, null);
   assert.equal(h.store.getState().user, null);
@@ -280,9 +302,9 @@ test('concurrent 401s share one refresh and replay with the refreshed token', as
   assert.ok(results.every(result => result.data.protected));
   assert.equal(h.refreshes.length, 1);
   assert.equal(h.requests.length, 6);
-  assert.ok(h.requests.slice(3).every(config => config.headers.get('Authorization') === 'Bearer A-access-new'));
+  assert.ok(h.requests.slice(3).every(config => config.headers.get('Authorization') === `Bearer ${jwt('A-access-new')}`));
   assert.equal(h.disk, 'A-refresh-new');
-  assert.equal(h.store.getState().accessToken, 'A-access-new');
+  assert.equal(h.store.getState().accessToken, jwt('A-access-new'));
   assert.equal(h.session.getSessionGeneration(), generation);
 });
 
@@ -295,7 +317,7 @@ test('session restoration still shares a refresh and restores saved credentials'
   await pending;
   assert.equal(h.refreshes.length, 1);
   assert.equal(h.disk, 'A-refresh-restored');
-  assert.equal(h.store.getState().accessToken, 'A-access-restored');
+  assert.equal(h.store.getState().accessToken, jwt('A-access-restored'));
   assert.equal(h.session.getSessionGeneration(), generation);
 });
 
@@ -328,7 +350,7 @@ for (const outcome of ['success', 'failure']) {
     assert.equal((await pending).status, 'rejected');
     assert.equal(h.requests.length, 1);
     assert.equal(h.store.getState().user.id, 'B');
-    assert.equal(h.store.getState().accessToken, 'B-access');
+    assert.equal(h.store.getState().accessToken, jwt('B-access'));
     assert.equal(h.disk, 'B-refresh');
     assert.equal(h.session.isRefreshBlocked(), false);
     assert.equal(h.toasts.length, 0);
@@ -385,7 +407,7 @@ for (const writeFails of [false, true]) {
     assert.equal(await refresh, null);
     await login;
     assert.equal(h.disk, 'B-refresh');
-    assert.equal(h.store.getState().accessToken, 'B-access');
+    assert.equal(h.store.getState().accessToken, jwt('B-access'));
     assert.equal(h.session.isRefreshBlocked(), false);
     assert.equal(h.maxActiveStorage, 1);
   });
@@ -440,7 +462,7 @@ for (const outcome of ['success', 'failure']) {
     await tick();
     assert.equal(h.refreshes.length, 2);
     h.refreshes[1].resolve(responseFor(account('B', '-new')));
-    assert.deepEqual(await Promise.all([newRefresh, concurrent]), ['B-access-new', 'B-access-new']);
+    assert.deepEqual(await Promise.all([newRefresh, concurrent]), [jwt('B-access-new'), jwt('B-access-new')]);
     assert.equal(h.disk, 'B-refresh-new');
   });
 }
@@ -571,7 +593,7 @@ test('logout invalidates refresh immediately, and a delayed server logout cannot
   const logout = h.auth().logoutAndGoToLogin();
   assert.equal(h.session.isRefreshBlocked(), true);
   await until(() => h.requests.length === 1);
-  assert.equal(h.requests[0].headers.get('Authorization'), 'Bearer A-access');
+  assert.equal(h.requests[0].headers.get('Authorization'), `Bearer ${jwt('A-access')}`);
   assert.equal(JSON.parse(h.requests[0].data).refreshToken, 'A-refresh');
   h.refreshes[0].resolve(responseFor(account('A', '-stale')));
   assert.equal(await refresh, null);
@@ -608,28 +630,31 @@ test('a queued logout mutation cannot dispatch against a newer account', async (
   assert.equal(h.navigation.length, 0);
 });
 
-test('logout snapshots the latest device token at invocation and cannot pick up later token changes', async () => {
+test('mobile sign-out sends the refresh token and an installation ID that survives sign-out', async () => {
   const h = harness();
   const auth = h.auth();
-  h.store.getState().setPushNotificationToken('latest-device-token');
-  const read = h.holdNext('get');
-  const logout = auth.logoutUser();
-  await read.started;
-  h.store.getState().setPushNotificationToken('later-device-token');
-  read.release();
-  await logout;
-  assert.equal(h.requests.length, 1);
-  assert.equal(JSON.parse(h.requests[0].data).expoPushToken, 'latest-device-token');
-  assert.equal(h.store.getState().pushNotificationToken, 'later-device-token');
+  h.store.getState().setPushNotificationToken('device-token');
+  await auth.logoutUser();
+  await h.session.setAuthenticatedSession(account('A', '-new'));
+  await auth.logoutUser();
+  assert.equal(h.requests.length, 2);
+  const [first, second] = h.requests.map(request => JSON.parse(request.data));
+  assert.equal(h.requests[0].url, '/api/auth/mobile/sign-out');
+  assert.deepEqual(Object.keys(first).sort(), ['installationId', 'refreshToken']);
+  assert.equal(first.refreshToken, 'A-refresh');
+  assert.equal(second.refreshToken, 'A-refresh-new');
+  assert.match(first.installationId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.equal(second.installationId, first.installationId);
+  assert.equal(h.store.getState().pushNotificationToken, 'device-token');
   assert.equal(h.registrations.length, 0);
 });
 
-test('login and both email-verification callbacks persist sessions without automatic push registration', async () => {
+test('login and change-email verification persist sessions without automatic push registration', async () => {
   const h = harness({ saved: null, signedIn: false });
-  h.setAdapter(async config => h.ok(config, responseFor(account('B')).data));
   const auth = h.auth();
-  for (const mutation of [auth.loginMutation, auth.verifyEmailMutation, auth.verifyNewEmailMutation]) {
-    await mutation.mutateAsync({ email: 'B@example.test', password: 'synthetic', otp: '123456' });
+  for (const name of ['loginMutation', 'verifyNewEmailMutation']) {
+    h.setAdapter(async config => h.ok(config, sessionBody(name, account('B'))));
+    await auth[name].mutateAsync({ email: 'B@example.test', password: 'synthetic', otp: '123456' });
     assert.equal(h.disk, 'B-refresh');
     assert.equal(h.store.getState().user.id, 'B');
   }
@@ -711,7 +736,7 @@ test('same-account refresh preserves private/shared caches, mutation records, an
   const refresh = h.session.refreshAccessToken();
   await until(() => h.refreshes.length === 1);
   h.refreshes[0].resolve(responseFor(account('A', '-new')));
-  assert.equal(await refresh, 'A-access-new');
+  assert.equal(await refresh, jwt('A-access-new'));
   assert.equal(h.queryClient.getQueryData(['private-profile']).owner, 'A');
   assert.equal(h.queryClient.getQueryData(['shared-lookups']).label, 'Shared');
   assert.deepEqual(h.queryClient.getMutationCache().getAll(), records);
@@ -867,7 +892,7 @@ for (const [name, optionsFor] of retainedQueries) {
   test(`${name} cancellation reaches Axios and its late response cannot repopulate B's cache`, async () => {
     const h = harness();
     const replyA = deferred(), replyB = deferred();
-    h.setAdapter(config => config.headers.get('Authorization') === 'Bearer A-access' ? replyA.promise : replyB.promise);
+    h.setAdapter(config => config.headers.get('Authorization') === `Bearer ${jwt('A-access')}` ? replyA.promise : replyB.promise);
     const optionsA = { ...optionsFor(h), gcTime: Infinity };
     const pendingA = observe(h.queryClient.fetchQuery({ ...optionsA, retry: false }));
     await until(() => h.requests.length === 1);
@@ -932,17 +957,12 @@ const refreshFailures = [
   ['unknown error', pending => pending.reject(new Error('Refresh could not complete'))],
   ['empty success body', pending => pending.resolve({ data: null })],
   ['success missing tokens', pending => pending.resolve({ data: { data: { user: account('A').user } } })],
-  ['success missing user', pending => {
-    const response = responseFor(account('A'));
-    delete response.data.data.user;
-    pending.resolve(response);
-  }],
+  ['opaque access token without readable claims', pending => pending.resolve(responseFor({ ...account('A'), accessToken: 'opaque-access' }))],
   ['non-string access token', pending => pending.resolve(responseFor({ ...account('A'), accessToken: 123 }))],
   ['non-string refresh token', pending => pending.resolve(responseFor({ ...account('A'), refreshToken: {} }))],
-  ['explicit unsuccessful response with token fields', pending => {
-    const response = responseFor(account('A', '-must-not-apply'));
-    response.data.success = false;
-    pending.resolve(response);
+  ['access token without an access level', pending => {
+    const claims = Buffer.from(JSON.stringify({ sub: 'A' })).toString('base64url');
+    pending.resolve(responseFor({ ...account('A', '-must-not-apply'), accessToken: `e30.${claims}.signature` }));
   }],
 ];
 
@@ -972,7 +992,7 @@ for (const [name, complete] of refreshFailures) {
     assert.equal(h.refreshes.length, 1);
     await h.session.setAuthenticatedSession(account('A', '-recovered'));
     assert.equal(h.disk, 'A-refresh-recovered');
-    assert.equal(h.store.getState().accessToken, 'A-access-recovered');
+    assert.equal(h.store.getState().accessToken, jwt('A-access-recovered'));
     assert.equal(h.session.getSessionGeneration(), generation + 2);
   });
 }
@@ -994,7 +1014,7 @@ test('failed startup restoration completes signed out and requires explicit sign
   await h.restoreUser();
   assert.equal(h.refreshes.length, 1);
   await h.session.setAuthenticatedSession(account('A', '-recovered'));
-  assert.equal(h.store.getState().accessToken, 'A-access-recovered');
+  assert.equal(h.store.getState().accessToken, jwt('A-access-recovered'));
   assert.equal(h.disk, 'A-refresh-recovered');
   assert.equal(h.session.getSessionGeneration(), generation + 2);
 });
@@ -1031,7 +1051,7 @@ test('failed rotated-token persistence clears the session and cannot restore the
   await until(() => h.refreshes.length === 1);
   h.refreshes[0].resolve(responseFor(account('A', '-rotated')));
   await write.started;
-  assert.equal(h.store.getState().accessToken, 'A-access');
+  assert.equal(h.store.getState().accessToken, jwt('A-access'));
   write.fail(new Error('SecureStore write failed'));
   assert.equal(await refresh, null);
   assert.equal(h.disk, null);
@@ -1040,7 +1060,7 @@ test('failed rotated-token persistence clears the session and cannot restore the
   assert.equal(h.session.isRefreshBlocked(), true);
   assert.equal(h.storage.filter(op => op.kind === 'delete').length, 1);
   assert.equal(h.session.getSessionGeneration(), generation + 1);
-  assert.equal(publishedTokens.includes('A-access-rotated'), false);
+  assert.equal(publishedTokens.includes(jwt('A-access-rotated')), false);
   assert.equal(await h.session.refreshAccessToken(), null);
   assert.equal(h.refreshes.length, 1);
   await h.session.setAuthenticatedSession(account('A', '-recovered'));
@@ -1111,7 +1131,7 @@ for (const trigger of ['restore', 'protected request']) {
     assert.equal(result.reason, originalError);
     assert.equal(h.requests.length, requestCount, 'The old request must not replay');
     assert.equal(h.session.getSessionGeneration(), generation + 2);
-    assert.equal(h.store.getState().accessToken, 'A-access-recovered');
+    assert.equal(h.store.getState().accessToken, jwt('A-access-recovered'));
     assert.equal(h.disk, 'A-refresh-recovered');
     assert.equal(h.queryClient.getQueryData(['private-profile']).owner, 'recovered');
     assert.equal(newSignal.aborted, false);
@@ -1146,7 +1166,7 @@ test('failed shared restoration advances once and cleanup subscribers cannot res
   assert.equal(h.session.getSessionGeneration(), generation + 1);
   assert.equal(h.disk, null);
   await h.session.setAuthenticatedSession(account('A', '-recovered'));
-  assert.equal(h.store.getState().accessToken, 'A-access-recovered');
+  assert.equal(h.store.getState().accessToken, jwt('A-access-recovered'));
   assert.equal(h.disk, 'A-refresh-recovered');
   assert.equal(h.session.getSessionGeneration(), generation + 2);
 });
@@ -1181,7 +1201,7 @@ test('an old startup read failure cannot clear a newer login or its cache', asyn
   read.fail(new Error('Old SecureStore read failed'));
   await Promise.all([restore, login]);
   unsubscribe();
-  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.store.getState().accessToken, jwt('B-access'));
   assert.equal(h.disk, 'B-refresh');
   assert.equal(h.queryClient.getQueryData(['private-profile']).owner, 'B');
 });
@@ -1215,7 +1235,7 @@ test('login publishes authentication only after persistence succeeds and blocks 
   write.release();
   assert.equal(await login, h.session.getSessionGeneration());
   assert.equal(h.disk, 'B-refresh');
-  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.store.getState().accessToken, jwt('B-access'));
   assert.equal(h.session.isRefreshBlocked(), false);
 });
 
@@ -1246,7 +1266,7 @@ for (const recovery of ['explicit login', 'logout cleanup']) {
     if (recovery === 'explicit login') {
       assert.equal(await h.session.setAuthenticatedSession(account('B')), generation + 2);
       assert.equal(h.disk, 'B-refresh');
-      assert.equal(h.store.getState().accessToken, 'B-access');
+      assert.equal(h.store.getState().accessToken, jwt('B-access'));
     } else {
       assert.equal(await h.session.clearSession(), true);
       assert.equal(h.disk, null);
@@ -1256,10 +1276,10 @@ for (const recovery of ['explicit login', 'logout cleanup']) {
   });
 }
 
-for (const mutationName of ['loginMutation', 'verifyEmailMutation', 'verifyNewEmailMutation']) {
+for (const mutationName of ['loginMutation', 'verifyNewEmailMutation']) {
   test(`${mutationName} rejects a failed session write without publishing auth or registering push`, async () => {
     const h = harness({ saved: null, signedIn: false });
-    h.setAdapter(async config => h.ok(config, responseFor(account('B')).data));
+    h.setAdapter(async config => h.ok(config, sessionBody(mutationName, account('B'))));
     const mutation = h.auth()[mutationName];
     const write = h.holdNext('set');
     const pending = observe(mutation.mutateAsync({ email: 'B@example.test', password: 'synthetic', otp: '123456' }));
@@ -1314,7 +1334,7 @@ for (const writeFails of [false, true]) {
     await tick();
     assert.equal(h.refreshes.length, 1);
     assert.equal(h.requests.length, 2);
-    assert.equal(h.store.getState().accessToken, 'A-access');
+    assert.equal(h.store.getState().accessToken, jwt('A-access'));
     assert.equal(h.disk, 'A-refresh');
     assert.equal(h.queryClient.getQueryData(['private-profile']).owner, 'A');
     if (writeFails) write.fail(new Error('Shared native write failed'));
@@ -1337,7 +1357,7 @@ for (const writeFails of [false, true]) {
     } else {
       assert.ok(results.every(result => result.status === 'fulfilled'));
       assert.equal(h.requests.length, 4);
-      assert.equal(h.store.getState().accessToken, 'A-access-rotated');
+      assert.equal(h.store.getState().accessToken, jwt('A-access-rotated'));
       assert.equal(h.disk, 'A-refresh-rotated');
       assert.equal(h.session.getSessionGeneration(), generation);
       assert.equal(h.queryClient.getQueryData(['private-profile']).owner, 'A');
@@ -1365,7 +1385,7 @@ test('concurrent refresh requests share a failed token read and recover through 
   assert.equal(h.refreshes[0].body.refreshToken, 'A-refresh');
   h.refreshes[0].resolve(responseFor(account('A', '-recovered')));
   await recovery;
-  assert.equal(h.store.getState().accessToken, 'A-access-recovered');
+  assert.equal(h.store.getState().accessToken, jwt('A-access-recovered'));
   assert.equal(h.session.getSessionGeneration(), generation + 1);
 });
 
@@ -1482,7 +1502,7 @@ test('a failed delayed deletion cannot clear a newer login or leave it blocked',
   assert.equal(await login, generation);
   h.queryClient.setQueryData(['private-profile'], { owner: 'B' });
   assert.equal(h.disk, 'B-refresh');
-  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.store.getState().accessToken, jwt('B-access'));
   assert.equal(h.session.isRefreshBlocked(), false);
   assert.equal(h.session.getSessionGeneration(), generation);
   assert.equal(h.maxActiveStorage, 1);
@@ -1497,7 +1517,7 @@ test('an old logout read failure cannot clear a newer login or navigate away fro
   read.fail(new Error('Old logout read failed'));
   await Promise.all([logout, login]);
   assert.equal(h.disk, 'B-refresh');
-  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.store.getState().accessToken, jwt('B-access'));
   assert.equal(h.session.isRefreshBlocked(), false);
   assert.equal(h.navigation.length, 0);
   assert.equal(h.storage.filter(op => op.kind === 'delete').length, 0);
@@ -1541,7 +1561,7 @@ test('a queued logout deletion is skipped when a newer login replaces it before 
   assert.equal(await login, h.session.getSessionGeneration());
   assert.equal(h.storage.filter(op => op.kind === 'delete').length, 0);
   assert.equal(h.disk, 'B-refresh');
-  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.store.getState().accessToken, jwt('B-access'));
   assert.equal(h.session.isRefreshBlocked(), false);
   assert.equal(h.maxActiveStorage, 1);
 });
@@ -1580,7 +1600,7 @@ test('an unconfirmed rotated-token write requires sign-in even if the native wri
   assert.equal(h.refreshes.length, 1);
   await h.session.setAuthenticatedSession(account('A', '-recovered'));
   assert.equal(h.disk, 'A-refresh-recovered');
-  assert.equal(h.store.getState().accessToken, 'A-access-recovered');
+  assert.equal(h.store.getState().accessToken, jwt('A-access-recovered'));
   assert.equal(h.session.getSessionGeneration(), generation + 2);
 });
 
@@ -1653,7 +1673,7 @@ for (const [name, policy] of [
     assert.equal(restarted.policyStorage.filter(op => op.kind === 'policySet').length, 0);
     await restarted.session.setAuthenticatedSession(account('B'));
     assert.equal(restarted.policy, policyRecord('allowed'));
-    assert.equal(restarted.store.getState().accessToken, 'B-access');
+    assert.equal(restarted.store.getState().accessToken, jwt('B-access'));
   });
 }
 
@@ -1673,7 +1693,7 @@ test('unreadable policy denies access without deleting credentials and can be re
   await until(() => h.refreshes.length === 1);
   h.refreshes[0].resolve(responseFor(account('A', '-recovered')));
   await recovery;
-  assert.equal(h.store.getState().accessToken, 'A-access-recovered');
+  assert.equal(h.store.getState().accessToken, jwt('A-access-recovered'));
   assert.equal(h.policy, policyRecord('allowed'));
   assert.equal(h.policyStorage.filter(op => op.kind === 'policySet').length, 0);
 });
@@ -1693,7 +1713,7 @@ test('login commits credentials before allowed policy and permits restoration on
   allowing.release();
   assert.equal(await login, h.session.getSessionGeneration());
   assert.equal(h.policy, policyRecord('allowed'));
-  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.store.getState().accessToken, jwt('B-access'));
   const writes = h.storageEvents.filter(op => op.kind === 'policySet' || op.kind === 'set');
   assert.deepEqual(writes.map(op => op.kind), ['policySet', 'set', 'policySet']);
   assert.equal(writes[0].value, policyRecord('blocked'));
@@ -1842,7 +1862,7 @@ for (const outcome of ['success', 'failure']) {
     await tick();
     assert.equal(h.disk, 'B-refresh');
     assert.equal(h.policy, policyRecord('allowed'));
-    assert.equal(h.store.getState().accessToken, 'B-access');
+    assert.equal(h.store.getState().accessToken, jwt('B-access'));
     assert.equal(h.storage.filter(op => op.kind === 'delete').length, 0);
     assert.equal(h.navigation.length, 0);
     assert.equal(h.maxActiveStorage, 1);
@@ -1880,7 +1900,7 @@ for (const outcome of ['success', 'failure']) {
     await login;
     assert.equal(h.refreshes.length, 0);
     assert.equal(h.policy, policyRecord('allowed'));
-    assert.equal(h.store.getState().accessToken, 'B-access');
+    assert.equal(h.store.getState().accessToken, jwt('B-access'));
   });
 }
 
@@ -1896,7 +1916,7 @@ test('a refresh failure durably requires sign-in after restart', async () => {
   await restarted.restoreUser();
   assert.equal(restarted.refreshes.length, 0);
   await restarted.session.setAuthenticatedSession(account('A', '-recovered'));
-  assert.equal(restarted.store.getState().accessToken, 'A-access-recovered');
+  assert.equal(restarted.store.getState().accessToken, jwt('A-access-recovered'));
   assert.equal(restarted.policy, policyRecord('allowed'));
 });
 
@@ -1946,7 +1966,7 @@ test('a rejected old allowed-policy write cannot roll back a newer explicit logi
   assert.equal(await newLogin, h.session.getSessionGeneration());
   assert.equal(h.policy, policyRecord('allowed'));
   assert.equal(h.disk, 'B-refresh');
-  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.store.getState().accessToken, jwt('B-access'));
   assert.equal(h.maxActiveStorage, 1);
 });
 
@@ -1955,12 +1975,12 @@ test('captured logout authorization cannot be reused for another endpoint', asyn
   const block = h.holdNext('policySet');
   const logout = h.auth().logoutAndGoToLogin();
   await block.started;
-  await h.api.get('/private', { headers: { Authorization: 'Bearer A-access' } });
+  await h.api.get('/private', { headers: { Authorization: `Bearer ${jwt('A-access')}` } });
   assert.equal(h.requests[0].headers.get('Authorization'), undefined);
   block.release();
   await logout;
-  const serverLogout = h.requests.find(config => config.url === '/Auth/Logout');
-  assert.equal(serverLogout.headers.get('Authorization'), 'Bearer A-access');
+  const serverLogout = h.requests.find(config => config.url === '/api/auth/mobile/sign-out');
+  assert.equal(serverLogout.headers.get('Authorization'), `Bearer ${jwt('A-access')}`);
   assert.equal(h.store.getState().accessToken, null);
 });
 
@@ -2059,13 +2079,13 @@ test('native multipart upload and private PDF helpers retain Axios auth and bina
   assert.equal((await h.apiFiles().uploadApiFile('put', '/api/quotes/101/document', form)).data, null);
   assert.equal(h.requests[0].data, form);
   assert.equal(h.requests[0].headers.getContentType(), false);
-  assert.equal(h.requests[0].headers.get('Authorization'), 'Bearer A-access');
+  assert.equal(h.requests[0].headers.get('Authorization'), `Bearer ${jwt('A-access')}`);
   const bytes = new ArrayBuffer(5);
   h.setAdapter(async config => ({ ...h.ok(config, bytes), headers: { 'content-type': 'application/pdf', 'content-disposition': 'unsafe filename' } }));
   const pdf = await h.apiFiles().downloadPrivatePdf('/api/quotes/101/document');
   assert.equal(pdf.data, bytes);
   assert.equal(pdf.fileName, 'quote.pdf');
-  assert.equal(h.requests.at(-1).headers.get('Authorization'), 'Bearer A-access');
+  assert.equal(h.requests.at(-1).headers.get('Authorization'), `Bearer ${jwt('A-access')}`);
   assert.equal(h.requests.at(-1).url.includes('token'), false);
 });
 
@@ -2088,7 +2108,8 @@ const findElement = (tree, type) => {
 };
 
 for (const signedIn of [false, true]) {
-  for (const endpoint of ['SignIn', 'SignUp', 'VerifyEmailOtp', 'SendEmailOtp', 'SendForgotPasswordOtp', 'VerifyForgotPasswordOtp', 'ResetPassword']) {
+  // Legacy recovery paths until guide 02; new auth paths are covered above.
+  for (const endpoint of ['SendForgotPasswordOtp', 'VerifyForgotPasswordOtp', 'ResetPassword']) {
     test(`public ${endpoint} 401 never refreshes or replays (signedIn=${signedIn})`, async () => {
       const h = harness({ signedIn });
       const generation = h.session.getSessionGeneration();
@@ -2100,7 +2121,7 @@ for (const signedIn of [false, true]) {
       assert.equal(h.requests.length, 1);
       assert.equal(h.requests[0]._retry, undefined);
       assert.equal(h.session.getSessionGeneration(), generation);
-      assert.equal(h.store.getState().accessToken, signedIn ? 'A-access' : null);
+      assert.equal(h.store.getState().accessToken, signedIn ? jwt('A-access') : null);
       assert.equal(h.disk, 'A-refresh');
       assert.equal(h.toasts.length, 1);
       assert.equal(h.toasts[0][1], 'error');
@@ -2111,7 +2132,8 @@ for (const signedIn of [false, true]) {
 for (const [status, expected] of [
   [400, 'Unable to sign in. Check your details and try again.'],
   [401, 'Unable to sign in. Check your details and try again.'],
-  [403, "You don't have permission to complete this request."],
+  // Sign-in is anonymous: 403 means a valid but unverified account (guides 00/01).
+  [403, 'Please verify your email before signing in.'],
   [429, 'Too many requests. Please wait and try again.'],
   [500, 'The service is temporarily unavailable. Please try again later.'],
 ]) {
@@ -2126,7 +2148,9 @@ for (const [status, expected] of [
     assert.equal(result.reason, failure);
     assert.deepEqual(h.toasts, [[expected, 'error']]);
     assert.equal(h.refreshes.length, 0);
-    assert.equal(h.navigation.length, 0);
+    assert.deepEqual(plain(h.navigation), status === 403
+      ? [['push', { pathname: '/(auth)/otp-register', params: { email: 'a@example.test' } }]]
+      : []);
     assert.equal(h.store.getState().accessToken, null);
     assert.equal(h.logs.length, 0);
     const info = h.errorInfo(failure, 'signIn');
@@ -2178,11 +2202,11 @@ for (const [mutationName, expected] of [
     assert.equal(h.registrations.length, 0);
     assert.equal(h.refreshes.length, 0);
     assert.equal(h.session.getSessionGeneration(), generation);
-    assert.equal(h.store.getState().accessToken, 'A-access');
+    assert.equal(h.store.getState().accessToken, jwt('A-access'));
   });
 }
 
-for (const endpoint of ['/Auth/Refresh', '/Auth/Logout']) {
+for (const endpoint of ['/api/auth/mobile/refresh', '/api/auth/mobile/sign-out']) {
   for (const status of [401, 500]) {
     test(`${endpoint} HTTP ${status} remains silent and never starts refresh`, async () => {
       const h = harness();
@@ -2208,9 +2232,9 @@ test('background push registration remains protected but stays silent after a fa
   assert.equal((await pending).status, 'rejected');
   assert.equal(h.refreshes.length, 1);
   assert.equal(h.requests.length, 2);
-  assert.equal(h.requests[1].headers.get('Authorization'), 'Bearer A-access-renewed');
+  assert.equal(h.requests[1].headers.get('Authorization'), `Bearer ${jwt('A-access-renewed')}`);
   assert.equal(h.toasts.length, 0);
-  assert.equal(h.store.getState().accessToken, 'A-access-renewed');
+  assert.equal(h.store.getState().accessToken, jwt('A-access-renewed'));
 });
 
 test('credential settings still share refresh and failed replays notify once without looping', async () => {
@@ -2261,7 +2285,7 @@ test('an error from a stale login request cannot notify or modify the newer sess
   h.queryClient.setQueryData(['private'], 'B-private');
   reply.reject(httpFailure(h.requests[0], 401));
   assert.equal((await pending).status, 'rejected');
-  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.store.getState().accessToken, jwt('B-access'));
   assert.equal(h.queryClient.getQueryData(['private']), 'B-private');
   assert.equal(h.toasts.length, 0);
   assert.equal(h.refreshes.length, 0);
@@ -2300,11 +2324,11 @@ for (const method of ['getData', 'postData', 'putData', 'deleteData']) {
       assert.equal(result.data, payload.data);
       assert.equal(Object.hasOwn(result, 'data'), Object.hasOwn(payload, 'data'));
       assert.equal(h.requests.length, 1);
-      assert.equal(h.requests[0].headers.get('Authorization'), 'Bearer A-access');
+      assert.equal(h.requests[0].headers.get('Authorization'), `Bearer ${jwt('A-access')}`);
       assert.equal(h.refreshes.length, 0);
       assert.equal(h.storage.length, 0);
       assert.equal(h.session.getSessionGeneration(), generation);
-      assert.equal(h.store.getState().accessToken, 'A-access');
+      assert.equal(h.store.getState().accessToken, jwt('A-access'));
       assert.equal(h.toasts.length, 0);
     });
   }
@@ -2335,7 +2359,7 @@ test('the response interceptor retains the HTTP response around a Service Provid
   assert.equal(h.toasts.length, 0);
 });
 
-test('Service Provider null data survives the existing legacy refresh and one retry', async () => {
+test('Service Provider null data survives mobile refresh and one retry', async () => {
   const h = harness();
   const body = { traceId: 'retry-trace', code: 'Success', data: null };
   h.setAdapter(async config => {
@@ -2344,15 +2368,15 @@ test('Service Provider null data survives the existing legacy refresh and one re
   });
   const pending = h.apiHelpers().getData('/api/contract-test');
   await until(() => h.refreshes.length === 1);
-  assert.equal(h.refreshes[0].url, 'https://api.example.test/Auth/Refresh');
+  assert.equal(h.refreshes[0].url, 'https://api.example.test/api/auth/mobile/refresh');
   assert.equal(h.refreshes[0].body.refreshToken, 'A-refresh');
   h.refreshes[0].resolve(responseFor(account('A', '-renewed')));
   assert.equal(await pending, body);
   assert.equal(h.requests.length, 2);
-  assert.equal(h.requests[1].headers.get('Authorization'), 'Bearer A-access-renewed');
+  assert.equal(h.requests[1].headers.get('Authorization'), `Bearer ${jwt('A-access-renewed')}`);
   assert.equal(h.refreshes.length, 1);
   assert.equal(h.disk, 'A-refresh-renewed');
-  assert.equal(h.store.getState().accessToken, 'A-access-renewed');
+  assert.equal(h.store.getState().accessToken, jwt('A-access-renewed'));
   assert.equal(h.toasts.length, 0);
 });
 
@@ -2375,7 +2399,7 @@ for (const [name, body, config] of [
 test('public request policies match canonical, query-string, trailing-slash, and absolute URLs', async () => {
   const h = harness();
   h.setAdapter(async config => { throw httpFailure(config, 401); });
-  for (const url of ['Auth/SignIn/', '/Auth/SignIn?request=synthetic', 'https://api.example.test/Auth/SignIn', '/auth/signin']) {
+  for (const url of ['api/auth/mobile/sign-in/', '/api/auth/mobile/sign-in?request=synthetic', 'https://api.example.test/api/auth/mobile/sign-in', '/API/Auth/Mobile/Sign-In']) {
     assert.equal((await observe(h.api.post(url))).status, 'rejected');
   }
   assert.equal(h.refreshes.length, 0);
@@ -2399,7 +2423,11 @@ for (const name of ['otp-register', 'otp-forgot-password']) {
     h.setAdapter(async config => h.ok(config, { success: false, message: 'Private backend message', data: null }));
     const otp = findElement(h.screen(name), 'OTPComponent');
     await otp.props.reSendOtp();
-    assert.deepEqual(h.toasts, [['A new code has been requested. Please check your email.', 'success']]);
+    // Verification resend must not reveal whether the account exists (guide 01).
+    const expected = name === 'otp-register'
+      ? 'If this email needs verification, a new code has been sent.'
+      : 'A new code has been requested. Please check your email.';
+    assert.deepEqual(h.toasts, [[expected, 'success']]);
   });
 }
 
@@ -2440,10 +2468,10 @@ test('safe error projections, notifications, and logs never copy sensitive reque
   assert.equal(unknown.message.includes(secret), false);
 });
 
-for (const mutationName of ['loginMutation', 'verifyEmailMutation', 'verifyNewEmailMutation']) {
+for (const mutationName of ['loginMutation', 'verifyNewEmailMutation']) {
   test(`${mutationName} stale persistence failure cannot notify or affect a newer login`, async () => {
     const h = harness();
-    h.setAdapter(async config => h.ok(config, responseFor(account('B')).data));
+    h.setAdapter(async config => h.ok(config, sessionBody(mutationName, account('B'))));
     const write = h.holdNext('set');
     const pending = observe(h.auth()[mutationName].mutateAsync({ email: 'b@example.test', password: 'synthetic', otp: '123456' }));
     await write.started;
@@ -2456,7 +2484,7 @@ for (const mutationName of ['loginMutation', 'verifyEmailMutation', 'verifyNewEm
     const lateFailure = new Error('Delayed callback failure');
     h.apiHelpers().notifyApiError(lateFailure, { generation: oldGeneration, action: 'signIn' });
     h.apiHelpers().notifyApiError(lateFailure, { action: 'signIn' });
-    assert.equal(h.store.getState().accessToken, 'C-access');
+    assert.equal(h.store.getState().accessToken, jwt('C-access'));
     assert.equal(h.disk, 'C-refresh');
     assert.equal(h.policy, policyRecord('allowed'));
     assert.equal(h.queryClient.getQueryData(['private']), 'C-private');
@@ -2470,11 +2498,11 @@ const authPayload = {
   otp: '123456', userId: 1, newEmail: 'new@example.test',
   currentPassword: 'synthetic-old', newPassword: 'synthetic-new', forgotPasswordToken: 'synthetic-reset',
 };
-const authSuccessBody = (name, id = 'A') => name === 'registerMutation'
-  ? { success: true, data: { user: account(id).user } }
+const authSuccessBody = (name, id = 'A') => ['registerMutation', 'verifyEmailMutation'].includes(name)
+  ? emptyBody
   : name === 'verifyResetPasswordOtpMutation'
     ? { success: true, data: { forgotPasswordToken: 'synthetic-reset' } }
-    : responseFor(account(id)).data;
+    : sessionBody(name, account(id));
 
 for (const name of ['loginMutation', 'registerMutation', 'verifyEmailMutation', 'verifyNewEmailMutation',
   'changeEmailMutation', 'changePasswordMutation', 'sendForgetPasswordMutation', 'verifyResetPasswordOtpMutation', 'setNewPasswordMutation']) {
@@ -2533,7 +2561,7 @@ test('the newer successful login wins across hook instances and reused input obj
   replies[0].resolve(h.ok(h.requests[0], responseFor(account('A')).data));
   assert.ok(axios.isCancel((await first).reason));
   assert.equal(h.store.getState().user.id, 'B');
-  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.store.getState().accessToken, jwt('B-access'));
   assert.equal(h.disk, 'B-refresh');
   assert.equal(h.storage.length, nativeWrites);
   assert.equal(h.policyStorage.length, policyWrites);
@@ -2552,7 +2580,7 @@ test('a newer failed attempt still supersedes older successes without clearing t
   replies[0].resolve(h.ok(h.requests[0], responseFor(account('B')).data));
   assert.ok(axios.isCancel((await older).reason));
   assert.equal(h.store.getState().user.id, 'A');
-  assert.equal(h.store.getState().accessToken, 'A-access');
+  assert.equal(h.store.getState().accessToken, jwt('A-access'));
   assert.equal(h.disk, 'A-refresh');
   assert.equal(h.toasts.length, 1, 'Only the current failure may notify');
   assert.equal(h.policyStorage.length, 0);
@@ -2583,7 +2611,7 @@ test('a success superseded between HTTP completion and mutation callback cannot 
   barrier.resolve();
   assert.ok(axios.isCancel((await pending).reason));
   assert.equal(h.store.getState().user.id, 'B');
-  assert.equal(h.store.getState().accessToken, 'B-access');
+  assert.equal(h.store.getState().accessToken, jwt('B-access'));
   assert.equal(h.disk, 'B-refresh');
   assert.deepEqual(h.navigation, []);
 });
@@ -2619,7 +2647,7 @@ for (const boundary of ['blocked policy', 'credential', 'allowed policy']) {
     nextReply.resolve(h.ok(h.requests[1], responseFor(account('B')).data));
     assert.equal((await next).status, 'fulfilled');
     assert.equal(h.store.getState().user.id, 'B');
-    assert.equal(h.store.getState().accessToken, 'B-access');
+    assert.equal(h.store.getState().accessToken, jwt('B-access'));
     assert.equal(h.disk, 'B-refresh');
     assert.equal(h.policy, policyRecord('allowed'));
     assert.deepEqual(h.toasts, []);
@@ -2648,7 +2676,7 @@ test('auth response interception rejects superseded direct service calls within 
   assert.ok(axios.isCancel((await pending).reason));
   assert.equal(h.session.getSessionGeneration(), generation);
   assert.equal(h.store.getState().user.id, 'A');
-  assert.equal(h.store.getState().accessToken, 'A-access');
+  assert.equal(h.store.getState().accessToken, jwt('A-access'));
 });
 
 test('a stale credential 401 cannot refresh or notify even when the session generation is unchanged', async () => {
@@ -2662,7 +2690,7 @@ test('a stale credential 401 cannot refresh or notify even when the session gene
   assert.equal((await pending).reason, failure, 'Existing rejection identity remains intact');
   assert.equal(h.refreshes.length, 0);
   assert.deepEqual(h.toasts, []);
-  assert.equal(h.store.getState().accessToken, 'A-access');
+  assert.equal(h.store.getState().accessToken, jwt('A-access'));
 });
 
 test('consumer success/settled callbacks cannot run after a newer operation begins during settlement', async () => {
@@ -2680,24 +2708,41 @@ test('consumer success/settled callbacks cannot run after a newer operation begi
   assert.deepEqual(callbacks, []);
 });
 
-test('normal registration and OTP retain callback payloads, pending identity, navigation, and confirmed credentials', async () => {
+test('registration opens verification for that email, and verification returns to sign-in without a session', async () => {
   const h = harness({ signedIn: false, saved: null }), callbacks = [];
-  h.setAdapter(async config => h.ok(config, config.url === '/Auth/SignUp'
-    ? authSuccessBody('registerMutation') : responseFor(account('A')).data));
+  h.setAdapter(async config => h.ok(config, emptyBody));
   const auth = h.auth();
   const registration = await auth.registerMutation.mutateAsync(authPayload, {
-    onSuccess: (data, variables) => callbacks.push([data.data.user.id, variables.email]),
+    onSuccess: (data, variables) => callbacks.push([data.data, variables.email]),
   });
-  assert.equal(registration.data.user.id, 'A');
-  assert.equal(h.store.getState().user.id, 'A');
+  assert.equal(h.requests[0].url, '/api/auth/register');
+  assert.equal(registration.data, null);
   assert.equal(h.store.getState().accessToken, null);
-  assert.deepEqual(h.navigation, [['push', '/(auth)/otp-register']]);
-  assert.deepEqual(callbacks, [['A', authPayload.email]]);
-  await auth.verifyEmailMutation.mutateAsync(authPayload);
-  assert.equal(h.store.getState().accessToken, 'A-access');
-  assert.equal(h.disk, 'A-refresh');
-  assert.equal(h.policy, policyRecord('allowed'));
+  assert.deepEqual(plain(h.navigation), [['push', { pathname: '/(auth)/otp-register', params: { email: authPayload.email } }]]);
+  assert.deepEqual(callbacks, [[null, authPayload.email]]);
+  // A six-digit string code keeps its leading zero.
+  await auth.verifyEmailMutation.mutateAsync({ email: authPayload.email, code: '012345' });
+  assert.equal(h.requests[1].url, '/api/auth/verify-email');
+  assert.deepEqual(JSON.parse(h.requests[1].data), { email: authPayload.email, code: '012345' });
+  assert.equal(h.store.getState().accessToken, null);
+  assert.equal(h.disk, null);
+  assert.deepEqual(plain(h.navigation[1]), ['replace', { pathname: '/(auth)', params: { email: authPayload.email } }]);
+  assert.deepEqual(h.toasts, [['Email verified. Please sign in.', 'success']]);
   assert.equal(h.registrations.length, 0);
+});
+
+test('a profile-setup sign-in publishes a session that requires initial setup', async () => {
+  const h = harness({ signedIn: false, saved: null });
+  const claims = Buffer.from(JSON.stringify({ sub: 'D', access_level: 'profile_setup', role: 'Member' })).toString('base64url');
+  const setupToken = `e30.${claims}.signature`;
+  h.setAdapter(async config => h.ok(config, responseFor({ accessToken: setupToken, refreshToken: 'D-refresh' }, true).data));
+  await h.auth().loginMutation.mutateAsync({ email: 'D@example.test', password: 'synthetic' });
+  assert.equal(h.requests[0].url, '/api/auth/mobile/sign-in');
+  assert.deepEqual(plain(h.store.getState().user), {
+    id: 'D', email: 'D@example.test', accessLevel: 'profile_setup', roles: ['Member'], permissions: [], profileCompletionRequired: true,
+  });
+  assert.equal(h.store.getState().accessToken, setupToken);
+  assert.equal(h.disk, 'D-refresh');
 });
 
 test('password-reset delayed navigation is discarded after another authentication operation', async () => {
@@ -2714,9 +2759,10 @@ test('password-reset delayed navigation is discarded after another authenticatio
 for (const boundary of ['credential', 'allowed policy']) {
   test(`a newer confirmed login owns persistence while an old ${boundary} write is still in flight`, async () => {
     const h = harness({ signedIn: false, saved: null });
-    h.setAdapter(async config => h.ok(config, responseFor(account(h.requests.length === 1 ? 'A' : 'B')).data));
+    h.setAdapter(async config => h.ok(config, h.requests.length === 1
+      ? sessionBody('verifyNewEmailMutation', account('A')) : responseFor(account('B')).data));
     const credential = h.holdNext('set');
-    const old = observe(h.auth().verifyEmailMutation.mutateAsync(authPayload));
+    const old = observe(h.auth().verifyNewEmailMutation.mutateAsync(authPayload));
     await credential.started;
     let held = credential;
     if (boundary === 'allowed policy') {
@@ -2733,7 +2779,7 @@ for (const boundary of ['credential', 'allowed policy']) {
     h.queryClient.setQueryData(['new-session'], 'B-private');
     await tick();
     assert.equal(h.store.getState().user.id, 'B');
-    assert.equal(h.store.getState().accessToken, 'B-access');
+    assert.equal(h.store.getState().accessToken, jwt('B-access'));
     assert.equal(h.disk, 'B-refresh');
     assert.equal(h.policy, policyRecord('allowed'));
     assert.equal(h.session.isRefreshBlocked(), false);

@@ -1,19 +1,8 @@
-import { User } from "./user.interface";
-
-export interface Token {
-  accessToken: string;
-  refreshToken: string;
-}
-
+// Guide 01 account-access requests. Responses use ApiResponse<...> from
+// serviceProviderAuth.interface.ts.
 export interface LoginRequest {
   email: string;
   password: string;
-}
-
-export interface LoginResponse {
-  email: string;
-  token?: Token;
-  user: User;
 }
 
 export interface RegisterRequest {
@@ -22,25 +11,25 @@ export interface RegisterRequest {
   confirmPassword: string;
 }
 
-export interface RegisterResponse {
-  user: User;
-}
-
-export interface VerifyEmailOtpRequest {
-  email: string;
-  otp: string;
-}
-
-export interface VerifyEmailOtpResponse {
-  user: User;
-  token: Token;
+export interface refreshTokenRequest {
+  refreshToken: string;
 }
 
 export interface sendEmailOtpRequest {
   email: string;
 }
 
-export interface SendVerifyEmailResponse {}
+// Legacy credential and recovery shapes below still call /Auth/* paths. Password
+// recovery migrates with guide 02; the new backend documents no change-email or
+// change-password endpoints.
+export interface Token {
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface VerifyEmailOtpResponse {
+  token?: Token;
+}
 
 export interface ChangeEmailRequest {
   userId: number;
@@ -81,18 +70,4 @@ export interface VerifyResetPasswordOtpRequest {
 
 export interface VerifyResetPasswordOtpResponse {
   forgotPasswordToken: string;
-}
-
-export interface refreshTokenRequest {
-  refreshToken: string;
-}
-
-export interface refreshTokenResponse {
-  user: User;
-  token: Token;
-}
-
-export interface LogoutRequest {
-  refreshToken?: string;
-  expoPushToken?: string;
 }

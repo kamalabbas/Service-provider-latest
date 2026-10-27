@@ -32,15 +32,9 @@ const requestPolicies: Record<string, RequestPolicy> = {
   '/api/auth/mobile/sign-out': { refresh: false, silent: true },
   '/health/live': { refresh: false, silent: true },
   '/health/ready': { refresh: false, silent: true },
-  "/auth/signin": { action: "signIn", refresh: false },
-  "/auth/signup": { action: "register", refresh: false },
-  "/auth/verifyemailotp": { action: "verifyCode", refresh: false },
-  "/auth/sendemailotp": { action: "sendCode", refresh: false },
   "/auth/sendforgotpasswordotp": { action: "sendCode", refresh: false },
   "/auth/verifyforgotpasswordotp": { action: "verifyCode", refresh: false },
   "/auth/resetpassword": { action: "resetPassword", refresh: false },
-  "/auth/refresh": { refresh: false, silent: true },
-  "/auth/logout": { refresh: false, silent: true },
   "/auth/credentials/changeemail": { action: "changeEmail", refresh: true },
   "/auth/credentials/verifynewemail": { action: "verifyCode", refresh: true },
   "/auth/credentials/changepassword": { action: "changePassword", refresh: true },
@@ -112,7 +106,7 @@ api.interceptors.request.use(
       throw new CanceledError("Session changed before request dispatch.");
     }
 
-    if (config.url?.includes("/Auth/Refresh")) {
+    if (config.url?.includes("/api/auth/mobile/refresh")) {
       return config;
     }
 
@@ -131,7 +125,7 @@ api.interceptors.request.use(
     }
     // Logout uses its captured header after memory has already been cleared.
     // This exception cannot authorize other endpoints or bypass generation checks.
-    else if (!sameOrigin || !(config.url === "/Auth/Logout" && isRefreshBlocked())) config.headers.delete?.("Authorization");
+    else if (!sameOrigin || !(config.url === "/api/auth/mobile/sign-out" && isRefreshBlocked())) config.headers.delete?.("Authorization");
 
     return config;
   },

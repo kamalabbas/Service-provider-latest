@@ -1,6 +1,7 @@
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { useThemeColor } from "@/hooks/useThemeColor";
+import { PASSWORD_RULE_TEXT } from "@/utility/passwordPolicy";
 import { forwardRef, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, TextInputProps, View } from "react-native";
 
@@ -15,7 +16,6 @@ export const FormInput = forwardRef<TextInput, FormInputProps>(
   ({ label, error, labelStyle, style, secureTextEntry, showPasswordRule = true, ...props }, ref) => {
   const [showPassword, setShowPassword] = useState(false);
   const isPasswordField = !!secureTextEntry;
-  const passwordRuleText = "Password must be at least 8 characters, include one uppercase letter, and one number.";
 
   // Theme colors
   const borderColor = useThemeColor({}, "borderColor");
@@ -55,7 +55,7 @@ export const FormInput = forwardRef<TextInput, FormInputProps>(
           </Pressable>
         )}
       </View>
-      {isPasswordField && showPasswordRule && <ThemedText style={[styles.passwordRule, { color: mutedTextColor }]}>{passwordRuleText}</ThemedText>}
+      {isPasswordField && showPasswordRule && <ThemedText style={[styles.passwordRule, { color: mutedTextColor }]}>{PASSWORD_RULE_TEXT}</ThemedText>}
       {!!error && <Text style={[styles.error, { color: errorColor }]}>{error}</Text>}
     </ThemedView>
   );

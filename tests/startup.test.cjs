@@ -47,12 +47,20 @@ const until = async predicate => {
   }
   assert.ok(predicate(), 'Expected asynchronous boundary was not reached');
 };
-const account = {
-  user: { id: 'A', email: 'a@example.test' },
-  accessToken: 'A-access', refreshToken: 'A-refresh',
+// Access tokens are unsigned JWTs: the app derives identity from their claims.
+const jwt = label => {
+  const sub = label.split('-')[0];
+  const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+  return `${encode({ alg: 'none' })}.${encode({ sub, email: `${sub}@example.test`, access_level: 'full', jti: label })}.signature`;
 };
-const response = { data: { success: true, data: {
-  user: account.user, token: { accessToken: account.accessToken, refreshToken: account.refreshToken },
+const userFor = id => ({ id, email: `${id}@example.test`, accessLevel: 'full', roles: [], permissions: [], profileCompletionRequired: false });
+const account = {
+  user: userFor('A'),
+  accessToken: jwt('A-access'), refreshToken: 'A-refresh',
+};
+const response = { data: { traceId: 'example-trace', code: 'Success', data: {
+  accessToken: account.accessToken, expiresAtUtc: '2030-01-01T00:05:00Z',
+  refreshToken: account.refreshToken, refreshTokenExpiresAtUtc: '2030-01-06T00:00:00Z', profileCompletionRequired: false,
 } } };
 const findElement = (tree, type) => {
   if (!tree || typeof tree !== 'object') return null;
@@ -347,7 +355,7 @@ test('cold start waits for successful restoration and native root layout before 
   h.refreshes[0].resolve(response);
   await h.flush();
   assert.ok(findView(root.tree));
-  assert.equal(h.store.getState().accessToken, 'A-access');
+  assert.equal(h.store.getState().accessToken, jwt('A-access'));
   assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found']);
   assert.deepEqual(h.splash, ['prevent'], 'State readiness alone must not dismiss splash');
   root.layout(); root.layout(); root.render(); root.layout();
@@ -424,7 +432,7 @@ test('notification permission/token failures preserve session restoration, navig
     h.refreshes[0].resolve(response);
     await h.flush();
     assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found']);
-    assert.equal(h.store.getState().accessToken, 'A-access');
+    assert.equal(h.store.getState().accessToken, jwt('A-access'));
     root.layout();
     assert.deepEqual(h.splash, ['prevent', 'hide']);
     assert.equal(h.store.getState().pushNotificationToken, null);
@@ -537,7 +545,7 @@ test('offline restoration releases splash and requires explicit sign-in', async 
   await h.session.restoreSession();
   assert.equal(h.refreshes.length, 1);
   await h.session.setAuthenticatedSession(account);
-  assert.equal(h.store.getState().accessToken, 'A-access');
+  assert.equal(h.store.getState().accessToken, jwt('A-access'));
   assert.equal(h.session.getSessionGeneration(), generation + 2);
   assert.deepEqual(h.splash, ['prevent', 'hide']);
 });
@@ -582,7 +590,7 @@ test('unexpected startup rejection cannot clear a superseding authenticated sess
   const generation = h.session.getSessionGeneration();
   pending.reject(new Error('old startup failed'));
   await h.flush();
-  assert.equal(h.store.getState().accessToken, 'A-access');
+  assert.equal(h.store.getState().accessToken, jwt('A-access'));
   assert.equal(h.session.getSessionGeneration(), generation);
   assert.equal(h.queryClient.getQueryData(['private']), 'new-session-data');
   assert.ok(findView(root.tree));
@@ -718,7 +726,7 @@ test('saved-session restoration keeps deep-link queries unmounted until fresh cr
   await h.flush();
   const probe = await protectedProbe(h, root);
   assert.equal(probe.requests, 1);
-  assert.equal(h.store.getState().accessToken, 'A-access');
+  assert.equal(h.store.getState().accessToken, jwt('A-access'));
   assert.equal(h.token, 'A-refresh');
   assert.equal(h.restoreCalls, 1);
 });
@@ -733,7 +741,7 @@ test('an expired in-memory access token cannot bypass the cold-start restoration
   assert.equal(h.refreshes[0].body.refreshToken, 'saved-refresh');
   h.refreshes[0].resolve(response);
   await h.flush();
-  assert.equal(h.store.getState().accessToken, 'A-access');
+  assert.equal(h.store.getState().accessToken, jwt('A-access'));
   assert.equal((await protectedProbe(h, root)).requests, 1);
 });
 
@@ -807,6 +815,22 @@ test('logout immediately removes protected descendants and their navigation hist
   assert.equal(h.queryClient.getQueryData(['private']), undefined);
   await logout.refreshToken; await cleanup;
   assert.equal(h.store.getState().accessToken, null);
+});
+
+test('a session requiring profile completion opens setup and never the dashboard', async () => {
+  const h = harness({ noBackend: true }), root = h.mount(); await h.flush();
+  let state = stackRouter.getInitialState(routeConfig(h.screens(root)));
+  const setupAccount = { ...account, user: { ...account.user, accessLevel: 'profile_setup', profileCompletionRequired: true } };
+  await h.session.setAuthenticatedSession(setupAccount); await h.flush();
+  assert.deepEqual(h.screens(root), ['(setup)', '+not-found']);
+  state = stackRouter.getStateForRouteNamesChange(state, routeConfig(h.screens(root)));
+  assert.equal(state.routes[0].name, '(setup)');
+  assert.equal(h.mount('app/(dashboard)/_layout.tsx').tree, null);
+  assert.notEqual(h.mount('app/(setup)/_layout.tsx').tree, null);
+  // A refreshed full session leaves setup for the normal application.
+  await h.session.setAuthenticatedSession(account); await h.flush();
+  assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found']);
+  assert.equal(h.mount('app/(setup)/_layout.tsx').tree, null);
 });
 
 test('repeated login/logout transitions consistently prune history without repeating restoration', async () => {

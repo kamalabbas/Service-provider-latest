@@ -2,17 +2,16 @@ import { ThemedView } from "@/components/ThemedView";
 import { BackToLogin } from "@/components/ui/BackToLogin";
 import { OTPComponent } from "@/components/ui/OTPComponent";
 import { useAuth } from "@/hooks/useAuth";
-import { VerifyEmailOtpRequest } from "@/interfaces/auth.interface";
-import { sendEmailOtp } from "@/services/authService";
+import { VerifyEmailRequest } from "@/interfaces/serviceProviderAuth.interface";
+import { resendVerification } from "@/services/authService";
 import { notifyApiError } from "@/services/api";
-import { useAuthStore } from "@/stores/authStore";
 import { useToastStore } from "@/stores/toastStore";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { StyleSheet } from "react-native";
 
 export default function OtpRegisterScreen() {
-  // Auth Store Fields
-  const email = useAuthStore((s) => s.user?.email)!;
+  // Registration and unverified sign-in pass the original email.
+  const { email = "" } = useLocalSearchParams<{ email?: string }>();
 
   // Toast Store
   const { showToast } = useToastStore();
@@ -25,26 +24,27 @@ export default function OtpRegisterScreen() {
 
   // Submit handler
   const onSubmit = async (data: { otp: string }) => {
-    // check if email is present in params or not if not redirect to login
-    EmailCheck(email);
+    if (!EmailCheck(email)) return;
 
-    const payload: VerifyEmailOtpRequest = {
+    // Six-digit string code; leading zeroes are preserved.
+    const payload: VerifyEmailRequest = {
       email,
-      otp: data.otp,
+      code: data.otp,
     };
 
     verifyEmail(payload);
   };
 
-  // if there is no email in params, redirect to login
+  // Without the original email there is nothing to verify; return to sign-in.
   function EmailCheck(email: string) {
     if (!email) {
       showToast("Something went wrong. Please login again.", "error");
       setTimeout(() => {
         router.replace("/(auth)");
       }, 2000);
-      return;
+      return false;
     }
+    return true;
   }
 
   return (
@@ -54,13 +54,11 @@ export default function OtpRegisterScreen() {
         email={email}
         onSubmit={onSubmit}
         reSendOtp={async () => {
-          if (!email) {
-            EmailCheck(email);
-            return false;
-          }
+          if (!EmailCheck(email)) return false;
           try {
-            const res = await sendEmailOtp({ email });
-            res.message && showToast("A new code has been requested. Please check your email.", "success");
+            await resendVerification({ email });
+            // Unknown and already-verified accounts receive the same response.
+            showToast("If this email needs verification, a new code has been sent.", "success");
             return true;
           } catch (error) {
             notifyApiError(error, { action: "sendCode" });
