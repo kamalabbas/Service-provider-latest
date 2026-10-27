@@ -36,7 +36,7 @@ clearly superseded; otherwise list it as a follow-up.
 
 ### Step 2: Contracts → `interfaces/<feature>.interface.ts`
 ### Step 3: Service → `services/<feature>Service.ts`
-### Step 4: Access policy → `utility/access/<feature>.ts`
+### Step 4: Access policy → `utility/access.ts`
 ### Step 5: Hooks → `hooks/use<Feature>.ts`
 ### Step 6: Screens → `app/(dashboard)/<feature>/…` (or `(setup)` for onboarding)
 ### Step 7: Tests → `tests/<feature>.test.cjs`
@@ -123,20 +123,15 @@ Rules:
 
 ### 3.3 Access policy
 ```ts
-// utility/access/profiles.ts
-import type { User } from "@/interfaces/user.interface";
-import { hasPermissions, type AccessGrants } from "@/utility/permissions";
+// utility/access.ts: one file for every gate, grouped under a "Guide NN" comment.
+// (The test harness resolves "@/x" to "x.ts" only, so don't use folder index files.)
 
-const grants = (user?: User | null): AccessGrants => ({
-  accessLevel: user?.accessLevel ?? null,
-  roles: user?.roles ?? [],
-  permissions: user?.permissions ?? [],
-});
-
-// Copy the guide's "Access" row for each endpoint; suffixes are independent.
-export const canViewOwnProfile = (user?: User | null) => hasPermissions(grants(user), ["profiles.view"], true);
-export const canEditOwnProfile = (user?: User | null) => hasPermissions(grants(user), ["profiles.manage"], true);
+// Guide 04: profiles. Copy each endpoint's Access row; suffixes are independent.
+export const canViewOwnProfile = (user?: User | null) => can(user, ["profiles.view"], true);
+export const canEditOwnProfile = (user?: User | null) => can(user, ["profiles.manage"], true);
 ```
+`can(user, permissions, allowDuringSetup)` and `grantsOf(user)` already exist in
+`utility/access.ts` (guide 06 added the first gates).
 - `allowDuringSetup = true` only where the guide says "profile-setup access supported".
 - Hide entry points the user can't use; still handle 403 when the server disagrees.
 - Business user type never grants permissions.
@@ -146,7 +141,7 @@ export const canEditOwnProfile = (user?: User | null) => hasPermissions(grants(u
 // hooks/useProfile.ts
 import { getMyProfile, saveMyProfile } from "@/services/profileService";
 import { useAuthStore } from "@/stores/authStore";
-import { canViewOwnProfile } from "@/utility/access/profiles";
+import { canViewOwnProfile } from "@/utility/access";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 // Keys always include the account ID so a different account never reads this cache.

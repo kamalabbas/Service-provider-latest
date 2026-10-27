@@ -36,7 +36,8 @@ npx expo export --platform android --output-dir <scratch dir>
 | HTTP client, interceptors, error toasts | `services/api.ts`, `services/apiError.ts` |
 | Session (refresh, restore, logout) | `services/authSession.ts`, `hooks/useAuth.ts` |
 | Signed-in identity from JWT claims | `utility/accessToken.ts`, `interfaces/user.interface.ts` |
-| Permissions | `utility/permissions.ts` (+ `utility/access/<feature>.ts` per guide) |
+| Permissions | `utility/permissions.ts`; per-guide gates in `utility/access.ts` |
+| Reference choices (regions, occupations, positions, licence types) | `hooks/useReferenceChoices.ts` + `utility/referenceOptions.ts` → `SelectInput` / `SelectMultiInput` |
 | Transport/value helpers (paging, money, dates, IDs, files) | `utility/apiTransport.ts`, `utility/apiValues.ts`, `services/apiFiles.ts` |
 | Design tokens and colors | `constants/Theme.ts`, `constants/Colors.ts` |
 | Route groups | `app/(auth)`, `app/(setup)` (profile completion), `app/(dashboard)` (full session) |

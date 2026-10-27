@@ -15,8 +15,8 @@ Status: ✅ done · 🔜 next · ⬜ not started · ⏸ blocked on a decision
 | 0 Foundation | 01 Account access | ✅ | 00 | 9 / 0 | — |
 | 0 Foundation | UI design system | ✅ | — | — | — |
 | 1 Onboarding | 02 Password recovery | ✅ | 01 | 3 / 0 | — |
-| 1 Onboarding | 06 Reference choices | 🔜 | 01 | 4 / 5 | `reference.view` (setup ok), `reference.manage/.delete`, `reference-admin.view` |
-| 1 Onboarding | 03 Member types and roles | ⬜ | 01 | 4 / 12 | `profiles.view/.manage` (setup ok); admin: `users.*`, `roles.*` |
+| 1 Onboarding | 06 Reference choices | ✅ | 01 | 4 / 5 | `reference.view` (setup ok), `reference.manage/.delete`, `reference-admin.view` |
+| 1 Onboarding | 03 Member types and roles | 🔜 | 01 | 4 / 12 | `profiles.view/.manage` (setup ok); admin: `users.*`, `roles.*` |
 | 1 Onboarding | 04 Profiles | ⬜ | 03, 06 | 3 / 4 | `profiles.view/.manage` (setup ok) |
 | 2 Provider setup | 05 Business details | ⬜ | 04 | 5 / 7 | `businesses.view/.manage/.delete` |
 | 2 Provider setup | 07 Services (own listings) | ⬜ | 05, 06 | 7 / 5 (shared with discovery) | `services.view/.manage/.delete` |
@@ -85,5 +85,5 @@ and ends with a session refresh to obtain full access.
 | Legacy | Replaced by |
 |---|---|
 | `/Auth/Credentials/*` (change email/password) | Decision 2 |
-| `BaseResponse<T>`, `useLookup`, `useGetLocations`, `lookupService`, `locationService` | Guide 06 |
+| `BaseResponse<T>` (legacy credentials and `useNotification`) | Decision 2, guide 17 |
 | `/PushNotification/Register`, `/PushNotification/Send` (`useNotification`) | Guide 17 |

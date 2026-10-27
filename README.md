@@ -98,7 +98,13 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 
 - New passwords (registration, reset, change) require 8+ characters with an uppercase letter, a lowercase letter, a number and a symbol (`utility/passwordPolicy.ts`).
 
-Lookup/location serialization and query hooks remain reusable. Their endpoints must be passed explicitly from an approved API contract. Without endpoints, the hooks are disabled and the services reject manual calls. No lookup domains or product-specific profile rules have been invented.
+## Reference choices (guide 06)
+
+- `useReferenceChoices(catalogue)` loads the active choices for `regions` (public), `occupations`, `employee-positions` and `licence-types` (`reference.view`, allowed during profile setup) from `/api/members/{catalogue}`. Lists are never hard-coded.
+- Choices are cached for the session (account-keyed, cleared at session boundaries) and refetched after management changes. Forms call `useInvalidateReferenceChoices()` after a validation error, because a choice can be retired while the form is open.
+- `referenceOptions(choices, savedCode)` turns choices into `SelectInput`/`SelectMultiInput` options: submit `code`, show `displayName`. A saved code that is no longer active stays on the record, labelled "(retired)", and can't be picked as a new selection. In multi-select it can be removed but not added.
+- Management (`/api/admin/reference-choices/{catalogue}`: list incl. inactive, create, edit label/order, retire, reactivate) has a service and hooks with independent `reference-admin.view` / `reference.manage` / `reference.delete` gates in `utility/access.ts`. Non-region codes must match `^[a-z][a-z0-9_]{1,79}$`. No management screen yet; that waits on the admin-screens decision.
+- The legacy lookup/location hooks and services (caller-supplied endpoints, `BaseResponse` envelope) were removed.
 
 ## Application shell
 

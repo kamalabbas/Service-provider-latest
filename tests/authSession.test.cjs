@@ -265,9 +265,7 @@ function harness({ saved = 'A-refresh', signedIn = true, policy = policyRecord('
     restart: () => harness({ signedIn: false, persistence }),
     auth: () => load('hooks/useAuth.ts').useAuth(),
     restoreUser: () => load('utility/restoreUser.ts').restoreUser(),
-    lookup: (...args) => load('hooks/useLookup.ts').useLookup(...args),
-    regions: (...args) => load('hooks/useGetLocations.ts').useGetLocations(...args),
-    cities: (...args) => load('hooks/useGetLocations.ts').useCities(...args),
+    reference: catalogue => load('hooks/useReferenceChoices.ts').useReferenceChoices(catalogue),
     setAdapter: value => { adapter = value; }, ok, unauthorized,
     requireRefresh: () => { adapter = async config => {
       if (!config._retry) throw unauthorized(config);
@@ -859,32 +857,32 @@ test('queries started during logout storage cleanup are removed before logout co
   assert.equal(h.queryClient.getQueryCache().getAll().length, 0);
 });
 
+// Guide 06 reference choices: public regions and permission-gated occupations.
 const retainedQueries = [
-  ['lookups', h => h.lookup(['domain'], '/lookups')],
-  ['regions', h => h.regions(['country'], '/regions')],
-  ['cities', h => h.cities('lb', 1, 2, '/cities')],
+  ['regions', h => h.reference('regions')],
+  ['occupations', h => ({ ...h.reference('occupations'), enabled: true })],
 ];
 
 for (const [name, optionsFor] of retainedQueries) {
   test(`${name} keys isolate identities and mounted observers do not reuse A data for B`, async () => {
     const h = harness();
     const optionsA = { ...optionsFor(h), enabled: false, gcTime: Infinity };
-    const dataA = { owner: 'A', data: { cities: [{ owner: 'A' }] } };
+    const dataA = { owner: 'A', data: [{ code: 'a', displayName: 'A' }] };
     h.queryClient.setQueryData(optionsA.queryKey, dataA);
     const observer = new QueryObserver(h.queryClient, optionsA);
     const unsubscribe = observer.subscribe(() => {});
     try {
-      assert.deepEqual(observer.getCurrentResult().data, name === 'cities' ? dataA.data.cities : dataA);
+      assert.deepEqual(plain(observer.getCurrentResult().data), dataA.data);
       await h.session.setAuthenticatedSession(account('B'));
       const optionsB = { ...optionsFor(h), enabled: false, gcTime: Infinity };
       assert.notDeepEqual(optionsA.queryKey, optionsB.queryKey);
       observer.setOptions(optionsB);
       assert.equal(observer.getCurrentResult().data, undefined);
-      const dataB = { owner: 'B', data: { cities: [{ owner: 'B' }] } };
+      const dataB = { owner: 'B', data: [{ code: 'b', displayName: 'B' }] };
       h.queryClient.setQueryData(optionsB.queryKey, dataB);
       assert.equal(h.queryClient.getQueryData(optionsA.queryKey), undefined);
       assert.equal(h.queryClient.getQueryData(optionsB.queryKey).owner, 'B');
-      assert.deepEqual(observer.getCurrentResult().data, name === 'cities' ? dataB.data.cities : dataB);
+      assert.deepEqual(plain(observer.getCurrentResult().data), dataB.data);
     } finally {
       unsubscribe();
     }
