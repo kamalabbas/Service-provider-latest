@@ -58,3 +58,15 @@ export const canArchiveOwnBusiness = (user: User | null | undefined, userTypeCod
   businessEligible(userTypeCode) && can(user, ["businesses.delete"]);
 /** Admin business routes are SuperAdmin-only (full session). */
 export const canManageBusinessesAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));
+
+// Guide 07: services and discovery. Reads need services.view; publishing also needs an
+// eligible type (and, checked by the screen, an active business); archival needs services.delete.
+export const canViewServices = (user?: User | null) => can(user, ["services.view"]);
+export const canManageOwnServices = (user: User | null | undefined, userTypeCode?: string | null) =>
+  businessEligible(userTypeCode) && can(user, ["services.manage"]);
+export const canArchiveOwnServices = (user: User | null | undefined, userTypeCode?: string | null) =>
+  businessEligible(userTypeCode) && can(user, ["services.delete"]);
+/** The listing flag is advisory; the requester also needs inspections.manage. */
+export const canRequestInspectionFor = (user: User | null | undefined, service: { canRequestInspection: boolean }) =>
+  service.canRequestInspection && can(user, ["inspections.manage"]);
+export const canManageServicesAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));

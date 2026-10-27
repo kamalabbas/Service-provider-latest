@@ -19,9 +19,9 @@ Status: ✅ done · 🔜 next · ⬜ not started · ⏸ blocked on a decision
 | 1 Onboarding | 03 Member types and roles | ✅ | 01 | 4 / 12 | `profiles.view/.manage` (setup ok); admin: `users.*`, `roles.*` |
 | 1 Onboarding | 04 Profiles | ✅ | 03, 06 | 3 / 4 | `profiles.view/.manage` (setup ok) |
 | 2 Provider setup | 05 Business details | ✅ | 04 | 5 / 7 | `businesses.view/.manage/.delete` |
-| 2 Provider setup | 07 Services (own listings) | 🔜 | 05, 06 | 7 / 5 (shared with discovery) | `services.view/.manage/.delete` |
-| 2 Provider setup | 10 Employees | ⬜ | 05, 06 | 5 / 5 | `employees.view/.manage/.delete` |
-| 3 Customer work | 07 Discovery (nearby search, provider detail) | ⬜ | 04 | (above) | `services.view` |
+| 2 Provider setup | 07 Services (own listings) | ✅ | 05, 06 | 7 / 5 (shared with discovery) | `services.view/.manage/.delete` |
+| 2 Provider setup | 10 Employees | 🔜 | 05, 06 | 5 / 5 | `employees.view/.manage/.delete` |
+| 3 Customer work | 07 Discovery (nearby search, provider detail) | ✅ | 04 | (above) | `services.view` |
 | 3 Customer work | 08 Inspections | ⬜ | 07 | 11 / 6 | `inspections.view/.manage/.delete` |
 | 3 Customer work | 09 Quotes | ⬜ | 08 | 8 / 6 | `quotes.view/.manage/.delete` |
 | 4 Cards | 11 Card requests | ⬜ | 04, 10 | 6 / 6 | `card-requests.*`, `employees.manage` |

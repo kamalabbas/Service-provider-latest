@@ -124,6 +124,13 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 - Archive refetches every query, since listings, roster and card requests change server-side. The picture upload shares `components/ui/PicturePicker.tsx` with the profile picture.
 - SuperAdmin list/detail/create-for-user/update/archive/history/picture routes have services and hooks (`services/businessService.ts`, `hooks/useBusiness.ts`). No admin screens yet.
 
+## Services and discovery (guide 07)
+
+- **Find** tab (`app/(dashboard)/(find)`): search by location (typed, or "use my business location" until device location is approved), radius 1–500 km (default 50), optional occupation and membership ID. Empty filters are omitted; results are paged with **Show more** and ordered by estimated straight-line distance. Results refresh when returning to the tab.
+- Provider detail shows business and profile pictures, membership ID, rating (a null average shows "No ratings yet"), service and business locations, and inspection availability (`canRequestInspection` plus `inspections.manage`). A listing that stops being discoverable shows "no longer available". No email or phone is exposed.
+- Account → **My services**: active and archived listings, detail, create/edit and archive. Publishing needs an eligible type, `services.manage` and an active business; a Tradeperson may list only occupations on their profile. A new listing starts at the business location but keeps its own coordinates. Archived listings are read-only.
+- Rules live in `utility/serviceForm.ts` and `utility/coordinates.ts` (shared with the business form); search parameters are built and checked by `searchParams` in `services/serviceListingService.ts`. SuperAdmin listing routes have services and hooks (`hooks/useServices.ts`). No admin screens yet.
+
 ## Reference choices (guide 06)
 
 - `useReferenceChoices(catalogue)` loads the active choices for `regions` (public), `occupations`, `employee-positions` and `licence-types` (`reference.view`, allowed during profile setup) from `/api/members/{catalogue}`. Lists are never hard-coded.

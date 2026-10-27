@@ -1,6 +1,7 @@
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { selectIsAuthenticated, selectNeedsProfileSetup, useAuthStore } from "@/stores/authStore";
+import { canViewServices } from "@/utility/access";
 import { Tabs } from "expo-router";
 import { StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -8,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 export default function DashboardLayout() {
   const isAuthenticated = useAuthStore(selectIsAuthenticated);
   const needsSetup = useAuthStore(selectNeedsProfileSetup);
+  const canFind = useAuthStore((state) => canViewServices(state.user));
   const insets = useSafeAreaInsets();
   const tabActive = useThemeColor({}, "tabIconSelected");
   const tabInactive = useThemeColor({}, "tabIconDefault");
@@ -43,6 +45,15 @@ export default function DashboardLayout() {
         options={{
           title: "Home",
           tabBarIcon: ({ color, size }) => <IconSymbol name="house.fill" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="(find)"
+        options={{
+          title: "Find",
+          // Hidden without services.view; the screen also says so on direct navigation.
+          href: canFind ? undefined : null,
+          tabBarIcon: ({ color, size }) => <IconSymbol name="magnifyingglass" color={color} size={size} />,
         }}
       />
       <Tabs.Screen

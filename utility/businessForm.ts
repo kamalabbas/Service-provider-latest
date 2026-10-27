@@ -1,5 +1,6 @@
 import type { Business, SaveBusinessRequest } from "@/interfaces/business.interface";
 import * as yup from "yup";
+import { coordinateField, coordinateText } from "@/utility/coordinates";
 
 const digits = (value: string) => value.replace(/\s/g, "");
 
@@ -20,7 +21,6 @@ export function isValidAcn(value: string): boolean {
   return (10 - (sum % 10)) % 10 === Number(acn[8]);
 }
 
-/** Coordinates are typed as text so 0 and negative values edit naturally. */
 export interface BusinessFormValues {
   businessName: string;
   abn: string;
@@ -50,20 +50,15 @@ export function businessFormValues(business?: Business | null): BusinessFormValu
     suburb: business?.suburb ?? "",
     regionCode: business?.regionCode ?? "",
     postalCode: business?.postalCode ?? "",
-    latitude: business ? String(business.latitude) : "",
-    longitude: business ? String(business.longitude) : "",
+    latitude: coordinateText(business?.latitude),
+    longitude: coordinateText(business?.longitude),
   };
 }
 
 const PHONE = /^(?=.*\d)\+?[0-9 ()-]+$/;
-const DECIMAL = /^-?\d+(\.\d+)?$/;
 const required = (label: string, max: number) => yup.string().trim().required(`Enter ${label}`).max(max, `Use at most ${max} characters`);
 const optional = (max: number) => yup.string().trim().max(max, `Use at most ${max} characters`).defined();
 const phone = () => optional(30).matches(PHONE, { message: "Enter a valid phone number", excludeEmptyString: true });
-const coordinate = (label: string, limit: number) =>
-  yup.string().trim().required(`Enter the ${label}`)
-    .matches(DECIMAL, `Enter the ${label} as a decimal number, e.g. ${label === "latitude" ? "-33.8688" : "151.2093"}`)
-    .test("range", `The ${label} must be between -${limit} and ${limit}`, (value) => !value || Math.abs(Number(value)) <= limit);
 
 /** Mirrors SaveBusinessRequest; the server still validates and normalizes. */
 export const businessSchema: yup.ObjectSchema<BusinessFormValues> = yup.object({
@@ -76,8 +71,8 @@ export const businessSchema: yup.ObjectSchema<BusinessFormValues> = yup.object({
   suburb: required("a suburb", 100),
   regionCode: yup.string().required("Choose a state or territory"),
   postalCode: required("a postcode", 20),
-  latitude: coordinate("latitude", 90),
-  longitude: coordinate("longitude", 180),
+  latitude: coordinateField("latitude"),
+  longitude: coordinateField("longitude"),
 });
 
 const optionalText = (value: string) => value.trim() || null;

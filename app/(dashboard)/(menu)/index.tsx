@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDeactivateMyAccount, useMyMember } from "@/hooks/useMembership";
 import { useMyProfile } from "@/hooks/useProfile";
 import { useToastStore } from "@/stores/toastStore";
-import { canDeactivateOwnAccount, canViewOwnBusiness, canViewOwnProfile } from "@/utility/access";
+import { canDeactivateOwnAccount, canViewOwnBusiness, canViewOwnProfile, canViewServices } from "@/utility/access";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useAuthStore } from "@/stores/authStore";
 import { ThemePreference, useThemeStore } from "@/stores/theme";
@@ -97,6 +97,14 @@ export default function MenuScreen() {
             subtitle="Name, ABN, address and picture"
             onPress={() => router.push("/(dashboard)/(menu)/business")}
           />
+          {canViewServices(user) ? (
+            <ListRow
+              icon="construct-outline"
+              title="My services"
+              subtitle="Listings customers find nearby"
+              onPress={() => router.push("/(dashboard)/(menu)/my-services")}
+            />
+          ) : null}
         </ListSection>
       ) : null}
 
