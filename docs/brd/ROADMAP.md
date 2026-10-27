@@ -22,8 +22,8 @@ Status: ✅ done · 🔜 next · ⬜ not started · ⏸ blocked on a decision
 | 2 Provider setup | 07 Services (own listings) | ✅ | 05, 06 | 7 / 5 (shared with discovery) | `services.view/.manage/.delete` |
 | 2 Provider setup | 10 Employees | ✅ | 05, 06 | 5 / 5 | `employees.view/.manage/.delete` |
 | 3 Customer work | 07 Discovery (nearby search, provider detail) | ✅ | 04 | (above) | `services.view` |
-| 3 Customer work | 08 Inspections | 🔜 | 07 | 11 / 6 | `inspections.view/.manage/.delete` |
-| 3 Customer work | 09 Quotes | ⬜ | 08 | 8 / 6 | `quotes.view/.manage/.delete` |
+| 3 Customer work | 08 Inspections | ✅ | 07 | 11 / 6 | `inspections.view/.manage/.delete` |
+| 3 Customer work | 09 Quotes | 🔜 | 08 | 8 / 6 | `quotes.view/.manage/.delete` |
 | 4 Cards | 11 Card requests | ⬜ | 04, 10 | 6 / 6 | `card-requests.*`, `employees.manage` |
 | 4 Cards | 11-b Card issuance | ⬜ | 11 | 5 / 6 | `cards.view/.manage`, `card-requests.manage`, `employees.manage` |
 | 5 Relationships and pricing | 12 Client relationships | ⬜ | 08 | 3 / 2 | `clients.view/.manage/.delete` |

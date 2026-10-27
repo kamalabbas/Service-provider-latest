@@ -3,6 +3,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { ListRow, ListSection } from "@/components/ui/ListSection";
 import { Loader } from "@/components/ui/loader";
 import { Notice } from "@/components/ui/Notice";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { Screen } from "@/components/ui/Screen";
 import { Radius, Spacing } from "@/constants/Theme";
 import { useReferenceChoices } from "@/hooks/useReferenceChoices";
@@ -12,7 +13,7 @@ import { canRequestInspectionFor } from "@/utility/access";
 import { resolvePublicMediaUrl } from "@/utility/apiTransport";
 import { referenceLabel } from "@/utility/referenceOptions";
 import { distanceText, ratingText } from "@/utility/serviceForm";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Image, StyleSheet, View } from "react-native";
 
 const publicUri = (url?: string | null) => {
@@ -23,6 +24,7 @@ const publicUri = (url?: string | null) => {
 // Guide 07: another member's discoverable listing. No email or phone is exposed.
 export default function DiscoveredServiceScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const { data: service, isLoading, isError } = useDiscoveredService(Number(id));
   const regions = useReferenceChoices("regions");
@@ -62,14 +64,18 @@ export default function DiscoveredServiceScreen() {
         <ListRow icon="business-outline" title="Business" subtitle={`${service.businessLatitude}, ${service.businessLongitude}`} />
       </ListSection>
 
-      <Notice
-        tone={inspection ? "info" : "warning"}
-        message={inspection
-          ? "This provider is available for inspection requests. Requesting one arrives with inspections."
-          : service.canRequestInspection
+      {inspection ? (
+        <PrimaryButton
+          title="Request inspection"
+          leftIcon="clipboard-outline"
+          onPress={() => router.push({ pathname: "/(dashboard)/(inspections)/request", params: { serviceId: String(service.id) } })}
+        />
+      ) : <Notice
+        tone="warning"
+        message={service.canRequestInspection
             ? "You don't have permission to request inspections."
             : "You can't request an inspection for this service right now, for example because you already have an open request."}
-      />
+      />}
     </Screen>
   );
 }

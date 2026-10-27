@@ -137,6 +137,14 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 - Name, phone and occupation are required; email, position and licence are optional on both add and edit (cleared fields are sent as null). Email uniqueness across active employees is checked by the server and shown on the field. Retired saved occupations/positions stay visible while unchanged.
 - Eligible type plus `employees.view/.manage/.delete`; adding needs an active business. Archival refetches every query. Rules live in `utility/employeeForm.ts`; service and hooks in `services/employeeService.ts` / `hooks/useEmployees.ts`, including SuperAdmin routes (no admin screens yet). Worker assignment arrives with inspections (guide 08).
 
+## Inspections (guide 08)
+
+- **Inspections** tab (`app/(dashboard)/(inspections)`): requests the member made and requests for their business (All / I requested / For my business), a status filter, **Show hidden**, and **Show more** paging. Lists refresh when returning to the tab.
+- **Request inspection** on a found service opens a form prefilled with the profile address (the discovery location is not the visit address) plus an optional note. One open request per service is enforced by the server.
+- Detail shows the appointment, worker (name, occupation, position only; the provider when none is assigned), visit address, the other party, rating, timeline and worker history. Actions follow the guide's matrix by participant (account IDs), state and permission (`utility/inspectionRules.ts`): accept with a future date/time and optional matching worker, reject/cancel with an optional reason, assign/replace/clear the worker, show the completion code (requester) with a 10-minute countdown, enter the code (provider), rate once 1–5, and hide/restore this member's copy.
+- The completion code lives only in screen state: never cached, stored, logged or put in a URL. Every action refetches the inspection and lists, including after conflicts. Appointments are sent in UTC with seconds (`toUtcTimestamp`).
+- SuperAdmin list/detail/create-for-requester/decision/worker/rating routes have services and hooks (`services/inspectionService.ts`, `hooks/useInspections.ts`). No admin screens yet.
+
 ## Location and maps
 
 - `expo-location` gives the device position (`services/deviceLocation.ts`, foreground permission only; denial falls back to the map pin). `react-native-maps` shows the pin. Both work in Expo Go.

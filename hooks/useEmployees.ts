@@ -27,11 +27,11 @@ export const employeeKeys = {
 };
 
 /** Paged roster; pages load on demand. includeArchived shows history. */
-export function useMyEmployees(filters: EmployeeListFilters) {
+export function useMyEmployees(filters: EmployeeListFilters, pageSize = PAGE_SIZE) {
   const { user, userTypeCode } = useBusinessAccess();
   return useInfiniteQuery({
-    queryKey: employeeKeys.list(user?.id ?? null, filters),
-    queryFn: ({ pageParam, signal }) => listMyEmployees(filters, pageParam, PAGE_SIZE, signal),
+    queryKey: [...employeeKeys.list(user?.id ?? null, filters), pageSize],
+    queryFn: ({ pageParam, signal }) => listMyEmployees(filters, pageParam, pageSize, signal),
     initialPageParam: 1,
     getNextPageParam: (last, _pages, page) => (last.data?.hasMore ? page + 1 : undefined),
     enabled: canViewEmployees(user, userTypeCode),

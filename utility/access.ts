@@ -80,3 +80,9 @@ export const canManageEmployees = (user: User | null | undefined, userTypeCode?:
 export const canArchiveEmployees = (user: User | null | undefined, userTypeCode?: string | null) =>
   businessEligible(userTypeCode) && can(user, ["employees.delete"]);
 export const canManageEmployeesAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));
+
+// Guide 08: inspections. Per-action rules (participant + state + permission) live in
+// utility/inspectionRules.ts; these gate the screens and the request button.
+export const canViewInspections = (user?: User | null) => can(user, ["inspections.view"]);
+export const canRequestInspections = (user?: User | null) => can(user, ["inspections.manage"]);
+export const canManageInspectionsAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));
