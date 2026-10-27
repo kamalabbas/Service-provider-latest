@@ -7,8 +7,9 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Radius, Shadow, Spacing } from "@/constants/Theme";
 import { useAuth } from "@/hooks/useAuth";
 import { useDeactivateMyAccount, useMyMember } from "@/hooks/useMembership";
+import { useMyProfile } from "@/hooks/useProfile";
 import { useToastStore } from "@/stores/toastStore";
-import { canDeactivateOwnAccount } from "@/utility/access";
+import { canDeactivateOwnAccount, canViewOwnProfile } from "@/utility/access";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useAuthStore } from "@/stores/authStore";
 import { ThemePreference, useThemeStore } from "@/stores/theme";
@@ -35,6 +36,8 @@ export default function MenuScreen() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const { data: member, isLoading: memberLoading } = useMyMember();
+  const { data: profile } = useMyProfile();
+  const fullName = profile ? `${profile.firstName} ${profile.lastName}` : null;
   const deactivate = useDeactivateMyAccount();
   const showToast = useToastStore((state) => state.showToast);
 
@@ -62,14 +65,23 @@ export default function MenuScreen() {
   return (
     <Screen title="Account">
       <View style={[styles.profile, Shadow.card, { backgroundColor: surface, borderColor: border }]}>
-        <Avatar name={user?.email} size={56} />
+        <Avatar name={fullName ?? user?.email} uri={profile?.pictureUrl} size={56} />
         <View style={styles.profileText}>
-          <ThemedText type="headline" numberOfLines={1}>{user?.email ?? "Signed in"}</ThemedText>
+          <ThemedText type="headline" numberOfLines={1}>{fullName ?? user?.email ?? "Signed in"}</ThemedText>
+          {fullName ? <ThemedText type="caption" tone="muted" numberOfLines={1}>{user?.email}</ThemedText> : null}
           <ThemedText type="caption" tone="muted">{user?.roles.length ? user.roles.join(", ") : "Member"}</ThemedText>
         </View>
       </View>
 
       <ListSection title="Membership">
+        {canViewOwnProfile(user) ? (
+          <ListRow
+            icon="person-circle-outline"
+            title="Profile"
+            subtitle="Your details, address and contact information"
+            onPress={() => router.push("/(dashboard)/(menu)/profile")}
+          />
+        ) : null}
         <ListRow
           icon="ribbon-outline"
           title={member?.userTypeDisplayName ?? "Member type"}

@@ -2,12 +2,12 @@ import { ThemedText } from "@/components/ThemedText";
 import { Loader } from "@/components/ui/loader";
 import { ListRow, ListSection } from "@/components/ui/ListSection";
 import { BrandMark } from "@/components/ui/Logo";
-import { Notice } from "@/components/ui/Notice";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { Screen } from "@/components/ui/Screen";
 import { Spacing } from "@/constants/Theme";
 import { useAuth } from "@/hooks/useAuth";
 import { useMyMember } from "@/hooks/useMembership";
+import { useMyProfile } from "@/hooks/useProfile";
 import { useAuthStore } from "@/stores/authStore";
 import { useRouter } from "expo-router";
 import { StyleSheet, View } from "react-native";
@@ -19,6 +19,7 @@ export default function SetupScreen() {
   const email = useAuthStore((state) => state.user?.email);
   const { logoutAndGoToLogin } = useAuth();
   const { data: member, isLoading } = useMyMember();
+  const { data: profile } = useMyProfile();
   const typeChosen = Boolean(member);
 
   return (
@@ -44,14 +45,11 @@ export default function SetupScreen() {
           <ListRow
             icon="person-circle-outline"
             title="2. Complete your profile"
-            subtitle={typeChosen ? "Your details and contact information" : "Available after step 1"}
+            subtitle={!typeChosen ? "Available after step 1" : profile ? "Review and save to finish" : "Your details and contact information"}
+            onPress={typeChosen ? () => router.push("/profile") : undefined}
           />
         </ListSection>
       )}
-
-      {typeChosen ? (
-        <Notice message="Profile completion arrives in the next app update. Your member type is saved." style={styles.notice} />
-      ) : null}
 
       <PrimaryButton title="Log out" variant="secondary" leftIcon="log-out-outline" onPress={logoutAndGoToLogin} />
     </Screen>
@@ -61,5 +59,4 @@ export default function SetupScreen() {
 const styles = StyleSheet.create({
   header: { gap: Spacing.sm, marginBottom: Spacing.xl },
   title: { marginTop: Spacing.lg },
-  notice: { marginBottom: Spacing.xl },
 });

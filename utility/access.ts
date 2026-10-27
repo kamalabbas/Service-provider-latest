@@ -39,3 +39,9 @@ export const canDeleteRoles = (user?: User | null) => can(user, ["roles.delete"]
 export const canAssignRoles = (user?: User | null) => can(user, ["roles.manage", "users.manage"]);
 /** Type change is SuperAdmin-only; no permission grants it. */
 export const canChangeUserType = (user?: User | null) => isAdministrator(grantsOf(user));
+
+// Guide 04: profiles. A missing permission is not a missing profile.
+export const canViewOwnProfile = (user?: User | null) => can(user, ["profiles.view"], true);
+export const canEditOwnProfile = (user?: User | null) => can(user, ["profiles.manage"], true);
+/** Target-user profile routes are SuperAdmin-only (full session). */
+export const canManageUserProfiles = (user?: User | null) => isAdministrator(grantsOf(user));

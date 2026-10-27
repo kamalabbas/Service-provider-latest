@@ -24,6 +24,7 @@ export default function SetupLayout() {
     >
       <Stack.Screen name="index" options={{ title: "Account Setup", headerShown: false }} />
       <Stack.Screen name="member-type" options={{ title: "Member Type" }} />
+      <Stack.Screen name="profile" options={{ title: "Profile" }} />
     </Stack>
   );
 }

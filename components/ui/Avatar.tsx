@@ -1,11 +1,14 @@
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { StyleSheet, Text, View } from "react-native";
+import { ImageComponent } from "./imageComponent";
 
-// Initial-based avatar until profile pictures arrive with guide 04.
-export function Avatar({ name, size = 48 }: { name?: string; size?: number }) {
+// The profile picture (guide 04) when there is one, otherwise an initial.
+export function Avatar({ name, uri, size = 48 }: { name?: string; uri?: string | null; size?: number }) {
   const background = useThemeColor({}, "primaryLight");
   const tint = useThemeColor({}, "tint");
   const initial = name?.trim().charAt(0).toUpperCase() || "?";
+
+  if (uri) return <ImageComponent source={uri} width={size} height={size} />;
 
   return (
     <View

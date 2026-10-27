@@ -17,6 +17,7 @@ export default function MenuLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: "Account", headerShown: false }} />
+      <Stack.Screen name="profile" options={{ title: "Profile" }} />
       <Stack.Screen name="changeEmailPassword" options={{ title: "Email & password" }} />
     </Stack>
   );

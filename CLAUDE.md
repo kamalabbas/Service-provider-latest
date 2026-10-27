@@ -17,7 +17,7 @@ The "BRDs" are the frontend handbook guides in
 - **Never launch, drive, reload or screenshot the emulator / Expo Go unless the user asks.**
 - Never add or upgrade npm packages without the user's approval (use the existing lockfile).
 - Keep existing code patterns. Use the design system (`@/constants/Theme`, `useThemeColor`, `components/ui/*`); never hard-code colors, spacing or font sizes in screens.
-- Commit/push only when asked. Flow: branch `guide-NN-<slug>` (or a descriptive name) → commit → fast-forward `main` → push both. The GitHub CLI is not installed, so there are no PRs.
+- Commit/push only when asked. Commit subjects describe what changed (guide number only as a suffix, e.g. "Add profile setup form (guide 04)"), with a body listing the changes. Flow: branch `guide-NN-<slug>` (or a descriptive name) → commit → fast-forward `main` → push both. The GitHub CLI is not installed, so there are no PRs.
 - The backend is unreachable from this machine (a network firewall intercepts `auete.store` TLS). Don't bypass certificate checks; report "not verified against the live API".
 
 ## Commands

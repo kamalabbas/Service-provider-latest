@@ -105,6 +105,16 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 - The Account tab shows the member type and membership ID, and offers **Deactivate account** behind an explicit confirmation. `POST /api/members/me/deactivate` revokes every session server-side; the app then signs out locally and clears caches. Business history is kept; only an administrator can reactivate.
 - Admin users, roles and permissions (all users, exact-email lookup, deactivate/reactivate, SuperAdmin-only type change, role create/edit/delete, permission catalogue, user role replacement) have services and hooks in `services/memberService.ts` / `hooks/useMembership.ts`, gated in `utility/access.ts`. Role replacement sends the complete set and refuses SuperAdmin's role ID. No admin screens yet.
 
+## Profiles (guide 04)
+
+- One form (`components/profile/ProfileForm.tsx`) serves onboarding (setup step 2, **Complete your profile**) and later edits (Account → **Profile**). It loads `GET /api/members/me/profile` (`data: null` means a first profile) and saves the complete record with `PUT /api/members/me/profile`.
+- Sections follow the member's **current user type**: a Tradeperson picks one or more distinct occupations with licence text for each; Public & Government Sector needs a sector name. Other types send no occupations and no sector name, so the server removes details that no longer apply. Rules live in `utility/profileForm.ts` (yup schema + request mapping).
+- `isPostalSameAsAddress` is always sent; when it is off, the four postal fields are required. Blank optional fields are sent as null. The contact email is business contact information and never changes the sign-in email.
+- Region and occupation selections use reference codes. A saved choice that has since been retired stays visible (marked retired) while unchanged but can't be picked again.
+- After the onboarding save the session is refreshed; once the new token has `profileCompletionRequired: false` the app opens the member screens. If it doesn't clear, the screen says so and offers **Check again**.
+- The picture (`PUT /api/members/me/profile/picture`, field `picture`) needs a saved profile; the app checks JPEG/PNG, 5 MB and 16 million pixels before uploading. The Account card shows the name and picture.
+- SuperAdmin target-user profile read/save/history/picture routes have services and hooks (`services/profileService.ts`, `hooks/useProfile.ts`). No admin screens yet.
+
 ## Reference choices (guide 06)
 
 - `useReferenceChoices(catalogue)` loads the active choices for `regions` (public), `occupations`, `employee-positions` and `licence-types` (`reference.view`, allowed during profile setup) from `/api/members/{catalogue}`. Lists are never hard-coded.
