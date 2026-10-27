@@ -113,7 +113,7 @@ function harness(options = {}) {
   let token = options.saved === undefined ? 'saved-refresh' : options.saved;
   let savedTheme = options.savedTheme ?? null;
   let policy = JSON.stringify({ version: 1, state: 'allowed' });
-  let fonts = [true, null], current, restoreCalls = 0, appVersionData;
+  let fonts = [true, null], current, restoreCalls = 0;
   const sameDeps = (a, b) => a && b && a.length === b.length && a.every((value, i) => Object.is(value, b[i]));
   const react = {
     createContext(value) {
@@ -187,7 +187,6 @@ function harness(options = {}) {
     '@/hooks/useColorScheme': { useColorScheme: () => options.systemScheme ?? 'light' },
     '@/stores/toastStore': { useToastStore: select => select ? select(toastState) : toastState },
     '@/hooks/useThemeColor': { useThemeColor: () => '#fff' },
-    '@/hooks/useAppVersion': { __esModule: true, default: () => appVersionData },
     '@/utility/restoreUser': { restoreUser: () => {
       restoreCalls++;
       return options.restore ? options.restore() : load('utility/restoreUser.ts').restoreUser();
@@ -271,7 +270,6 @@ function harness(options = {}) {
   const notificationStore = load('stores/notificationStore.ts').useNotificationStore;
   const session = load('services/authSession.ts');
   const queryClient = load('services/queryClient.ts').queryClient;
-  const updateContext = load('hooks/useAppUpdatePolicy.ts').AppUpdatePolicyContext;
   store.subscribe(() => { for (const instance of mounts) if (instance.active) instance.dirty = true; });
   themeStore.subscribe(() => { for (const instance of mounts) if (instance.active) instance.dirty = true; });
   notificationStore.subscribe(() => { for (const instance of mounts) if (instance.active) instance.dirty = true; });
@@ -282,10 +280,6 @@ function harness(options = {}) {
     get token() { return token; },
     get policy() { return policy; },
     setFonts: (loaded, error = null) => { fonts = [loaded, error]; },
-    setUpdatePolicy(value) {
-      appVersionData = value ? { data: { appVersionPolicy: value } } : undefined;
-      for (const instance of mounts) if (instance.active) instance.dirty = true;
-    },
     screens(instance) {
       const navigator = findElement(instance.tree, Stack) ?? findElement(instance.tree, Tabs);
       const names = navigator ? Array.from(filterScreens(navigator.props.children).screens, screen => screen.name) : [];
@@ -304,8 +298,6 @@ function harness(options = {}) {
           current = instance;
           instance.cursor = 0; instance.effects = []; instance.dirty = false;
           instance.tree = Component();
-          const provider = findElement(instance.tree, updateContext.Provider);
-          if (provider) updateContext.value = provider.props.value;
           for (const slot of instance.effects) { slot.cleanup?.(); slot.cleanup = slot.setup(); }
           return instance.tree;
         },
@@ -701,7 +693,6 @@ async function protectedProbe(h, root) {
 }
 
 const authFlows = ['index', 'register', 'forgot-password', 'otp-forgot-password', 'otp-register', 'set-new-password'];
-const forcePolicy = { action: 'force', message: 'Please install the required update.', latestVersion: 102, updateUrl: 'https://updates.example.test/app' };
 
 test('cold start without credentials rejects a protected deep link before a private query can start', async () => {
   const h = harness({ saved: null }), root = h.mount();
@@ -816,90 +807,6 @@ test('logout immediately removes protected descendants and their navigation hist
   assert.equal(h.queryClient.getQueryData(['private']), undefined);
   await logout.refreshToken; await cleanup;
   assert.equal(h.store.getState().accessToken, null);
-});
-
-for (const signedIn of [false, true]) {
-  test(`confirmed force policy makes only the update screen accessible (signedIn=${signedIn})`, async () => {
-    const h = harness({ noBackend: true }), root = h.mount();
-    await h.flush();
-    if (signedIn) { await h.session.setAuthenticatedSession(account); await h.flush(); }
-    const auth = h.mount('app/(auth)/_layout.tsx');
-    const dashboard = h.mount('app/(dashboard)/_layout.tsx');
-    let state = stackRouter.getInitialState(routeConfig(h.screens(root)));
-    h.setUpdatePolicy(forcePolicy); await h.flush();
-    assert.deepEqual(h.screens(root), ['(auth)']);
-    assert.deepEqual(h.screens(auth), ['forced-update']);
-    assert.equal(dashboard.tree, null);
-    assert.equal((await protectedProbe(h, root)).requests, 0);
-    state = stackRouter.getStateForRouteNamesChange(state, routeConfig(h.screens(root)));
-    assert.equal(state.routes[0].name, '(auth)');
-    let authState = stackRouter.getRehydratedState({ stale: true, routes: [{ name: 'register' }] }, routeConfig(h.screens(auth)));
-    assert.equal(authState.routes[0].name, 'forced-update');
-    const key = authState.routes[0].key;
-    for (let i = 0; i < 15; i++) {
-      root.render(); auth.render();
-      authState = stackRouter.getStateForRouteNamesChange(authState, routeConfig(h.screens(auth)));
-      assert.equal(authState.routes[0].key, key, 'Stable state instead of repeated imperative replacement');
-      assert.deepEqual(h.screens(auth), ['forced-update']);
-    }
-    h.setUpdatePolicy(undefined); await h.flush();
-    const normal = stackRouter.getStateForRouteNamesChange(state, routeConfig(h.screens(root)));
-    assert.equal(normal.routes[0].name, signedIn ? '(dashboard)' : '(auth)');
-    if (!signedIn) {
-      const cleared = stackRouter.getStateForRouteNamesChange(authState, routeConfig(h.screens(auth)));
-      assert.equal(cleared.routes[0].name, 'index');
-    }
-  });
-}
-
-test('force policy during restoration still waits for bootstrap and font readiness', async () => {
-  const h = harness(); h.setFonts(false); h.setUpdatePolicy(forcePolicy);
-  const root = h.mount();
-  await until(() => h.refreshes.length === 1);
-  assert.equal(root.tree, null);
-  h.refreshes[0].resolve(response); await h.flush();
-  assert.equal(root.tree, null);
-  h.setFonts(true); root.render();
-  assert.deepEqual(h.screens(root), ['(auth)']);
-  assert.equal((await protectedProbe(h, root)).requests, 0);
-  root.layout();
-  assert.deepEqual(h.splash, ['prevent', 'hide']);
-});
-
-test('forced-update content reads the root policy without requiring an imperative redirect or trusting link parameters', async () => {
-  const h = harness({ noBackend: true, params: { message: 'Link message', latestVersion: '999', updateUrl: 'https://link.example.test' } });
-  const root = h.mount(); await h.flush();
-  h.setUpdatePolicy(forcePolicy); await h.flush();
-  const update = h.mount('app/(auth)/forced-update.tsx');
-  const button = findElement(update.tree, 'PrimaryButton');
-  assert.equal(button.props.disabled, false);
-  button.props.onPress();
-  assert.deepEqual(h.links, [forcePolicy.updateUrl]);
-  assert.equal(JSON.stringify(update.tree).includes(forcePolicy.message), true);
-  assert.equal(JSON.stringify(update.tree).includes('Link message'), false);
-  assert.deepEqual(h.screens(root), ['(auth)']);
-});
-
-test('soft-update feedback waits for startup readiness and appears once across rerenders', async () => {
-  const h = harness({ noBackend: true }); h.setFonts(false);
-  h.setUpdatePolicy({ ...forcePolicy, action: 'soft' });
-  const root = h.mount(); await h.flush();
-  assert.equal(h.toasts.length, 0);
-  h.setFonts(true); root.render();
-  for (let i = 0; i < 10; i++) { h.setUpdatePolicy({ ...forcePolicy, action: 'soft' }); root.render(); }
-  assert.equal(h.toasts.length, 1);
-  assert.deepEqual(h.toasts[0], [forcePolicy.message, 'error', true, 'Update', forcePolicy.updateUrl]);
-  assert.deepEqual(h.screens(root), ['(auth)', '+not-found']);
-});
-
-test('unavailable or pending version policy never becomes another startup gate', async () => {
-  const h = harness({ noBackend: true }), root = h.mount();
-  await h.flush();
-  assert.deepEqual(h.screens(root), ['(auth)', '+not-found']);
-  await h.session.setAuthenticatedSession(account); await h.flush();
-  assert.equal((await protectedProbe(h, root)).requests, 1);
-  h.setUpdatePolicy(undefined); await h.flush();
-  assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found']);
 });
 
 test('repeated login/logout transitions consistently prune history without repeating restoration', async () => {

@@ -2182,7 +2182,7 @@ for (const [mutationName, expected] of [
   });
 }
 
-for (const endpoint of ['/Auth/Refresh', '/Auth/Logout', '/Auth/CheckAppVersion']) {
+for (const endpoint of ['/Auth/Refresh', '/Auth/Logout']) {
   for (const status of [401, 500]) {
     test(`${endpoint} HTTP ${status} remains silent and never starts refresh`, async () => {
       const h = harness();

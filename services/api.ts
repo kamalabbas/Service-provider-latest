@@ -41,7 +41,6 @@ const requestPolicies: Record<string, RequestPolicy> = {
   "/auth/resetpassword": { action: "resetPassword", refresh: false },
   "/auth/refresh": { refresh: false, silent: true },
   "/auth/logout": { refresh: false, silent: true },
-  "/auth/checkappversion": { refresh: false, silent: true },
   "/auth/credentials/changeemail": { action: "changeEmail", refresh: true },
   "/auth/credentials/verifynewemail": { action: "verifyCode", refresh: true },
   "/auth/credentials/changepassword": { action: "changePassword", refresh: true },

@@ -71,9 +71,11 @@ The `development` profile still requests a custom development client, but `expo-
 
 ## Backend configuration
 
-With the API host unset, the sign-in screen launches but backend-dependent actions are disabled. Startup skips session restoration and push/version requests; persisted refresh credentials are preserved. No demonstration credentials, fake sessions, or replacement backend paths are provided.
+With the API host unset, the sign-in screen launches but backend-dependent actions are disabled. Startup skips session restoration and push requests; persisted refresh credentials are preserved. No demonstration credentials, fake sessions, or replacement backend paths are provided.
 
-The existing authentication, session, notification, and version-check implementations remain connected to their generic `/Auth/*` and `/PushNotification/*` paths. Compatibility with the new backend is unverified. Confirm response envelopes, user IDs, email verification status, tokens, refresh rotation, logout, and version policy before configuring a host.
+The DEV API origin is `https://dev-api-sp.auete.store`. The frontend handbook's `zourwa.com` hosts are incorrect; use the `auete.store` domain for API and SignalR hosts.
+
+The existing authentication, session, and notification implementations remain connected to their generic `/Auth/*` and `/PushNotification/*` paths. Compatibility with the new backend is unverified. Confirm response envelopes, user IDs, email verification status, tokens, refresh rotation, and logout before configuring a host. The legacy app-version check and forced-update screen were removed; the Service Provider backend has no version-policy endpoint.
 
 Lookup/location serialization and query hooks remain reusable. Their endpoints must be passed explicitly from an approved API contract. Without endpoints, the hooks are disabled and the services reject manual calls. No lookup domains or product-specific profile rules have been invented.
 
@@ -94,13 +96,12 @@ The shared Zustand selector `selectIsAuthenticated` requires both an in-memory a
 
 | State after startup readiness | Available routes |
 | --- | --- |
-| Signed out, no force policy | Sign in, registration, email OTP, password recovery/reset, and not-found |
-| Authenticated, no force policy | Home/Menu and credential settings, and not-found |
-| Confirmed force policy, either session state | Only `/(auth)/forced-update` |
+| Signed out | Sign in, registration, email OTP, password recovery/reset, and not-found |
+| Authenticated | Home/Menu and credential settings, and not-found |
 
-Signed-out protected deep links fall back to Sign In. After explicit login, Home opens without resuming the denied link. Signed-in navigation to ordinary auth routes falls back to Home. The dashboard also returns no descendants when authentication is absent or a force policy is active, covering removal of an existing native route after logout or access loss. Clearing authentication still uses the existing generation, cache-cancellation, persistence, and refresh-recovery mechanisms.
+Signed-out protected deep links fall back to Sign In. After explicit login, Home opens without resuming the denied link. Signed-in navigation to ordinary auth routes falls back to Home. The dashboard also returns no descendants when authentication is absent, covering removal of an existing native route after logout or access loss. Clearing authentication still uses the existing generation, cache-cancellation, persistence, and refresh-recovery mechanisms.
 
-The root's existing version check is shared through `AppUpdatePolicyContext`. Nested layouts and the update screen consume that value without starting another check. Version loading/failure remains nonblocking; normal routes are available until a force policy is known. Once known, guards exclude normal routes and not-found. Expo Router sitemap generation is disabled for this native app, and the root does not declare a generated `_sitemap` screen. The existing update screen reads policy content directly, so no imperative redirect or URL-parameter handoff is required. Clearing the force policy restores normal route availability. Soft-update feedback still appears once after startup readiness.
+Expo Router sitemap generation is disabled for this native app, and the root does not declare a generated `_sitemap` screen.
 
 The unused `useProtectedRoute` hook and the fully replaced `useUserStateRedirect` hook have been removed. Navigation protection tests are included in `node tests/startup.test.cjs`. They execute the real application layouts, installed Expo guard-filtering code, React Navigation's stack state engine, and a request-capable React Query probe with mocked native/UI boundaries. Android/iOS deep-link delivery, native mounting/unmounting, and back gestures still need device verification. Client route guards do not replace backend authorization.
 
@@ -110,9 +111,9 @@ The unused `useProtectedRoute` hook and the fully replaced `useUserStateRedirect
 
 Bare 400/401 failures use action-specific or generic feedback. HTTP 403 reports permission denial; 404 treats missing/inaccessible records identically; 413 reports an oversized file; 429 asks the user to wait (Retry-After is optional). HTTP 503 `EMAIL_DELIVERY_FAILED` explains that account creation may already have succeeded and suggests verification resend/recovery retry. `mapApiValidation(error, fields, aliases)` matches known controls case-insensitively, accepts explicit model-path aliases, and returns unmapped Identity/model messages as a summary. Feature forms bind the returned fields to React Hook Form without resetting drafts. Existing Yup validation remains active.
 
-The endpoint policy table excludes both current Service Provider public/mobile auth paths and retained legacy public auth/version paths from automatic refresh/replay. An authenticated API request can share one coordinated refresh and replay once. Failed refresh or a replayed 401 clears the session and requires explicit sign-in. Anonymous requests never initiate refresh; account credentials are not forwarded to another origin. Authenticated requests send `Cache-Control: no-store`. Session-generation checks remain in dispatch, refresh completion, and error presentation.
+The endpoint policy table excludes both current Service Provider public/mobile auth paths and retained legacy public auth paths from automatic refresh/replay. An authenticated API request can share one coordinated refresh and replay once. Failed refresh or a replayed 401 clears the session and requires explicit sign-in. Anonymous requests never initiate refresh; account credentials are not forwarded to another origin. Authenticated requests send `Cache-Control: no-store`. Session-generation checks remain in dispatch, refresh completion, and error presentation.
 
-Interactive failures show one error toast per error object, even when both the interceptor and hook/catch receive it. Cancellation and stale-session failures remain silent, including when a failed refresh retires its originating generation. Version checks, background push registration, refresh, and best-effort server logout also remain silent. Push registration stays protected despite its notification policy. Weak references track handled errors without retaining their payloads. Local authentication persistence failures also get one controlled error message; their presentation is bound to the generation that attempted persistence.
+Interactive failures show one error toast per error object, even when both the interceptor and hook/catch receive it. Cancellation and stale-session failures remain silent, including when a failed refresh retires its originating generation. Background push registration, refresh, and best-effort server logout also remain silent. Push registration stays protected despite its notification policy. Weak references track handled errors without retaining their payloads. Local authentication persistence failures also get one controlled error message; their presentation is bound to the generation that attempted persistence.
 
 HTTP helpers remain generic, default to `unknown`, and return the complete response body. Service Provider callers explicitly pass `ApiResponse<Payload>`, for example `getData<ApiResponse<Payload>>(url)` or `postData<Request, ApiResponse<Payload>>(url, body)`. This retains typed data, `traceId`, and `code` without coupling the helpers to an envelope. Null/omitted data is preserved. Legacy, health, text, and binary responses keep their own types. The success interceptor preserves the full Axios response, including headers and status.
 
@@ -201,13 +202,13 @@ The native identifiers create separate applications with their own installation 
 
 The BRDs must define provider profiles, roles/permissions, onboarding, approval states, support/content pages, media uploads, locations/lookups, and any other product functionality. Authentication compatibility, API hosts, native/cloud ownership, Firebase files, store links, and push routing also remain pending.
 
-Further infrastructure/security enhancements remain separate tasks. Password rules, theme persistence, and numeric version encoding remain unchanged.
+Further infrastructure/security enhancements remain separate tasks. Password rules and theme persistence remain unchanged.
 
 See [the cleanup report](docs/cleanup-report.md) for the file inventory and validation results.
 
 ## Push notification lifecycle
 
-The root layout owns notification listeners and starts permission/token acquisition before sign-in. Push setup never gates fonts, theme hydration, session restoration, splash dismissal, protected routes, or the update policy. An unset `EXPO_PUBLIC_BASE_URL` does not start this lifecycle. Token acquisition additionally requires a physical native device, a configured EAS project, and a native build rather than Expo Go. It uses the retained EAS project and the approved Service Provider native identities; build-variant validation remains unchanged. `expo-notifications` is included in the config-plugin list for native notification configuration.
+The root layout owns notification listeners and starts permission/token acquisition before sign-in. Push setup never gates fonts, theme hydration, session restoration, splash dismissal, or protected routes. An unset `EXPO_PUBLIC_BASE_URL` does not start this lifecycle. Token acquisition additionally requires a physical native device, a configured EAS project, and a native build rather than Expo Go. It uses the retained EAS project and the approved Service Provider native identities; build-variant validation remains unchanged. `expo-notifications` is included in the config-plugin list for native notification configuration.
 
 The Expo token belongs to the installation. It remains in the existing auth store's `pushNotificationToken` field for logout compatibility, independently of account authentication, and is reacquired in a fresh process. The old SecureStore `push_token` entry is no longer read or written. Concurrent acquisition attempts share one operation, root remounts do not repeat permission prompts, and native token changes resolve the latest Expo token before publishing it. Foregrounding checks for permission changes and can retry a failed acquisition without prompting again or fetching another Expo token when the current one is still usable. Authentication becoming available can also retry a missing token. Denial and native/Expo errors leave authentication untouched and produce no alerts or token/payload logs.
 
