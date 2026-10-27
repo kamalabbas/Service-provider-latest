@@ -19,9 +19,8 @@ export interface sendEmailOtpRequest {
   email: string;
 }
 
-// Legacy credential and recovery shapes below still call /Auth/* paths. Password
-// recovery migrates with guide 02; the new backend documents no change-email or
-// change-password endpoints.
+// Legacy credential shapes below still call /Auth/Credentials/* paths; the new
+// backend documents no change-email or change-password endpoints.
 export interface Token {
   accessToken: string;
   refreshToken: string;
@@ -48,26 +47,3 @@ export interface ChangePasswordRequest {
 }
 
 export interface ChangePasswordResponse {}
-
-export interface setNewPasswordRequest {
-  newPassword: string;
-  confirmPassword: string;
-  forgotPasswordToken: string;
-}
-
-export interface setNewPasswordResponse {}
-
-export interface sendForgotPasswordOtpRequest {
-  email: string;
-}
-
-export interface SendForgotPasswordOtpResponse {}
-
-export interface VerifyResetPasswordOtpRequest {
-  email: string;
-  otp: string;
-}
-
-export interface VerifyResetPasswordOtpResponse {
-  forgotPasswordToken: string;
-}

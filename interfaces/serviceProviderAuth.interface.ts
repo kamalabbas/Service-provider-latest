@@ -19,6 +19,26 @@ export interface VerifyEmailRequest {
   code: string;
 }
 
+/** Guide 02. Email follows the registration rules (valid, at most 254 characters). */
+export interface PasswordRecoveryRequest {
+  email: string;
+}
+
+/** Precheck only: it neither consumes the code nor returns a reset token. */
+export interface CheckPasswordRecoveryCodeRequest {
+  email: string;
+  /** Six digits (^[0-9]{6}$); keep leading zeroes. */
+  code: string;
+}
+
+/** Final reset: the same email and code, plus the new password and its confirmation. */
+export interface ResetPasswordRequest {
+  email: string;
+  code: string;
+  newPassword: string;
+  confirmNewPassword: string;
+}
+
 /** Access-token fields shared by the mobile authentication payload. */
 export interface AccessTokenResponse {
   accessToken: string;

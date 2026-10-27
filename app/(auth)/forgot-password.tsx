@@ -3,7 +3,7 @@ import { AuthLayout } from "@/components/ui/AuthLayout";
 import { BackToLogin } from "@/components/ui/BackToLogin";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { useAuth } from "@/hooks/useAuth";
-import { sendForgotPasswordOtpRequest } from "@/interfaces/auth.interface";
+import { PasswordRecoveryRequest } from "@/interfaces/serviceProviderAuth.interface";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useRouter } from "expo-router";
 import React from "react";
@@ -35,7 +35,7 @@ export default function ForgotPasswordScreen() {
   // API Request Hook
   const { mutate: sendForgetPasswordMutate, isPending } = useAuth().sendForgetPasswordMutation;
 
-  const onSubmit = (data: sendForgotPasswordOtpRequest) => {
+  const onSubmit = (data: PasswordRecoveryRequest) => {
     sendForgetPasswordMutate(data);
   };
 

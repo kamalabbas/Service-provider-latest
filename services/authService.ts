@@ -9,20 +9,17 @@ import {
   ChangePasswordResponse,
   LoginRequest,
   RegisterRequest,
-  sendForgotPasswordOtpRequest,
-  SendForgotPasswordOtpResponse,
-  setNewPasswordRequest,
-  setNewPasswordResponse,
   VerifyEmailOtpResponse,
   VerifyNewEmailRequest,
-  VerifyResetPasswordOtpRequest,
-  VerifyResetPasswordOtpResponse,
 } from "@/interfaces/auth.interface";
 import {
+  CheckPasswordRecoveryCodeRequest,
   MobileAuthResponseApiResponse,
   MobileSignOutRequest,
   ObjectApiResponse,
+  PasswordRecoveryRequest,
   ResendVerificationRequest,
+  ResetPasswordRequest,
   VerifyEmailRequest,
 } from "@/interfaces/serviceProviderAuth.interface";
 
@@ -68,17 +65,17 @@ export const changePassword = (body: ChangePasswordRequest, operation?: Authenti
   return postAuthentication<ChangePasswordRequest, BaseResponse<ChangePasswordResponse>>("/Auth/Credentials/ChangePassword", body, operation);
 };
 
-// Legacy password recovery; migrates with guide 02.
-export const sendForgotPasswordOtp = (body: sendForgotPasswordOtpRequest, operation?: AuthenticationOperation) => {
-  return postAuthentication<sendForgotPasswordOtpRequest, BaseResponse<SendForgotPasswordOtpResponse>>("/Auth/SendForgotPasswordOtp", body, operation);
+// Guide 02: password recovery.
+export const requestPasswordRecovery = (body: PasswordRecoveryRequest, operation?: AuthenticationOperation) => {
+  return postAuthentication<PasswordRecoveryRequest, ObjectApiResponse>("/api/auth/request-password-recovery", body, operation);
 };
 
-export const verifyResetPasswordOtp = (body: VerifyResetPasswordOtpRequest, operation?: AuthenticationOperation) => {
-  return postAuthentication<VerifyResetPasswordOtpRequest, BaseResponse<VerifyResetPasswordOtpResponse>>("/Auth/VerifyForgotPasswordOtp", body, operation);
+export const checkPasswordRecoveryCode = (body: CheckPasswordRecoveryCodeRequest, operation?: AuthenticationOperation) => {
+  return postAuthentication<CheckPasswordRecoveryCodeRequest, ObjectApiResponse>("/api/auth/check-password-recovery-code", body, operation);
 };
 
-export const setNewPassword = (body: setNewPasswordRequest, operation?: AuthenticationOperation) => {
-  return postAuthentication<setNewPasswordRequest, BaseResponse<setNewPasswordResponse>>("/Auth/ResetPassword", body, operation);
+export const resetPassword = (body: ResetPasswordRequest, operation?: AuthenticationOperation) => {
+  return postAuthentication<ResetPasswordRequest, ObjectApiResponse>("/api/auth/reset-password", body, operation);
 };
 
 export default {
@@ -86,9 +83,9 @@ export default {
   register,
   verifyEmail,
   resendVerification,
-  sendForgotPasswordOtp,
-  verifyResetPasswordOtp,
-  setNewPassword,
+  requestPasswordRecovery,
+  checkPasswordRecoveryCode,
+  resetPassword,
   changePassword,
   logout,
 };

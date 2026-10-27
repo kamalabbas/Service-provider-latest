@@ -4,35 +4,34 @@ import {
   ChangePasswordResponse,
   LoginRequest,
   RegisterRequest,
-  sendForgotPasswordOtpRequest,
-  SendForgotPasswordOtpResponse,
-  setNewPasswordRequest,
-  setNewPasswordResponse,
   VerifyEmailOtpResponse,
   VerifyNewEmailRequest,
-  VerifyResetPasswordOtpRequest,
-  VerifyResetPasswordOtpResponse,
 } from "@/interfaces/auth.interface";
 import { BaseResponse } from "@/interfaces/baseResponse.interface";
 import {
+  CheckPasswordRecoveryCodeRequest,
   MobileAuthResponseApiResponse,
   MobileSignOutRequest,
   ObjectApiResponse,
+  PasswordRecoveryRequest,
+  ResetPasswordRequest,
   VerifyEmailRequest,
 } from "@/interfaces/serviceProviderAuth.interface";
+import { queryClient } from "@/services/queryClient";
+import { usePasswordRecoveryStore } from "@/stores/passwordRecoveryStore";
 import { sessionUserFrom } from "@/utility/accessToken";
 import { getInstallationId } from "@/utility/installationId";
 import {
   changeEmail,
   changePassword,
+  checkPasswordRecoveryCode,
   login,
   logout,
   register,
-  sendForgotPasswordOtp,
-  setNewPassword,
+  requestPasswordRecovery,
+  resetPassword,
   verifyEmail,
   verifyNewEmail,
-  verifyResetPasswordOtp,
 } from "@/services/authService";
 import { AuthenticationOperation, beginAuthenticationOperation, beginSessionLogout, clearSession, finishSessionLogout, getSessionGeneration, isCurrentAuthenticationOperation, setAuthenticatedSession } from "@/services/authSession";
 import { notifyApiError } from "@/services/api";
@@ -44,6 +43,9 @@ import { CanceledError, isCancel } from "axios";
 import { useRouter } from "expo-router";
 
 const authenticationRequests = new WeakMap<object, AuthenticationOperation>();
+
+// Guide 02: identical for unknown, deactivated and undeliverable accounts.
+export const RECOVERY_SENT_MESSAGE = "If this account can receive recovery email, a code has been sent.";
 
 function assertCurrentOperation(operation?: AuthenticationOperation): asserts operation is AuthenticationOperation {
   if (!operation || !isCurrentAuthenticationOperation(operation)) {
@@ -212,40 +214,46 @@ export function useAuth() {
     },
   });
 
-  // Send Forget Password mutation
-  const sendForgetPasswordMutation = useAuthenticationMutation<BaseResponse<SendForgotPasswordOtpResponse>, sendForgotPasswordOtpRequest>({
-    mutationFn: sendForgotPasswordOtp,
+  // Guide 02: request a recovery code. The response never reveals whether the
+  // account exists, so the message is neutral. Email stays in transient state.
+  const sendForgetPasswordMutation = useAuthenticationMutation<ObjectApiResponse, PasswordRecoveryRequest>({
+    mutationFn: requestPasswordRecovery,
     onError: (error) => notifyApiError(error, { action: "sendCode" }),
     onSuccess: (_response, variables) => {
-      try {
-        router.push({
-          pathname: "/(auth)/otp-forgot-password",
-          params: { email: variables.email },
-        });
-      } catch {
-        console.warn("Password-reset navigation failed.");
+      usePasswordRecoveryStore.getState().setEmail(variables.email);
+      showToast(RECOVERY_SENT_MESSAGE, "success");
+      router.push("/(auth)/otp-forgot-password");
+    },
+  });
+
+  // Optional precheck: it neither consumes the code nor returns a reset token.
+  const verifyResetPasswordOtpMutation = useAuthenticationMutation<ObjectApiResponse, CheckPasswordRecoveryCodeRequest>({
+    mutationFn: checkPasswordRecoveryCode,
+    onError: (error) => notifyApiError(error, { action: "verifyCode" }),
+    onSuccess: (_response, variables) => {
+      usePasswordRecoveryStore.getState().setCode(variables.code);
+      router.push("/(auth)/set-new-password");
+    },
+  });
+
+  // Final reset with the same email and code. It does not sign in.
+  const setNewPasswordMutation = useAuthenticationMutation<ObjectApiResponse, ResetPasswordRequest>({
+    mutationFn: resetPassword,
+    onError: (error) => {
+      notifyApiError(error, { action: "resetPassword" });
+      // A password-policy failure keeps the code usable; a rejected code
+      // (invalid, expired or exhausted) sends the member back to code entry.
+      const fieldKeys = Object.keys(toAppError(error).validationErrors ?? {}).map((key) => key.toLowerCase());
+      if (fieldKeys.includes("code")) {
+        usePasswordRecoveryStore.getState().setCode(null);
+        router.replace("/(auth)/otp-forgot-password");
       }
     },
-  });
-
-  // Verify Reset Password mutation
-  const verifyResetPasswordOtpMutation = useAuthenticationMutation<BaseResponse<VerifyResetPasswordOtpResponse>, VerifyResetPasswordOtpRequest>({
-    mutationFn: verifyResetPasswordOtp,
-    onError: (error) => notifyApiError(error, { action: "verifyCode" }),
-    onSuccess: (response) => {
-      router.push({
-        pathname: "/(auth)/set-new-password",
-        params: { forgotPasswordToken: response.data?.forgotPasswordToken },
-      });
-    },
-  });
-
-  // Reset Password mutation
-  const setNewPasswordMutation = useAuthenticationMutation<BaseResponse<setNewPasswordResponse>, setNewPasswordRequest>({
-    mutationFn: setNewPassword,
-    onError: (error) => notifyApiError(error, { action: "resetPassword" }),
     onSuccess: (_response, _request, operation) => {
-      showToast("Password has been reset successfully. Please login.", "success");
+      // Reset revokes refresh sessions server-side; drop transient and cached private data.
+      usePasswordRecoveryStore.getState().clear();
+      queryClient.clear();
+      showToast("Your password has been reset. Sign in with your new password.", "success");
       setTimeout(() => {
         if (isCurrentAuthenticationOperation(operation)) router.replace("/(auth)");
       }, 1000);

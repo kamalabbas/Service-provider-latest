@@ -75,7 +75,7 @@ With the API host unset, the sign-in screen launches but backend-dependent actio
 
 The DEV API origin is `https://dev-api-sp.auete.store`. The frontend handbook's `zourwa.com` hosts are incorrect; use the `auete.store` domain for API and SignalR hosts.
 
-Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend-verification`, `/mobile/sign-in`, `/mobile/refresh`, `/mobile/sign-out`). Password recovery still calls the legacy `/Auth/SendForgotPasswordOtp`, `/VerifyForgotPasswordOtp` and `/ResetPassword` paths until guide 02. The Menu's change-email and change-password actions call legacy `/Auth/Credentials/*` paths that the Service Provider backend does not document. Push registration still uses `/PushNotification/*` until guide 17. The legacy app-version check and forced-update screen were removed; the Service Provider backend has no version-policy endpoint.
+Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend-verification`, `/mobile/sign-in`, `/mobile/refresh`, `/mobile/sign-out`). Password recovery follows guide 02 (see below). The Menu's change-email and change-password actions call legacy `/Auth/Credentials/*` paths that the Service Provider backend does not document. Push registration still uses `/PushNotification/*` until guide 17. The legacy app-version check and forced-update screen were removed; the Service Provider backend has no version-policy endpoint.
 
 ## Account access (guide 01)
 
@@ -86,6 +86,16 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 - Mobile sign-in and refresh return tokens only, with no user object. `utility/accessToken.ts` derives the signed-in user from the access-token claims: `sub` (account ID, kept as a string), `access_level`, `role`, `permission`, and an email claim when present (otherwise the sign-in email). Claims are read for UI decisions only; signatures are not verified on the device. A token without a subject or access level is rejected as an invalid session.
 - `profileCompletionRequired: true` opens the `(setup)` placeholder; normal screens stay unavailable until a refreshed full session. Guides 03 and 04 replace the placeholder with type selection and profile completion.
 - Sign-out sends the refresh token and the installation ID (`utility/installationId.ts`): one stable UUID per installation, kept in SecureStore and retained across sign-outs.
+## Password recovery (guide 02)
+
+- Forgot password calls `/api/auth/request-password-recovery` and always shows the neutral "If this account can receive recovery email, a code has been sent." Unknown, deactivated and undeliverable accounts look identical.
+- The code screen prechecks the six-digit string code with `/api/auth/check-password-recovery-code`. The precheck neither consumes the code nor returns a token. Resend uses the same request endpoint with the one-minute countdown; nothing resends automatically.
+- The password screen calls `/api/auth/reset-password` with `email`, `code`, `newPassword` and `confirmNewPassword` (same policy as registration). A password-policy rejection is shown on the field and the same code can be retried. A rejected code (invalid, expired and exhausted share one error) clears it and returns to code entry.
+- The email and code live only in `stores/passwordRecoveryStore.ts` (memory), never in route params, storage or logs. After an app restart the member requests a new code.
+- Success clears the recovery state and private query caches, then returns to Sign In. Reset never signs in or verifies an unverified email. The server revokes refresh sessions and push installations, so other devices must sign in again.
+
+## Password policy
+
 - New passwords (registration, reset, change) require 8+ characters with an uppercase letter, a lowercase letter, a number and a symbol (`utility/passwordPolicy.ts`).
 
 Lookup/location serialization and query hooks remain reusable. Their endpoints must be passed explicitly from an approved API contract. Without endpoints, the hooks are disabled and the services reject manual calls. No lookup domains or product-specific profile rules have been invented.
@@ -129,8 +139,7 @@ Interactive failures show one error toast per error object, even when both the i
 
 HTTP helpers remain generic, default to `unknown`, and return the complete response body. Service Provider callers explicitly pass `ApiResponse<Payload>`, for example `getData<ApiResponse<Payload>>(url)` or `postData<Request, ApiResponse<Payload>>(url, body)`. This retains typed data, `traceId`, and `code` without coupling the helpers to an envelope. Null/omitted data is preserved. Legacy, health, text, and binary responses keep their own types. The success interceptor preserves the full Axios response, including headers and status.
 
-No runtime envelope validation or HTTP 2xx business-code rejection is applied. JSON transport rejects unsafe numeric integers rather than silently rounding int64 IDs. IDs larger than `Number.MAX_SAFE_INTEGER` remain unsupported until a lossless serialization contract is agreed with the backend; JWT `sub` stays a string. Raw text/PDF responses are not parsed as envelopes. Password-recovery OTP resend retains its existing resolved-response/message-presence behavior until guide 02.
-
+No runtime envelope validation or HTTP 2xx business-code rejection is applied. JSON transport rejects unsafe numeric integers rather than silently rounding int64 IDs. IDs larger than `Number.MAX_SAFE_INTEGER` remain unsupported until a lossless serialization contract is agreed with the backend; JWT `sub` stays a string. Raw text/PDF responses are not parsed as envelopes.
 Shared integration helpers from guide 00:
 
 - `utility/apiTransport.ts`: HTTPS origin normalization, URLSearchParams serialization (omits null/undefined, retains false/zero, repeats array keys), safe JSON numbers, and page/pageSize bounds. `hasMore` controls loading the next page; feature screens reset page to 1 when filters change and never fetch all pages automatically.

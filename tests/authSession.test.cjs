@@ -253,6 +253,7 @@ function harness({ saved = 'A-refresh', signedIn = true, policy = policyRecord('
     authServices: () => load('services/authService.ts'),
     notification: () => load('hooks/useNotification.ts').useNotification(),
     screen: name => load(`app/(auth)/${name}.tsx`).default(),
+    recovery: () => load('stores/passwordRecoveryStore.ts').usePasswordRecoveryStore,
     holdNextMutation: () => {
       const started = deferred(), finished = deferred();
       mutationHolds.push({ started, finished });
@@ -2107,28 +2108,6 @@ const findElement = (tree, type) => {
   return null;
 };
 
-for (const signedIn of [false, true]) {
-  // Legacy recovery paths until guide 02; new auth paths are covered above.
-  for (const endpoint of ['SendForgotPasswordOtp', 'VerifyForgotPasswordOtp', 'ResetPassword']) {
-    test(`public ${endpoint} 401 never refreshes or replays (signedIn=${signedIn})`, async () => {
-      const h = harness({ signedIn });
-      const generation = h.session.getSessionGeneration();
-      let failure;
-      h.setAdapter(async config => { throw (failure = httpFailure(config, 401)); });
-      const result = await observe(h.api.post(`/Auth/${endpoint}`, { private: 'synthetic' }));
-      assert.equal(result.reason, failure);
-      assert.equal(h.refreshes.length, 0);
-      assert.equal(h.requests.length, 1);
-      assert.equal(h.requests[0]._retry, undefined);
-      assert.equal(h.session.getSessionGeneration(), generation);
-      assert.equal(h.store.getState().accessToken, signedIn ? jwt('A-access') : null);
-      assert.equal(h.disk, 'A-refresh');
-      assert.equal(h.toasts.length, 1);
-      assert.equal(h.toasts[0][1], 'error');
-    });
-  }
-}
-
 for (const [status, expected] of [
   [400, 'Unable to sign in. Check your details and try again.'],
   [401, 'Unable to sign in. Check your details and try again.'],
@@ -2411,6 +2390,7 @@ for (const name of ['otp-register', 'otp-forgot-password']) {
   test(`${name} actual resend catch cannot duplicate an interceptor error toast`, async () => {
     const h = harness();
     h.setAdapter(async config => { throw httpFailure(config, 400, { detail: 'Private resend diagnostics' }); });
+    h.recovery().getState().setEmail('A@example.test');
     const otp = findElement(h.screen(name), 'OTPComponent');
     await otp.props.reSendOtp();
     assert.equal(h.requests.length, 1);
@@ -2421,12 +2401,13 @@ for (const name of ['otp-register', 'otp-forgot-password']) {
   test(`${name} resend success uses controlled text without interpreting success:false`, async () => {
     const h = harness();
     h.setAdapter(async config => h.ok(config, { success: false, message: 'Private backend message', data: null }));
+    h.recovery().getState().setEmail('A@example.test');
     const otp = findElement(h.screen(name), 'OTPComponent');
     await otp.props.reSendOtp();
     // Verification resend must not reveal whether the account exists (guide 01).
     const expected = name === 'otp-register'
       ? 'If this email needs verification, a new code has been sent.'
-      : 'A new code has been requested. Please check your email.';
+      : 'If this account can receive recovery email, a code has been sent.';
     assert.deepEqual(h.toasts, [[expected, 'success']]);
   });
 }
@@ -2436,7 +2417,7 @@ for (const name of ['index', 'register', 'forgot-password', 'set-new-password'])
     const h = harness();
     const tree = h.screen(name);
     const form = h.forms[0];
-    form.values = name === 'set-new-password' ? { password: 'short', confirmPassword: 'mismatch' } : { email: 'invalid', password: 'short', confirmPassword: 'mismatch' };
+    form.values = name === 'set-new-password' ? { newPassword: 'short', confirmNewPassword: 'mismatch' } : { email: 'invalid', password: 'short', confirmPassword: 'mismatch' };
     await findElement(tree, 'PrimaryButton').props.onPress();
     assert.ok(Object.keys(form.errors).length > 0);
     const firstField = findElement(tree, 'Controller');
@@ -2500,8 +2481,8 @@ const authPayload = {
 };
 const authSuccessBody = (name, id = 'A') => ['registerMutation', 'verifyEmailMutation'].includes(name)
   ? emptyBody
-  : name === 'verifyResetPasswordOtpMutation'
-    ? { success: true, data: { forgotPasswordToken: 'synthetic-reset' } }
+  : ['sendForgetPasswordMutation', 'verifyResetPasswordOtpMutation', 'setNewPasswordMutation'].includes(name)
+    ? emptyBody
     : sessionBody(name, account(id));
 
 for (const name of ['loginMutation', 'registerMutation', 'verifyEmailMutation', 'verifyNewEmailMutation',
@@ -2794,5 +2775,71 @@ test('normal password-reset navigation still executes when its operation remains
   await h.auth().setNewPasswordMutation.mutateAsync(authPayload);
   timers[0]();
   assert.deepEqual(h.navigation, [['replace', '/(auth)']]);
-  assert.deepEqual(h.toasts, [['Password has been reset successfully. Please login.', 'success']]);
+  assert.deepEqual(h.toasts, [['Your password has been reset. Sign in with your new password.', 'success']]);
 });
+
+// Guide 02: password recovery.
+test('recovery request keeps the email out of the route and shows a neutral message', async () => {
+  const h = harness({ signedIn: false, saved: null });
+  h.setAdapter(async config => h.ok(config, emptyBody));
+  await h.auth().sendForgetPasswordMutation.mutateAsync({ email: 'a@example.test' });
+  assert.equal(h.requests[0].url, '/api/auth/request-password-recovery');
+  assert.deepEqual(JSON.parse(h.requests[0].data), { email: 'a@example.test' });
+  assert.deepEqual(plain(h.navigation), [['push', '/(auth)/otp-forgot-password']]);
+  assert.equal(JSON.stringify(h.navigation).includes('a@example.test'), false);
+  assert.equal(h.recovery().getState().email, 'a@example.test');
+  assert.deepEqual(h.toasts, [['If this account can receive recovery email, a code has been sent.', 'success']]);
+});
+
+test('code precheck stores the code and opens the password form without a token', async () => {
+  const h = harness({ signedIn: false, saved: null });
+  h.recovery().getState().setEmail('a@example.test');
+  h.setAdapter(async config => h.ok(config, emptyBody));
+  await h.auth().verifyResetPasswordOtpMutation.mutateAsync({ email: 'a@example.test', code: '012345' });
+  assert.equal(h.requests[0].url, '/api/auth/check-password-recovery-code');
+  assert.deepEqual(JSON.parse(h.requests[0].data), { email: 'a@example.test', code: '012345' });
+  assert.equal(h.recovery().getState().code, '012345');
+  assert.deepEqual(plain(h.navigation), [['push', '/(auth)/set-new-password']]);
+});
+
+test('reset sends email, code and both passwords, then clears recovery state and private caches', async () => {
+  const timers = [], h = harness({ signedIn: false, saved: null, scheduleTimeout: callback => { timers.push(callback); return 0; } });
+  h.recovery().getState().setEmail('a@example.test');
+  h.recovery().getState().setCode('012345');
+  h.queryClient.setQueryData(['private'], 'stale');
+  h.setAdapter(async config => h.ok(config, emptyBody));
+  const body = { email: 'a@example.test', code: '012345', newPassword: 'Another!Pass123', confirmNewPassword: 'Another!Pass123' };
+  await h.auth().setNewPasswordMutation.mutateAsync(body);
+  assert.equal(h.requests[0].url, '/api/auth/reset-password');
+  assert.deepEqual(JSON.parse(h.requests[0].data), body);
+  assert.equal(h.recovery().getState().email, null);
+  assert.equal(h.recovery().getState().code, null);
+  assert.equal(h.queryClient.getQueryData(['private']), undefined);
+  assert.equal(h.store.getState().accessToken, null, 'Reset never signs in');
+  timers[0]();
+  assert.deepEqual(plain(h.navigation), [['replace', '/(auth)']]);
+});
+
+for (const [name, errors, backToCode] of [
+  ['rejected code returns to code entry', { Code: ['The code is invalid or has expired.'] }, true],
+  ['password policy failure keeps the code for a retry', { NewPassword: ['Passwords must have at least one non alphanumeric character.'] }, false],
+]) {
+  test(`reset: ${name}`, async () => {
+    const h = harness({ signedIn: false, saved: null });
+    h.recovery().getState().setEmail('a@example.test');
+    h.recovery().getState().setCode('012345');
+    h.setAdapter(async config => {
+      const failure = httpFailure(config, 400, { code: 'VALIDATION_FAILED', detail: 'One or more validation errors occurred.', errors });
+      failure.response.headers = { 'content-type': 'application/problem+json' };
+      throw failure;
+    });
+    const result = await observe(h.auth().setNewPasswordMutation.mutateAsync({
+      email: 'a@example.test', code: '012345', newPassword: 'weakpass', confirmNewPassword: 'weakpass',
+    }));
+    assert.equal(result.status, 'rejected');
+    assert.equal(h.recovery().getState().email, 'a@example.test');
+    assert.equal(h.recovery().getState().code, backToCode ? null : '012345');
+    assert.deepEqual(plain(h.navigation), backToCode ? [['replace', '/(auth)/otp-forgot-password']] : []);
+    assert.equal(h.toasts.length, 1);
+  });
+}

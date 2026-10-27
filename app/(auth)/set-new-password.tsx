@@ -3,22 +3,26 @@ import { AuthLayout } from "@/components/ui/AuthLayout";
 import { BackToLogin } from "@/components/ui/BackToLogin";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { useAuth } from "@/hooks/useAuth";
-import { setNewPasswordRequest } from "@/interfaces/auth.interface";
+import { ResetPasswordRequest } from "@/interfaces/serviceProviderAuth.interface";
+import { mapApiValidation } from "@/services/apiError";
+import { usePasswordRecoveryStore } from "@/stores/passwordRecoveryStore";
 import { useToastStore } from "@/stores/toastStore";
 import { newPasswordSchema } from "@/utility/passwordPolicy";
 import { yupResolver } from "@hookform/resolvers/yup";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { Controller, useForm } from "react-hook-form";
 import { StyleSheet } from "react-native";
 import * as yup from "yup";
 
-// Yup schema for form validation
+const FIELDS = ["newPassword", "confirmNewPassword"] as const;
+
+// Yup schema for form validation (same policy as registration)
 const schema = yup
   .object({
-    password: newPasswordSchema(),
-    confirmPassword: yup
+    newPassword: newPasswordSchema(),
+    confirmNewPassword: yup
       .string()
-      .oneOf([yup.ref("password")], "Passwords must match")
+      .oneOf([yup.ref("newPassword")], "Passwords must match")
       .required("Confirm your new password"),
   })
   .required();
@@ -28,41 +32,42 @@ export default function SetNewPasswordScreen() {
   const {
     control,
     handleSubmit,
+    setError,
     formState: { errors },
   } = useForm({
     resolver: yupResolver(schema),
-    defaultValues: { password: "", confirmPassword: "" },
+    defaultValues: { newPassword: "", confirmNewPassword: "" },
   });
 
   // Toast Store
   const { showToast } = useToastStore();
-
-  // router params
   const router = useRouter();
-  const params = useLocalSearchParams();
-  const forgotPasswordToken = (params as any)?.forgotPasswordToken;
+
+  // Guide 02: email and code come from transient state, never the route.
+  const { email, code } = usePasswordRecoveryStore.getState();
 
   // APi Request Hook
-  const { mutate: setNewPassword, isPending } = useAuth().setNewPasswordMutation;
+  const { mutate: resetPassword, isPending } = useAuth().setNewPasswordMutation;
 
   // Submit handler
-  const onSubmit = (data: { password: string; confirmPassword: string }) => {
-    if (!forgotPasswordToken) {
-      showToast("Something went wrong. Please login again.", "error");
-      setTimeout(() => {
-        router.replace("/(auth)");
-      }, 2000);
+  const onSubmit = (data: { newPassword: string; confirmNewPassword: string }) => {
+    if (!email || !code) {
+      showToast("Your recovery session ended. Request a new code.", "error");
+      router.replace("/(auth)/forgot-password");
       return;
     }
 
-    // payload for API
-    const payload: setNewPasswordRequest = {
-      newPassword: data.password,
-      confirmPassword: data.confirmPassword,
-      forgotPasswordToken,
-    };
+    const payload: ResetPasswordRequest = { email, code, ...data };
 
-    setNewPassword(payload);
+    resetPassword(payload, {
+      // A password-policy failure keeps the code valid: show it on the field and let the member retry.
+      onError: (error) => {
+        const { fieldErrors } = mapApiValidation(error, FIELDS);
+        FIELDS.forEach((field) => {
+          if (fieldErrors[field]) setError(field, { message: fieldErrors[field] });
+        });
+      },
+    });
   };
 
   return (
@@ -73,7 +78,7 @@ export default function SetNewPasswordScreen() {
     >
       <Controller
         control={control}
-        name="password"
+        name="newPassword"
         render={({ field: { onChange, onBlur, value } }) => (
           <FormInput
             label="New password"
@@ -85,13 +90,13 @@ export default function SetNewPasswordScreen() {
             value={value}
             onChangeText={onChange}
             onBlur={onBlur}
-            error={errors.password?.message as string}
+            error={errors.newPassword?.message as string}
           />
         )}
       />
       <Controller
         control={control}
-        name="confirmPassword"
+        name="confirmNewPassword"
         render={({ field: { onChange, onBlur, value } }) => (
           <FormInput
             label="Confirm new password"
@@ -104,7 +109,7 @@ export default function SetNewPasswordScreen() {
             value={value}
             onChangeText={onChange}
             onBlur={onBlur}
-            error={errors.confirmPassword?.message as string}
+            error={errors.confirmNewPassword?.message as string}
           />
         )}
       />
