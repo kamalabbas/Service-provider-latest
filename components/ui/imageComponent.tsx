@@ -1,4 +1,5 @@
 import { useThemeColor } from "@/hooks/useThemeColor";
+import { resolvePublicMediaUrl } from '@/utility/apiTransport';
 import { Image, StyleSheet } from "react-native";
 
 interface CustomImageProps {
@@ -19,8 +20,12 @@ export function ImageComponent({ source, width, height, style, ...props }: Custo
 
   const containerStyle = { backgroundColor, width: w, height: h, borderRadius: Math.min(w, h) / 2 };
   const shadowStyle = styles.shadow;
+  let uri = source;
+  if (uri?.startsWith('/')) {
+    try { uri = resolvePublicMediaUrl(uri); } catch { uri = null; }
+  }
 
-  return <Image source={(source) ? { uri: source } : require("@/assets/images/service-provider-icon.png")} style={[containerStyle, shadowStyle, style]} {...props} />;
+  return <Image source={uri ? { uri } : require("@/assets/images/service-provider-icon.png")} style={[containerStyle, shadowStyle, style]} {...props} />;
 }
 
 const styles = StyleSheet.create({

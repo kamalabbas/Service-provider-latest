@@ -6,9 +6,9 @@ function validateApiUrl(value) {
   if (value === undefined || value === "") return;
   let url;
   try { url = new URL(value); } catch { /* Report only controlled configuration text. */ }
-  if (!url || value !== value.trim() || !/^https?:\/\//i.test(value) ||
-      !url.hostname || url.username || url.password || url.search || url.hash) {
-    throw new Error("EXPO_PUBLIC_BASE_URL must be an absolute HTTP(S) API base URL without credentials, query parameters, fragments, or surrounding whitespace.");
+  if (!url || value !== value.trim() || !value.startsWith('https://') || url.protocol !== 'https:' ||
+      !url.hostname || url.username || url.password || url.search || url.hash || url.pathname !== '/') {
+    throw new Error("EXPO_PUBLIC_BASE_URL must be an absolute HTTPS API origin without a path, credentials, query parameters, fragments, or surrounding whitespace.");
   }
 }
 

@@ -12,7 +12,7 @@ const root = path.resolve(__dirname, "..");
 const base = require("../app.json").expo;
 const eas = require("../eas.json");
 const packageJson = require("../package.json");
-const api = "https://api.example.test/v1";
+const api = "https://api.example.test";
 const configSource = fs.readFileSync(path.join(root, "app.config.js"), "utf8");
 const scriptSource = fs.readFileSync(path.join(root, "scripts/check-config.cjs"), "utf8");
 const localRequire = createRequire(path.join(root, "app.config.js"));
@@ -101,7 +101,7 @@ for (const variant of ["", "development", "prod", "staging", "PRODUCTION", " pro
   });
 }
 
-for (const value of [" ", "/api", "api.example.test", "ftp://api.example.test", "https:/api.example.test", " https://api.example.test", "https://user:private@api.example.test", "https://api.example.test?token=private", "https://api.example.test#private"]) {
+for (const value of [" ", "/api", "api.example.test", "http://localhost:3000", "https://api.example.test/api", "https://api.example.test/v1", "ftp://api.example.test", "https:/api.example.test", " https://api.example.test", "https://user:private@api.example.test", "https://api.example.test?token=private", "https://api.example.test#private"]) {
   test(`invalid API URL case ${JSON.stringify(value.split("private")[0])} produces a safe configuration error`, t => {
     assert.throws(() => dynamic({ EXPO_PUBLIC_BASE_URL: value }, fixture(t)), error => {
       assert.match(error.message, /EXPO_PUBLIC_BASE_URL must be an absolute HTTP/);
@@ -111,9 +111,9 @@ for (const value of [" ", "/api", "api.example.test", "ftp://api.example.test", 
   });
 }
 
-test("HTTP local-development URLs and HTTPS API paths are accepted unchanged", t => {
+test("HTTPS origins with optional trailing slash are accepted without modifying the environment", t => {
   const directory = fixture(t);
-  for (const value of ["http://localhost:3000", api, api + "/"]) {
+  for (const value of [api, api + "/"]) {
     const env = { EXPO_PUBLIC_BASE_URL: value };
     assert.equal(dynamic(env, directory).config.extra.appVariant, "dev");
     assert.equal(env.EXPO_PUBLIC_BASE_URL, value);

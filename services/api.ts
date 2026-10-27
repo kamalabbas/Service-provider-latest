@@ -1,14 +1,15 @@
 import { useAuthStore } from "@/stores/authStore";
-import { AuthenticationOperation, getSessionGeneration, isCurrentAuthenticationOperation, isRefreshBlocked, refreshAccessToken } from "@/services/authSession";
+import { AuthenticationOperation, clearSession, getSessionGeneration, isCurrentAuthenticationOperation, isRefreshBlocked, refreshAccessToken } from "@/services/authSession";
 import { useToastStore } from "@/stores/toastStore";
 import { ApiErrorAction, toAppError } from "@/services/apiError";
-import type { ApiResponse } from "@/interfaces/serviceProviderApi.interface";
-import axios, { AxiosHeaders, AxiosRequestConfig, AxiosResponse, CanceledError, InternalAxiosRequestConfig, isAxiosError, isCancel } from "axios";
+import { assertSafeJsonNumbers, normalizeApiOrigin, parseApiJson, serializeQuery } from '@/utility/apiTransport';
+import { create, AxiosHeaders, AxiosRequestConfig, AxiosResponse, CanceledError, InternalAxiosRequestConfig, isAxiosError, isCancel } from "axios";
 
 type SessionRequestConfig = InternalAxiosRequestConfig & {
   _retry?: boolean;
   _sessionGeneration?: number;
   _authenticationOperation?: AuthenticationOperation;
+  _hadAccessToken?: boolean;
 };
 
 const staleAuthentication = (config?: SessionRequestConfig) => Boolean(
@@ -20,6 +21,17 @@ const protectedRequest: RequestPolicy = { refresh: true };
 // Only the retained endpoints with established request purposes are listed.
 // Other configured API calls keep their existing protected-request behavior.
 const requestPolicies: Record<string, RequestPolicy> = {
+  '/api/auth/register': { action: 'register', refresh: false },
+  '/api/auth/verify-email': { action: 'verifyCode', refresh: false },
+  '/api/auth/resend-verification': { action: 'sendCode', refresh: false },
+  '/api/auth/request-password-recovery': { action: 'sendCode', refresh: false },
+  '/api/auth/check-password-recovery-code': { action: 'verifyCode', refresh: false },
+  '/api/auth/reset-password': { action: 'resetPassword', refresh: false },
+  '/api/auth/mobile/sign-in': { action: 'signIn', refresh: false },
+  '/api/auth/mobile/refresh': { refresh: false, silent: true },
+  '/api/auth/mobile/sign-out': { refresh: false, silent: true },
+  '/health/live': { refresh: false, silent: true },
+  '/health/ready': { refresh: false, silent: true },
   "/auth/signin": { action: "signIn", refresh: false },
   "/auth/signup": { action: "register", refresh: false },
   "/auth/verifyemailotp": { action: "verifyCode", refresh: false },
@@ -59,13 +71,30 @@ export function notifyApiError(error: unknown, context: { action?: ApiErrorActio
   const appError = toAppError(error, context.action ?? policy.action);
   if (appError.kind === "cancelled" || context.silent || policy.silent || staleAuthentication(config) ||
       (generation !== undefined && generation !== getSessionGeneration())) return;
-  useToastStore.getState().showToast(appError.message, "error");
+  const messages = [appError.message, ...Object.values(appError.validationErrors ?? {}).flat()];
+  if (appError.status === 500 && appError.traceId) messages.push(`Reference: ${appError.traceId}`);
+  useToastStore.getState().showToast([...new Set(messages)].join('\n'), "error");
 }
 
 // Create a configured Axios instance
-const api = axios.create({
-  baseURL: process.env.EXPO_PUBLIC_BASE_URL,
+const api = create({
+  baseURL: normalizeApiOrigin(process.env.EXPO_PUBLIC_BASE_URL),
   timeout: 60000,
+  headers: { Accept: 'application/json, application/problem+json' },
+  paramsSerializer: { serialize: serializeQuery },
+  transformResponse: [function (data, headers) {
+    if (this.responseType && this.responseType !== 'json') return data;
+    if (typeof data !== 'string') {
+      assertSafeJsonNumbers(data);
+      return data;
+    }
+    const contentType = String(headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+    if (contentType && contentType !== 'application/json' && !contentType.endsWith('+json')) return data;
+    try { return parseApiJson(data); } catch (error) {
+      if (error instanceof SyntaxError && this.responseType !== 'json') return data;
+      throw error;
+    }
+  }],
 });
 
 // --- Request Interceptor
@@ -88,16 +117,22 @@ api.interceptors.request.use(
       return config;
     }
 
-    const token = useAuthStore.getState().accessToken;
+    const sameOrigin = api.defaults.baseURL && new URL(config.url ?? '', config.baseURL ?? api.defaults.baseURL).origin === api.defaults.baseURL;
+    const token = sameOrigin ? useAuthStore.getState().accessToken : null;
+    sessionConfig._hadAccessToken = Boolean(token);
+    if (!(typeof FormData !== 'undefined' && config.data instanceof FormData)) assertSafeJsonNumbers(config.data);
 
     if (!config.headers || !(config.headers instanceof AxiosHeaders)) {
       config.headers = new AxiosHeaders(config.headers);
     }
 
-    if (token) config.headers.set("Authorization", `Bearer ${token}`);
+    if (token) {
+      config.headers.set("Authorization", `Bearer ${token}`);
+      config.headers.set('Cache-Control', 'no-store');
+    }
     // Logout uses its captured header after memory has already been cleared.
     // This exception cannot authorize other endpoints or bypass generation checks.
-    else if (!(config.url === "/Auth/Logout" && isRefreshBlocked())) config.headers.delete?.("Authorization");
+    else if (!sameOrigin || !(config.url === "/Auth/Logout" && isRefreshBlocked())) config.headers.delete?.("Authorization");
 
     return config;
   },
@@ -128,7 +163,12 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (err?.response?.status === 401 && originalRequest && !originalRequest._retry && policy.refresh) {
+    if (err?.response?.status === 401 && originalRequest && policy.refresh && originalRequest._hadAccessToken) {
+      if (originalRequest._retry) {
+        notifyApiError(error);
+        await clearSession();
+        return Promise.reject(error);
+      }
       if (isRefreshBlocked()) {
         notifyApiError(error, { silent: true });
         return Promise.reject(error);
@@ -168,25 +208,25 @@ api.interceptors.response.use(
 // TResponse is the full body type: use ApiResponse<Payload> for typed business data,
 // or an explicit legacy/raw response type. No runtime envelope validation is applied.
 // GET request
-export const getData = async <TResponse = ApiResponse<unknown>>(url: string, config?: AxiosRequestConfig): Promise<TResponse> => {
+export const getData = async <TResponse = unknown>(url: string, config?: AxiosRequestConfig): Promise<TResponse> => {
   const response: AxiosResponse<TResponse> = await api.get(url, config);
   return response.data;
 };
 
 // POST request
-export const postData = async <TRequest, TResponse = ApiResponse<unknown>>(url: string, data: TRequest, config?: AxiosRequestConfig): Promise<TResponse> => {
+export const postData = async <TRequest, TResponse = unknown>(url: string, data: TRequest, config?: AxiosRequestConfig): Promise<TResponse> => {
   const response: AxiosResponse<TResponse> = await api.post(url, data, config);
   return response.data;
 };
 
 // PUT request
-export const putData = async <TRequest, TResponse = ApiResponse<unknown>>(url: string, data: TRequest, config?: AxiosRequestConfig): Promise<TResponse> => {
+export const putData = async <TRequest, TResponse = unknown>(url: string, data: TRequest, config?: AxiosRequestConfig): Promise<TResponse> => {
   const response: AxiosResponse<TResponse> = await api.put(url, data, config);
   return response.data;
 };
 
 // DELETE request
-export const deleteData = async <TResponse = ApiResponse<unknown>>(url: string, config?: AxiosRequestConfig): Promise<TResponse> => {
+export const deleteData = async <TResponse = unknown>(url: string, config?: AxiosRequestConfig): Promise<TResponse> => {
   const response: AxiosResponse<TResponse> = await api.delete(url, config);
   return response.data;
 };

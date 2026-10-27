@@ -5,6 +5,7 @@ import { queryClient } from "@/services/queryClient";
 import { useAuthStore } from "@/stores/authStore";
 import { getRefreshToken, removeRefreshToken, setRefreshToken } from "@/utility/secureStore";
 import { readRestorePolicy, writeRestorePolicy } from "@/utility/restorePolicy";
+import { normalizeApiOrigin } from '@/utility/apiTransport';
 import axios from "axios";
 
 let refreshPromise: Promise<string | null> | null = null;
@@ -221,6 +222,7 @@ export const refreshAccessToken = async (): Promise<string | null> => {
   if (!refreshPromise) {
     const generation = sessionGeneration;
     const operation = (async () => {
+      let requestedRefresh = false;
       try {
         const policy = await runRefreshTokenOperation(generation, readRestorePolicy);
         if (generation !== sessionGeneration) return null;
@@ -236,8 +238,11 @@ export const refreshAccessToken = async (): Promise<string | null> => {
           return null;
         }
 
+        const apiOrigin = normalizeApiOrigin(process.env.EXPO_PUBLIC_BASE_URL);
+        if (!apiOrigin) throw new Error('The API origin is not configured.');
         const payload: refreshTokenRequest = { refreshToken: refreshTok };
-        const response = await axios.post<BaseResponse<refreshTokenResponse>>(`${process.env.EXPO_PUBLIC_BASE_URL}/Auth/Refresh`, payload, {
+        requestedRefresh = true;
+        const response = await axios.post<BaseResponse<refreshTokenResponse>>(`${apiOrigin}/Auth/Refresh`, payload, {
           timeout: 60000,
           headers: {
             "Content-Type": "application/json",
@@ -265,10 +270,18 @@ export const refreshAccessToken = async (): Promise<string | null> => {
       } catch {
         if (generation !== sessionGeneration) return null;
 
-        // Terminal invalid/revoked-token detection awaits backend contract confirmation.
-        // All refresh errors are recoverable for now; never delete the saved token here.
-        invalidateRefreshSession(generation);
-        console.log("Session refresh failed; persisted credentials retained for a later retry.");
+        // A local storage read failure has not attempted token rotation. Deny
+        // access, but allow a later explicit restore to retry that local read.
+        if (!requestedRefresh) {
+          invalidateRefreshSession(generation);
+          console.warn('Could not read the saved session.');
+          return null;
+        }
+
+        // Guide 00 requires sign-in after a failed refresh. Retire stale work
+        // immediately and durably block automatic restoration of this session.
+        await clearSession();
+        console.warn("Session refresh failed; sign in again.");
         return null;
       }
     })().finally(() => {

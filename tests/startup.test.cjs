@@ -237,7 +237,7 @@ function harness(options = {}) {
     const module = { exports: {} };
     modules.set(file, module);
     vm.runInNewContext(compiled.get(file), {
-      module, exports: module.exports, Promise,
+      module, exports: module.exports, Promise, URL, URLSearchParams,
       process: { env: { EXPO_PUBLIC_BASE_URL: options.noBackend ? '' : 'https://api.example.test' } },
       console: { warn: (...args) => logs.push(args), log: (...args) => logs.push(args) },
       require: id => {
@@ -527,7 +527,7 @@ test('font failure uses the existing shell with system fonts, while still waitin
   assert.ok(h.logs.some(args => args[0] === 'Custom font loading failed; using system fonts.'));
 });
 
-test('offline restoration releases splash, preserves recoverable credentials, and permits later recovery', async () => {
+test('offline restoration releases splash and requires explicit sign-in', async () => {
   const h = harness(), root = h.mount();
   await until(() => h.refreshes.length === 1);
   const generation = h.session.getSessionGeneration();
@@ -536,16 +536,15 @@ test('offline restoration releases splash, preserves recoverable credentials, an
   assert.equal(h.store.getState().accessToken, null);
   assert.equal(h.store.getState().user, null);
   assert.equal(h.session.getSessionGeneration(), generation + 1);
-  assert.equal(h.token, 'saved-refresh');
-  assert.equal(JSON.parse(h.policy).state, 'allowed');
+  assert.equal(h.token, null);
+  assert.equal(JSON.parse(h.policy).state, 'blocked');
   assert.ok(findView(root.tree));
   root.layout();
-  const recovery = h.session.restoreSession();
-  await until(() => h.refreshes.length === 2);
-  h.refreshes[1].resolve(response);
-  await recovery;
+  await h.session.restoreSession();
+  assert.equal(h.refreshes.length, 1);
+  await h.session.setAuthenticatedSession(account);
   assert.equal(h.store.getState().accessToken, 'A-access');
-  assert.equal(h.session.getSessionGeneration(), generation + 1);
+  assert.equal(h.session.getSessionGeneration(), generation + 2);
   assert.deepEqual(h.splash, ['prevent', 'hide']);
 });
 
@@ -745,7 +744,7 @@ test('an expired in-memory access token cannot bypass the cold-start restoration
   assert.equal((await protectedProbe(h, root)).requests, 1);
 });
 
-test('transient restoration failure denies private routes and later explicit recovery opens Home', async () => {
+test('restoration failure denies private routes and a new explicit sign-in opens Home', async () => {
   const h = harness(), root = h.mount();
   await until(() => h.refreshes.length === 1);
   h.refreshes[0].reject(new Error('Offline'));
@@ -753,12 +752,9 @@ test('transient restoration failure denies private routes and later explicit rec
   const failed = await protectedProbe(h, root);
   assert.equal(failed.requests, 0);
   assert.equal(failed.state.routes[0].name, '(auth)');
-  assert.equal(h.token, 'saved-refresh');
-  assert.equal(JSON.parse(h.policy).state, 'allowed');
-  const recovery = h.session.restoreSession();
-  await until(() => h.refreshes.length === 2);
-  h.refreshes[1].resolve(response);
-  await recovery; await h.flush();
+  assert.equal(h.token, null);
+  assert.equal(JSON.parse(h.policy).state, 'blocked');
+  await h.session.setAuthenticatedSession(account); await h.flush();
   const recovered = stackRouter.getStateForRouteNamesChange(failed.state, routeConfig(h.screens(root)));
   assert.equal(recovered.routes[0].name, '(dashboard)');
   assert.equal(recovered.routes[0].state, undefined, 'Do not resume the denied private deep link');

@@ -33,10 +33,10 @@ type Equal<Left, Right> =
   (<Value>() => Value extends Right ? 1 : 2) ? true : false;
 type Assert<Condition extends true> = Condition;
 
-export type DefaultGet = Assert<Equal<Responses["defaultGet"], ApiResponse<unknown>>>;
-export type DefaultPost = Assert<Equal<Responses["defaultPost"], ApiResponse<unknown>>>;
-export type DefaultPut = Assert<Equal<Responses["defaultPut"], ApiResponse<unknown>>>;
-export type DefaultDelete = Assert<Equal<Responses["defaultDelete"], ApiResponse<unknown>>>;
+export type DefaultGet = Assert<Equal<Responses["defaultGet"], unknown>>;
+export type DefaultPost = Assert<Equal<Responses["defaultPost"], unknown>>;
+export type DefaultPut = Assert<Equal<Responses["defaultPut"], unknown>>;
+export type DefaultDelete = Assert<Equal<Responses["defaultDelete"], unknown>>;
 export type NullableDetail = Assert<Equal<Responses["detail"]["data"], Detail | null | undefined>>;
 export type NullableArray = Assert<Equal<Responses["array"]["data"], Detail[] | null | undefined>>;
 export type NullablePage = Assert<Equal<Responses["page"]["data"], ApiPage<Detail> | null | undefined>>;
