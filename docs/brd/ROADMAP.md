@@ -16,8 +16,8 @@ Status: ✅ done · 🔜 next · ⬜ not started · ⏸ blocked on a decision
 | 0 Foundation | UI design system | ✅ | — | — | — |
 | 1 Onboarding | 02 Password recovery | ✅ | 01 | 3 / 0 | — |
 | 1 Onboarding | 06 Reference choices | ✅ | 01 | 4 / 5 | `reference.view` (setup ok), `reference.manage/.delete`, `reference-admin.view` |
-| 1 Onboarding | 03 Member types and roles | 🔜 | 01 | 4 / 12 | `profiles.view/.manage` (setup ok); admin: `users.*`, `roles.*` |
-| 1 Onboarding | 04 Profiles | ⬜ | 03, 06 | 3 / 4 | `profiles.view/.manage` (setup ok) |
+| 1 Onboarding | 03 Member types and roles | ✅ | 01 | 4 / 12 | `profiles.view/.manage` (setup ok); admin: `users.*`, `roles.*` |
+| 1 Onboarding | 04 Profiles | 🔜 | 03, 06 | 3 / 4 | `profiles.view/.manage` (setup ok) |
 | 2 Provider setup | 05 Business details | ⬜ | 04 | 5 / 7 | `businesses.view/.manage/.delete` |
 | 2 Provider setup | 07 Services (own listings) | ⬜ | 05, 06 | 7 / 5 (shared with discovery) | `services.view/.manage/.delete` |
 | 2 Provider setup | 10 Employees | ⬜ | 05, 06 | 5 / 5 | `employees.view/.manage/.delete` |

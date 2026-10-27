@@ -1,6 +1,6 @@
 import type { User } from "@/interfaces/user.interface";
 import type { ReferenceCatalogue } from "@/interfaces/reference.interface";
-import { hasPermissions, type AccessGrants } from "@/utility/permissions";
+import { hasPermissions, isAdministrator, type AccessGrants } from "@/utility/permissions";
 
 /** The signed-in user's normalized grants for UI access decisions. */
 export const grantsOf = (user?: User | null): AccessGrants => ({
@@ -23,3 +23,19 @@ export const canViewReferenceChoices = (user: User | null | undefined, catalogue
 export const canViewReferenceAdmin = (user?: User | null) => can(user, ["reference-admin.view"]);
 export const canManageReferenceChoices = (user?: User | null) => can(user, ["reference.manage"]);
 export const canRetireReferenceChoices = (user?: User | null) => can(user, ["reference.delete"]);
+
+// Guide 03: member types and roles.
+export const canViewOwnMembership = (user?: User | null) => can(user, ["profiles.view"], true);
+export const canSelectUserType = (user?: User | null) => can(user, ["profiles.manage"], true);
+/** Self-deactivation needs only a signed-in session (setup included), no permission. */
+export const canDeactivateOwnAccount = (user?: User | null) => user?.accessLevel === "full" || user?.accessLevel === "profile_setup";
+export const canViewUsers = (user?: User | null) => can(user, ["users.view"]);
+export const canDeactivateUsers = (user?: User | null) => can(user, ["users.delete"]);
+export const canReactivateUsers = (user?: User | null) => can(user, ["users.manage"]);
+export const canViewRoles = (user?: User | null) => can(user, ["roles.view"]);
+export const canManageRoles = (user?: User | null) => can(user, ["roles.manage"]);
+export const canDeleteRoles = (user?: User | null) => can(user, ["roles.delete"]);
+/** Role assignment needs both grants. */
+export const canAssignRoles = (user?: User | null) => can(user, ["roles.manage", "users.manage"]);
+/** Type change is SuperAdmin-only; no permission grants it. */
+export const canChangeUserType = (user?: User | null) => isAdministrator(grantsOf(user));

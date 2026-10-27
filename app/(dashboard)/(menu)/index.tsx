@@ -6,6 +6,9 @@ import { Screen } from "@/components/ui/Screen";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Radius, Shadow, Spacing } from "@/constants/Theme";
 import { useAuth } from "@/hooks/useAuth";
+import { useDeactivateMyAccount, useMyMember } from "@/hooks/useMembership";
+import { useToastStore } from "@/stores/toastStore";
+import { canDeactivateOwnAccount } from "@/utility/access";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useAuthStore } from "@/stores/authStore";
 import { ThemePreference, useThemeStore } from "@/stores/theme";
@@ -30,6 +33,21 @@ export default function MenuScreen() {
   const border = useThemeColor({}, "separatorColor");
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
+  const { data: member, isLoading: memberLoading } = useMyMember();
+  const deactivate = useDeactivateMyAccount();
+  const showToast = useToastStore((state) => state.showToast);
+
+  // Guide 03: self-deactivation revokes every session server-side; then clear
+  // this device's session and caches through the normal sign-out path.
+  const deactivateAccount = () =>
+    deactivate.mutate(undefined, {
+      onSuccess: async () => {
+        setConfirmDeactivate(false);
+        showToast("Your account has been deactivated.", "success");
+        await logoutAndGoToLogin();
+      },
+    });
 
   const logOut = async () => {
     setLoggingOut(true);
@@ -51,6 +69,14 @@ export default function MenuScreen() {
         </View>
       </View>
 
+      <ListSection title="Membership">
+        <ListRow
+          icon="ribbon-outline"
+          title={member?.userTypeDisplayName ?? "Member type"}
+          subtitle={member ? `Membership ID ${member.membershipId}` : memberLoading ? "Loading…" : "Not chosen yet"}
+        />
+      </ListSection>
+
       <ListSection title="Security">
         <ListRow
           icon="key-outline"
@@ -68,6 +94,9 @@ export default function MenuScreen() {
 
       <ListSection>
         <ListRow icon="log-out-outline" title="Log out" destructive onPress={() => setConfirmLogout(true)} />
+        {canDeactivateOwnAccount(user) ? (
+          <ListRow icon="person-remove-outline" title="Deactivate account" destructive onPress={() => setConfirmDeactivate(true)} />
+        ) : null}
       </ListSection>
 
       <ThemedText type="footnote" tone="muted" style={styles.version}>
@@ -84,6 +113,18 @@ export default function MenuScreen() {
         isLoading={loggingOut}
         onConfirm={logOut}
         onCancel={() => setConfirmLogout(false)}
+      />
+
+      <ConfirmModal
+        visible={confirmDeactivate}
+        icon="person-remove-outline"
+        tone="danger"
+        title="Deactivate your account?"
+        message="You'll be signed out on every device and can't sign in again. Your business history is kept, not deleted. Only an administrator can reactivate your account."
+        confirmLabel="Deactivate"
+        isLoading={deactivate.isPending}
+        onConfirm={deactivateAccount}
+        onCancel={() => setConfirmDeactivate(false)}
       />
     </Screen>
   );

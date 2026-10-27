@@ -12,17 +12,19 @@ type ScreenProps = PropsWithChildren<{
   accessory?: ReactNode;
   /** Use the muted grouped background behind cards and list sections. */
   grouped?: boolean;
+  /** A stack header above the screen already reserves the top inset. */
+  hasHeader?: boolean;
 }>;
 
 // Scrollable page for signed-in tabs, with a large title header.
-export function Screen({ title, subtitle, accessory, grouped = true, children }: ScreenProps) {
+export function Screen({ title, subtitle, accessory, grouped = true, hasHeader = false, children }: ScreenProps) {
   const background = useThemeColor({}, grouped ? "muted" : "background");
   const insets = useSafeAreaInsets();
 
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: background }}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + Spacing.lg }]}
+      contentContainerStyle={[styles.content, { paddingTop: (hasHeader ? 0 : insets.top) + Spacing.lg }]}
       keyboardShouldPersistTaps="handled"
     >
       {title ? (

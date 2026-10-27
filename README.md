@@ -98,6 +98,13 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 
 - New passwords (registration, reset, change) require 8+ characters with an uppercase letter, a lowercase letter, a number and a symbol (`utility/passwordPolicy.ts`).
 
+## Member types and membership (guide 03)
+
+- Setup reads `GET /api/members/me` (`data: null` before the first selection). Step 1 opens **Choose your member type**, which lists `GET /api/members/user-types` (public, never derived from roles) and saves the one-time choice with `PUT /api/members/me/user-type`. The returned membership ID and type then show on the setup overview. If the response says no profile is required, the session refreshes to pick up full access. Otherwise guide 04's profile step follows.
+- A type, once chosen, can't be changed by the member; the screen says so and only an administrator can change it.
+- The Account tab shows the member type and membership ID, and offers **Deactivate account** behind an explicit confirmation. `POST /api/members/me/deactivate` revokes every session server-side; the app then signs out locally and clears caches. Business history is kept; only an administrator can reactivate.
+- Admin users, roles and permissions (all users, exact-email lookup, deactivate/reactivate, SuperAdmin-only type change, role create/edit/delete, permission catalogue, user role replacement) have services and hooks in `services/memberService.ts` / `hooks/useMembership.ts`, gated in `utility/access.ts`. Role replacement sends the complete set and refuses SuperAdmin's role ID. No admin screens yet.
+
 ## Reference choices (guide 06)
 
 - `useReferenceChoices(catalogue)` loads the active choices for `regions` (public), `occupations`, `employee-positions` and `licence-types` (`reference.view`, allowed during profile setup) from `/api/members/{catalogue}`. Lists are never hard-coded.
