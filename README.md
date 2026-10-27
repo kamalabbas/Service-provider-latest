@@ -131,6 +131,12 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 - Account → **My services**: active and archived listings, detail, create/edit and archive. Publishing needs an eligible type, `services.manage` and an active business; a Tradeperson may list only occupations on their profile. A new listing starts at the business location but keeps its own coordinates. Archived listings are read-only.
 - Rules live in `utility/serviceForm.ts` and `utility/coordinates.ts` (shared with the business form); search parameters are built and checked by `searchParams` in `services/serviceListingService.ts`. SuperAdmin listing routes have services and hooks (`hooks/useServices.ts`). No admin screens yet.
 
+## Employees (guide 10)
+
+- Account → **Employees**: the business roster (paged, **Show more**), with an **Include archived** view for history. Employees are records, not sign-in accounts. Detail shows work and contact details; **Edit details** is a full replacement form and **Archive employee** warns that accepted inspection assignments may be cleared and card requests/cards cancelled.
+- Name, phone and occupation are required; email, position and licence are optional on both add and edit (cleared fields are sent as null). Email uniqueness across active employees is checked by the server and shown on the field. Retired saved occupations/positions stay visible while unchanged.
+- Eligible type plus `employees.view/.manage/.delete`; adding needs an active business. Archival refetches every query. Rules live in `utility/employeeForm.ts`; service and hooks in `services/employeeService.ts` / `hooks/useEmployees.ts`, including SuperAdmin routes (no admin screens yet). Worker assignment arrives with inspections (guide 08).
+
 ## Location and maps
 
 - `expo-location` gives the device position (`services/deviceLocation.ts`, foreground permission only; denial falls back to the map pin). `react-native-maps` shows the pin. Both work in Expo Go.

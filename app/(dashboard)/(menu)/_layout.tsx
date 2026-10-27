@@ -23,6 +23,9 @@ export default function MenuLayout() {
       <Stack.Screen name="my-services" options={{ title: "My services" }} />
       <Stack.Screen name="my-service" options={{ title: "Listing" }} />
       <Stack.Screen name="my-service-edit" options={{ title: "Listing details" }} />
+      <Stack.Screen name="employees" options={{ title: "Employees" }} />
+      <Stack.Screen name="employee" options={{ title: "Employee" }} />
+      <Stack.Screen name="employee-edit" options={{ title: "Employee details" }} />
       <Stack.Screen name="changeEmailPassword" options={{ title: "Email & password" }} />
     </Stack>
   );

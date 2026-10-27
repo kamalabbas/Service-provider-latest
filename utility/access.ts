@@ -70,3 +70,13 @@ export const canArchiveOwnServices = (user: User | null | undefined, userTypeCod
 export const canRequestInspectionFor = (user: User | null | undefined, service: { canRequestInspection: boolean }) =>
   service.canRequestInspection && can(user, ["inspections.manage"]);
 export const canManageServicesAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));
+
+// Guide 10: employees (roster records, not accounts). Eligible type plus each operation's
+// permission; creating also needs an active business, checked by the screen.
+export const canViewEmployees = (user: User | null | undefined, userTypeCode?: string | null) =>
+  businessEligible(userTypeCode) && can(user, ["employees.view"]);
+export const canManageEmployees = (user: User | null | undefined, userTypeCode?: string | null) =>
+  businessEligible(userTypeCode) && can(user, ["employees.manage"]);
+export const canArchiveEmployees = (user: User | null | undefined, userTypeCode?: string | null) =>
+  businessEligible(userTypeCode) && can(user, ["employees.delete"]);
+export const canManageEmployeesAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));

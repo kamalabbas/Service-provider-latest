@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDeactivateMyAccount, useMyMember } from "@/hooks/useMembership";
 import { useMyProfile } from "@/hooks/useProfile";
 import { useToastStore } from "@/stores/toastStore";
-import { canDeactivateOwnAccount, canViewOwnBusiness, canViewOwnProfile, canViewServices } from "@/utility/access";
+import { canDeactivateOwnAccount, canViewEmployees, canViewOwnBusiness, canViewOwnProfile, canViewServices } from "@/utility/access";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useAuthStore } from "@/stores/authStore";
 import { ThemePreference, useThemeStore } from "@/stores/theme";
@@ -103,6 +103,14 @@ export default function MenuScreen() {
               title="My services"
               subtitle="Listings customers find nearby"
               onPress={() => router.push("/(dashboard)/(menu)/my-services")}
+            />
+          ) : null}
+          {canViewEmployees(user, member?.userTypeCode) ? (
+            <ListRow
+              icon="people-outline"
+              title="Employees"
+              subtitle="Workers you assign to inspections"
+              onPress={() => router.push("/(dashboard)/(menu)/employees")}
             />
           ) : null}
         </ListSection>
