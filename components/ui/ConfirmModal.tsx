@@ -35,8 +35,10 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   customContent,
   isLoading = false
 }) => {
-  const bg = useThemeColor({}, "white");
+  const bg = useThemeColor({}, "surface");
   const text = useThemeColor({}, "text");
+  const cancelBg = useThemeColor({}, "muted");
+  const cancelBorder = useThemeColor({}, "borderColor");
 
   return (
     <Modal transparent visible={visible} animationType="fade">
@@ -70,7 +72,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
               disabled={isLoading}
             />
 
-            <TouchableOpacity onPress={onCancel} style={styles.cancelBtn}>
+            <TouchableOpacity onPress={onCancel} style={[styles.cancelBtn, { backgroundColor: cancelBg, borderColor: cancelBorder }]}>
               <ThemedText style={{ color: text }}>{cancelLabel}</ThemedText>
             </TouchableOpacity>
           </View>
@@ -115,6 +117,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: "center",
-    backgroundColor: "#F0F0F0",
+    borderWidth: 1,
   },
 });

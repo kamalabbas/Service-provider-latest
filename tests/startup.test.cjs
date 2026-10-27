@@ -6,6 +6,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+// The root replaces navigation backgrounds with constants/Colors.ts values.
+const BRAND_BACKGROUND = { light: '#FFFFFF', dark: '#0D1A14' };
 const vm = require('node:vm');
 const ts = require('typescript');
 const { QueryClient, QueryObserver } = require('@tanstack/react-query');
@@ -453,7 +455,7 @@ test('slow theme restoration holds the splash and first content uses the saved d
   pending.resolve(JSON.stringify({ state: { preference: 'dark' }, version: 0 }));
   await h.flush();
   assert.equal(root.lateUpdates, 0);
-  assert.equal(findView(remounted.tree).props.style.backgroundColor, '#000');
+  assert.equal(findView(remounted.tree).props.style.backgroundColor, BRAND_BACKGROUND.dark);
   assert.deepEqual(h.screens(remounted), ['(auth)', '+not-found']);
   assert.deepEqual(h.splash, ['prevent']);
   remounted.layout();
@@ -473,7 +475,7 @@ for (const failure of ['corrupt', 'unavailable']) {
     assert.deepEqual(h.splash, ['prevent']);
     h.refreshes[0].resolve(response);
     await h.flush();
-    assert.equal(findView(root.tree).props.style.backgroundColor, '#fff');
+    assert.equal(findView(root.tree).props.style.backgroundColor, BRAND_BACKGROUND.light);
     assert.deepEqual(h.screens(root), ['(dashboard)', '+not-found']);
     root.layout();
     assert.deepEqual(h.splash, ['prevent', 'hide']);
@@ -485,14 +487,14 @@ test('root navigation theme updates at runtime and restores existing system pref
   const h = harness({ noBackend: true, systemScheme: 'dark', savedTheme: JSON.stringify({ state: { preference: 'system' }, version: 0 }) });
   const root = h.mount();
   await h.flush();
-  assert.equal(findElement(root.tree, 'ThemeProvider').props.value.colors.background, '#000');
+  assert.equal(findElement(root.tree, 'ThemeProvider').props.value.colors.background, BRAND_BACKGROUND.dark);
   root.layout();
   h.themeStore.getState().setPreference('light');
   await h.flush();
-  assert.equal(findElement(root.tree, 'ThemeProvider').props.value.colors.background, '#fff');
+  assert.equal(findElement(root.tree, 'ThemeProvider').props.value.colors.background, BRAND_BACKGROUND.light);
   h.themeStore.getState().setPreference('dark');
   await h.flush();
-  assert.equal(findView(root.tree).props.style.backgroundColor, '#000');
+  assert.equal(findView(root.tree).props.style.backgroundColor, BRAND_BACKGROUND.dark);
   assert.equal(h.restoreCalls, 0);
   assert.deepEqual(h.splash, ['prevent', 'hide']);
 });

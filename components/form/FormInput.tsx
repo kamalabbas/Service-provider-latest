@@ -22,6 +22,9 @@ export const FormInput = forwardRef<TextInput, FormInputProps>(
   const backgroundColor = useThemeColor({}, "background");
   const textColor = useThemeColor({}, "text");
   const errorColor = useThemeColor({}, "error");
+  const placeholderColor = useThemeColor({}, "placeholder");
+  const mutedTextColor = useThemeColor({}, "textMuted");
+  const tint = useThemeColor({}, "tint");
 
   return (
     <ThemedView style={[styles.container, styles.transparentBackground]}>
@@ -36,7 +39,7 @@ export const FormInput = forwardRef<TextInput, FormInputProps>(
             isPasswordField && styles.passwordInput,
             error && { borderColor: errorColor },
           ]}
-          placeholderTextColor={borderColor}
+          placeholderTextColor={placeholderColor}
           secureTextEntry={isPasswordField ? !showPassword : secureTextEntry}
           {...props}
         />
@@ -48,11 +51,11 @@ export const FormInput = forwardRef<TextInput, FormInputProps>(
             accessibilityRole="button"
             accessibilityLabel={showPassword ? "Hide password" : "Show password"}
           >
-            <ThemedText style={styles.passwordToggleText}>{showPassword ? "Hide" : "Show"}</ThemedText>
+            <ThemedText style={[styles.passwordToggleText, { color: tint }]}>{showPassword ? "Hide" : "Show"}</ThemedText>
           </Pressable>
         )}
       </View>
-      {isPasswordField && showPasswordRule && <ThemedText style={[styles.passwordRule, { color: borderColor }]}>{passwordRuleText}</ThemedText>}
+      {isPasswordField && showPasswordRule && <ThemedText style={[styles.passwordRule, { color: mutedTextColor }]}>{passwordRuleText}</ThemedText>}
       {!!error && <Text style={[styles.error, { color: errorColor }]}>{error}</Text>}
     </ThemedView>
   );

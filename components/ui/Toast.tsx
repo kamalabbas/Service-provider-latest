@@ -17,7 +17,9 @@ export const Toast: React.FC<ToastProps> = ({ message, type = 'error', visible, 
   const errorBg = useThemeColor({}, 'error');
   const successBg = useThemeColor({}, 'success');
   const hideToast = useToastStore((s) => s.hideToast);
+  const toastId = useToastStore((s) => s.id);
 
+  // Each new toast gets its own full display time.
   useEffect(() => {
     if (visible && !persist) {
       const timer = setTimeout(() => {
@@ -25,7 +27,7 @@ export const Toast: React.FC<ToastProps> = ({ message, type = 'error', visible, 
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [visible, hideToast]);
+  }, [visible, persist, toastId, hideToast]);
 
   
   if (!visible) return null;

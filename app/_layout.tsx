@@ -8,6 +8,7 @@ import { View } from 'react-native';
 import 'react-native-reanimated';
 
 import { Toast } from '@/components/ui/Toast';
+import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import usePushNotification from '@/hooks/usePushNotification';
 import { initializeTheme, useThemeStore } from '@/stores/theme';
@@ -19,6 +20,30 @@ import { restoreUser } from '@/utility/restoreUser';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/services/queryClient';
 import { getSessionGeneration } from '@/services/authSession';
+
+// Navigation headers, back buttons and screen backgrounds follow the brand palette.
+const brandLightTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary: Colors.light.tint,
+    background: Colors.light.background,
+    card: Colors.light.surface,
+    text: Colors.light.text,
+    border: Colors.light.separatorColor,
+  },
+};
+const brandDarkTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary: Colors.dark.tint,
+    background: Colors.dark.background,
+    card: Colors.dark.surface,
+    text: Colors.dark.text,
+    border: Colors.dark.separatorColor,
+  },
+};
 
 void SplashScreen.preventAutoHideAsync().catch(() => {
   console.warn('Could not keep the native splash screen visible during startup.');
@@ -62,7 +87,7 @@ export default function RootLayout() {
   const systemColorScheme = useColorScheme();
 
   const colorScheme = themePref === 'system' ? systemColorScheme : themePref;
-  const theme = colorScheme === 'dark' ? DarkTheme : DefaultTheme;
+  const theme = colorScheme === 'dark' ? brandDarkTheme : brandLightTheme;
   const ready = appReady && (fontsLoaded || !!fontError);
   const { visible, message, type, persist, linkText, linkURL } = useToastStore();
   
@@ -122,7 +147,7 @@ export default function RootLayout() {
                 <Stack.Screen name="+not-found" />
               </Stack.Protected>
             </Stack>
-            <StatusBar style='dark' />
+            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
             <Toast visible={visible} message={message} type={type} persist={persist} linkText={linkText} linkURL={linkURL}/>
           </View>
         </AppUpdatePolicyContext.Provider>

@@ -41,6 +41,8 @@ export const SelectInput: React.FC<SelectInputProps> = ({ label,value, onChange,
   const tint = useThemeColor({}, 'tint');
   const separatorColor = useThemeColor({}, 'separatorColor');
   const optionSeparator = useThemeColor({}, 'optionSeparator');
+  const surfaceColor = useThemeColor({}, 'surface');
+  const placeholderColor = useThemeColor({}, 'placeholder');
 
   useEffect(() => {
     if (value) {
@@ -76,7 +78,7 @@ export const SelectInput: React.FC<SelectInputProps> = ({ label,value, onChange,
 
       <TouchableWithoutFeedback onPress={openModal} disabled={disabled}>
         <View style={[styles.input, { borderColor, backgroundColor, opacity: disabled ? 0.5 : 1 }]}>
-          <Text style={selectedItemLabel ? styles.text : styles.placeholder}>
+          <Text style={[styles.text, { color: selectedItemLabel ? textColor : placeholderColor }]}>
             {selectedItemLabel || placeholder}
           </Text>
           <MaterialCommunityIcons name="chevron-down" size={24} color={textColor} />
@@ -100,11 +102,11 @@ export const SelectInput: React.FC<SelectInputProps> = ({ label,value, onChange,
           </TouchableWithoutFeedback>
 
           {/* Picker panel: taps inside should NOT close the modal */}
-          <Animated.View style={[styles.picker, { transform: [{ translateY: slideAnim }] }]}>
+          <Animated.View style={[styles.picker, { backgroundColor: surfaceColor, transform: [{ translateY: slideAnim }] }]}>
               {(pickerLabel || label) && (
                 <>
                   <View style={styles.pickerHeader}>
-                    <Text style={{ fontSize: 18, fontWeight: '600' }}>{pickerLabel || label}</Text>
+                    <Text style={{ fontSize: 18, fontWeight: '600', color: textColor }}>{pickerLabel || label}</Text>
                     <TouchableWithoutFeedback onPress={closeModal}>
                       <Text>
                         <MaterialCommunityIcons name="close" size={24} color={textColor} />
@@ -119,7 +121,7 @@ export const SelectInput: React.FC<SelectInputProps> = ({ label,value, onChange,
                 data={options}
                 keyExtractor={(item) => item.value}
                 renderItem={({ item, index }) => {
-                  const selected = item.value === value;
+                  const selected = value != null && item.value === value.toString();
                   const isLast = index === options.length - 1;
                   return (
                     <TouchableOpacity
@@ -168,10 +170,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  placeholder: {
-    color: '#666',
-    flex: 1,
-  },
   text: { flex: 1 },
   error: {
     marginTop: 4,
@@ -184,7 +182,6 @@ const styles = StyleSheet.create({
     paddingTop: 30,
   },
   picker: {
-    backgroundColor: 'white',
     height: '50%',
     borderRadius: 10,
     padding: 24,

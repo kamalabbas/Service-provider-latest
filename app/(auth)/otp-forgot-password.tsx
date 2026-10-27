@@ -55,13 +55,15 @@ export default function OtpForgotPasswordScreen() {
         reSendOtp={async () => {
           if (!email) {
             EmailCheck(email);
-            return;
+            return false;
           }
           try {
             const res = await sendForgotPasswordOtp({ email });
             res.message && showToast("A new code has been requested. Please check your email.", "success");
+            return true;
           } catch (error) {
             notifyApiError(error, { action: "sendCode" });
+            return false;
           }
         }}
       />

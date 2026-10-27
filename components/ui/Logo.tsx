@@ -1,3 +1,4 @@
+import { useThemeColor } from "@/hooks/useThemeColor";
 import { Image, ImageProps, ImageStyle, StyleProp, StyleSheet, View } from "react-native";
 import { ThemedText } from "../ThemedText";
 
@@ -7,18 +8,22 @@ type LogoProps = {
   resizeMode?: ImageProps["resizeMode"];
 };
 
-export const Logo = ({ large = true, style, resizeMode = "contain" }: LogoProps) => (
-  <View style={styles.container}>
-    <Image
-      source={require("@/assets/images/service-provider-icon.png")}
-      style={[large ? styles.large : styles.small, style]}
-      resizeMode={resizeMode}
-      accessibilityRole="image"
-      accessibilityLabel="Service Provider"
-    />
-    <ThemedText type="subtitle">Service Provider</ThemedText>
-  </View>
-);
+export const Logo = ({ large = true, style, resizeMode = "contain" }: LogoProps) => {
+  const tint = useThemeColor({}, "tint");
+
+  return (
+    <View style={styles.container}>
+      <Image
+        source={require("@/assets/images/service-provider-icon.png")}
+        style={[large ? styles.large : styles.small, style]}
+        resizeMode={resizeMode}
+        accessibilityRole="image"
+        accessibilityLabel="Service Provider"
+      />
+      <ThemedText type="subtitle" style={{ color: tint }}>Service Provider</ThemedText>
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   container: { alignItems: "center", gap: 12, marginBottom: 24 },

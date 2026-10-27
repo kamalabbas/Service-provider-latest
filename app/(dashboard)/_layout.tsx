@@ -10,9 +10,10 @@ export default function DashboardLayout() {
   const isAuthenticated = useAuthStore(selectIsAuthenticated);
   const forceUpdate = useContext(AppUpdatePolicyContext)?.action === "force";
   const insets = useSafeAreaInsets();
-  const tabActive = useThemeColor({}, "tabIconDefault");
-  const tabInactive = useThemeColor({}, "optionSeparator");
-  const tabBackground = useThemeColor({}, "background");
+  const tabActive = useThemeColor({}, "tabIconSelected");
+  const tabInactive = useThemeColor({}, "tabIconDefault");
+  const tabBackground = useThemeColor({}, "surface");
+  const tabBorder = useThemeColor({}, "separatorColor");
 
   // The root navigator owns fallback navigation. Keep descendants unrendered
   // while an existing native route is being removed after access changes.
@@ -27,7 +28,8 @@ export default function DashboardLayout() {
         tabBarInactiveTintColor: tabInactive,
         tabBarStyle: {
           backgroundColor: tabBackground,
-          borderTopWidth: 0,
+          borderTopWidth: 1,
+          borderTopColor: tabBorder,
           elevation: 0,
           shadowOpacity: 0,
           height: 60 + insets.bottom,

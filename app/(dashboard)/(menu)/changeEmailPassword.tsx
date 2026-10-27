@@ -51,6 +51,9 @@ const passwordSchema = yup
 export default function ChangeEmailPasswordScreen() {
   const backgroundColor = useThemeColor({}, "muted");
   const textColor = useThemeColor({}, "text");
+  const tabBg = useThemeColor({}, "primaryLight");
+  const tabActiveBg = useThemeColor({}, "primary");
+  const tabActiveText = useThemeColor({}, "buttonText");
 
   const { changeEmailMutation, verifyNewEmailMutation, changePasswordMutation } = useAuth();
   const showToast = useToastStore((s) => s.showToast);
@@ -174,11 +177,14 @@ export default function ChangeEmailPasswordScreen() {
   return (
     <ThemedView style={{ flex: 1, backgroundColor }}>
       <View style={styles.tabsContainer}>
-        <TouchableOpacity style={[styles.tab, activeTab === "email" && styles.tabActive]} onPress={() => setActiveTab("email")}>
-          <ThemedText style={[styles.tabText, activeTab === "email" && styles.tabTextActive]}>Change Email</ThemedText>
+        <TouchableOpacity
+          style={[styles.tab, { backgroundColor: activeTab === "email" ? tabActiveBg : tabBg }]}
+          onPress={() => setActiveTab("email")}
+        >
+          <ThemedText style={[styles.tabText, activeTab === "email" && [styles.tabTextActive, { color: tabActiveText }]]}>Change Email</ThemedText>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === "password" && styles.tabActive]}
+          style={[styles.tab, { backgroundColor: activeTab === "password" ? tabActiveBg : tabBg }]}
           onPress={() => {
             setActiveTab("password");
             setOtpSent(false);
@@ -186,7 +192,7 @@ export default function ChangeEmailPasswordScreen() {
             resetOtpForm();
           }}
         >
-          <ThemedText style={[styles.tabText, activeTab === "password" && styles.tabTextActive]}>Change Password</ThemedText>
+          <ThemedText style={[styles.tabText, activeTab === "password" && [styles.tabTextActive, { color: tabActiveText }]]}>Change Password</ThemedText>
         </TouchableOpacity>
       </View>
 
@@ -363,12 +369,8 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: "#E5E5E5",
     alignItems: "center",
     marginHorizontal: 4,
-  },
-  tabActive: {
-    backgroundColor: "#CBD5E1",
   },
   tabText: {
     fontSize: 14,

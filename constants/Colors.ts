@@ -1,46 +1,54 @@
 /**
  * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * The palette is derived from the brand logo green (#1A543C) on white.
  */
-const primaryColor = "#CBD5E1";
-const tintColorLight = "#94A3B8";
-const tintColorDark = "#475569";
+const brandGreen = "#1A543C";
+const brandGreenDarkMode = "#2A7A57";
+const brandGreenLight = "#6FCF9F";
 
 export const Colors = {
   light: {
-    text: "#11181C",
-    background: "#fff",
-    muted: "#F5F6F7",
-    tint: tintColorDark,
-    icon: tintColorDark,
-    tabIconDefault: primaryColor,
-    tabIconSelected: tintColorDark,
-    error: "#e74c3c",
-    primary: primaryColor,
-    borderColor: "#11181C",
-    buttonText: "#11181C",
-    separatorColor: "#11181C",
-    optionSeparator: "#3b3a3aff",
-    success: "#28a745",
-    warning: "#F1C40F",
+    text: "#10231A",
+    textMuted: "#5B6B63",
+    background: "#FFFFFF",
+    surface: "#FFFFFF",
+    muted: "#F2F6F4",
+    tint: brandGreen,
+    icon: brandGreen,
+    tabIconDefault: "#8A9A92",
+    tabIconSelected: brandGreen,
+    error: "#C0392B",
+    primary: brandGreen,
+    primaryLight: "#E3EEE8",
+    borderColor: "#C9D6CF",
+    placeholder: "#7A8A82",
+    buttonText: "#FFFFFF",
+    separatorColor: "#E1E8E4",
+    optionSeparator: "#E1E8E4",
+    success: "#2E7D4F",
+    warning: "#E0A800",
     white: "#FFFFFF",
   },
   dark: {
-    text: "#ECEDEE",
-    background: "#151718",
-    muted: "#0F1112",
-    tint: tintColorLight,
-    icon: primaryColor,
-    tabIconDefault: primaryColor,
-    tabIconSelected: tintColorLight,
-    error: "#e74c3c",
-    primary: primaryColor,
-    borderColor: "#ECEDEE",
-    buttonText: "#11181C",
-    separatorColor: "#eee",
-    optionSeparator: "#dbdbdbff",
-    success: "#28a745",
-    warning: "#F1C40F",
+    text: "#E6EEEA",
+    textMuted: "#9FB3A9",
+    background: "#0D1A14",
+    surface: "#15261E",
+    muted: "#0A140F",
+    tint: brandGreenLight,
+    icon: brandGreenLight,
+    tabIconDefault: "#7F948A",
+    tabIconSelected: brandGreenLight,
+    error: "#E5675A",
+    primary: brandGreenDarkMode,
+    primaryLight: "#1C3A2D",
+    borderColor: "#2E443A",
+    placeholder: "#7F948A",
+    buttonText: "#FFFFFF",
+    separatorColor: "#22332B",
+    optionSeparator: "#2E443A",
+    success: "#2E7D4F",
+    warning: "#E0A800",
     white: "#FFFFFF",
   },
 };

@@ -27,6 +27,8 @@ export function SelectMultiInput({ label, values, onChange, options, placeholder
   const borderColor = useThemeColor({}, "borderColor");
   const tint = useThemeColor({}, "tint");
   const errorColor = useThemeColor({}, "error");
+  const surfaceColor = useThemeColor({}, "surface");
+  const placeholderColor = useThemeColor({}, "placeholder");
   const selectedLabels = options.filter((option) => values.includes(option.value)).map((option) => option.label);
   const filteredOptions = options.filter((option) => option.label.toLowerCase().includes(search.toLowerCase()));
 
@@ -41,13 +43,15 @@ export function SelectMultiInput({ label, values, onChange, options, placeholder
         onPress={() => { setSearch(""); setVisible(true); }}
         accessibilityRole="button"
       >
-        <ThemedText numberOfLines={1}>{selectedLabels.join(", ") || placeholder}</ThemedText>
+        <ThemedText numberOfLines={1} style={selectedLabels.length ? undefined : { color: placeholderColor }}>
+          {selectedLabels.join(", ") || placeholder}
+        </ThemedText>
       </Pressable>
       {error ? <ThemedText style={{ color: errorColor }}>{error}</ThemedText> : null}
       <Modal visible={visible} transparent animationType="slide" onRequestClose={() => setVisible(false)}>
         <View style={styles.overlay}>
           <Pressable style={styles.backdrop} onPress={() => setVisible(false)} accessibilityLabel="Close options" />
-          <View style={[styles.panel, { backgroundColor }]}>
+          <View style={[styles.panel, { backgroundColor: surfaceColor }]}>
             <ThemedText type="subtitle">{pickerLabel || label || placeholder}</ThemedText>
             <FormInput placeholder="Search options" value={search} onChangeText={setSearch} />
             <FlatList

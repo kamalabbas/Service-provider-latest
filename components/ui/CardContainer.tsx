@@ -10,7 +10,7 @@ export const CardContainer: FC<PropsWithChildren<CardContainerProps>> = ({
   children,
   style,
 }) => {
-  const cardBg = useThemeColor({}, "white");
+  const cardBg = useThemeColor({}, "surface");
 
   return (
     <View style={[styles.card, { backgroundColor: cardBg }, style]}>

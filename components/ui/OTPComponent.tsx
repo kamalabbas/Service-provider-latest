@@ -14,7 +14,8 @@ export interface OTPComponentProps {
   isPending?: boolean;
   email?: string; 
   onSubmit: (data: { otp: string }) => void | Promise<void>;
-  reSendOtp?: () => void | Promise<void>;
+  // Return false when no code was sent, so the resend countdown does not start.
+  reSendOtp?: () => boolean | void | Promise<boolean | void>;
 }
 
 export function OTPComponent({ isPending, email, onSubmit, reSendOtp }: OTPComponentProps) {
@@ -47,15 +48,22 @@ export function OTPComponent({ isPending, email, onSubmit, reSendOtp }: OTPCompo
   const resendInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleResendOtp = async () => {
+    if (!email || !reSendOtp) return;
+
+    // Disable while the request is in flight to prevent duplicate sends.
+    setResendDisabled(true);
+    let sent = false;
     try {
-      if (email && reSendOtp) {
-        await reSendOtp();
-      }
+      sent = (await reSendOtp()) !== false;
     } catch {
       showToast("Something went wrong.", "error");
     }
 
-    setResendDisabled(true);
+    if (!sent) {
+      setResendDisabled(false);
+      return;
+    }
+
     setResendTimer(120);
     resendInterval.current = setInterval(() => {
       setResendTimer((prev) => {
@@ -115,7 +123,7 @@ export function OTPComponent({ isPending, email, onSubmit, reSendOtp }: OTPCompo
         <Text style={resendDisabled ? [styles.resendTextDisabled, { color: muted }] : [styles.resendText, { color: tint }]} onPress={!resendDisabled && process.env.EXPO_PUBLIC_BASE_URL ? handleResendOtp : undefined}>
           Resend it
         </Text>
-        {resendDisabled && (
+        {resendDisabled && resendInterval.current && (
           <Text style={[styles.counterText, { color: muted }]}> ({resendTimer}s)</Text>
         )}
       </Text>
