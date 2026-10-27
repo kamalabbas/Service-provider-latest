@@ -115,6 +115,15 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 - The picture (`PUT /api/members/me/profile/picture`, field `picture`) needs a saved profile; the app checks JPEG/PNG, 5 MB and 16 million pixels before uploading. The Account card shows the name and picture.
 - SuperAdmin target-user profile read/save/history/picture routes have services and hooks (`services/profileService.ts`, `hooks/useProfile.ts`). No admin screens yet.
 
+## Business details (guide 05)
+
+- Account → **My business** (`app/(dashboard)/(menu)/business.tsx`) shows an empty state, the active business (`GET /api/businesses/me`, `data: null` when none), its picture, and **Archive business** behind a confirmation that lists the effects. **Business details** (`business-edit.tsx`) creates with POST only when none is active, otherwise edits with PUT; it never creates implicitly.
+- Eligibility: Tradeperson, Builder or Developer **and** the operation's own permission (`businesses.view/.manage/.delete`), full access only. A type alone, or a permission alone, is not access. Read-only members see details without edit actions.
+- ABN (11 digits, checksum) is required and ACN (9 digits, checksum) is optional; spaces are removed before sending, and the screen notes that a checksum doesn't prove registration. Rules live in `utility/businessForm.ts`.
+- Coordinates are typed explicitly (0 is valid) and range-checked again in the service. The device's position is never used automatically. Location/map input needs a package decision (see the roadmap).
+- Archive refetches every query, since listings, roster and card requests change server-side. The picture upload shares `components/ui/PicturePicker.tsx` with the profile picture.
+- SuperAdmin list/detail/create-for-user/update/archive/history/picture routes have services and hooks (`services/businessService.ts`, `hooks/useBusiness.ts`). No admin screens yet.
+
 ## Reference choices (guide 06)
 
 - `useReferenceChoices(catalogue)` loads the active choices for `regions` (public), `occupations`, `employee-positions` and `licence-types` (`reference.view`, allowed during profile setup) from `/api/members/{catalogue}`. Lists are never hard-coded.

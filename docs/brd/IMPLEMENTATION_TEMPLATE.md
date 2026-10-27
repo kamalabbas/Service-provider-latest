@@ -267,18 +267,18 @@ Go unless the user asks.** Backend calls can't be tested from the dev machine
 
 ## 6. Report format ("what I did with guide NN")
 
+Keep it short and in plain language: what the user can now do, not how.
+
 ```markdown
-Guide NN (<title>) is implemented: <one-line outcome>. <verification summary>. <what was not verified>. Nothing is committed yet.
+Guide NN (<title>) is done. <one line: checks passed; not tested on a device or the live API; not committed>.
 
-| Guide requirement | What I did |
-|---|---|
-| … | … |
+- Added the <page/feature> where members <do what>: <what it includes>.
+- <one bullet per user-visible change; 3–6 bullets>
 
-**New screens:** …
-**Removed/replaced legacy code:** …
-**Not done / follow-ups:** … (each with why)
-**Decisions needed:** … (only real ones)
+**Needs your decision:** <only real ones, one line each>
 ```
+
+No requirement-by-requirement tables or file lists; the README section and the commit body hold the details.
 
 Then ask whether to commit. When the user says so: branch `guide-NN-<slug>`,
 commit, fast-forward `main`, push both. Never push without being asked.

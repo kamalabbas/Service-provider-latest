@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDeactivateMyAccount, useMyMember } from "@/hooks/useMembership";
 import { useMyProfile } from "@/hooks/useProfile";
 import { useToastStore } from "@/stores/toastStore";
-import { canDeactivateOwnAccount, canViewOwnProfile } from "@/utility/access";
+import { canDeactivateOwnAccount, canViewOwnBusiness, canViewOwnProfile } from "@/utility/access";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useAuthStore } from "@/stores/authStore";
 import { ThemePreference, useThemeStore } from "@/stores/theme";
@@ -88,6 +88,17 @@ export default function MenuScreen() {
           subtitle={member ? `Membership ID ${member.membershipId}` : memberLoading ? "Loading…" : "Not chosen yet"}
         />
       </ListSection>
+
+      {canViewOwnBusiness(user, member?.userTypeCode) ? (
+        <ListSection title="Business">
+          <ListRow
+            icon="storefront-outline"
+            title="My business"
+            subtitle="Name, ABN, address and picture"
+            onPress={() => router.push("/(dashboard)/(menu)/business")}
+          />
+        </ListSection>
+      ) : null}
 
       <ListSection title="Security">
         <ListRow

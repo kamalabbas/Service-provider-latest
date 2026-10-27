@@ -45,3 +45,16 @@ export const canViewOwnProfile = (user?: User | null) => can(user, ["profiles.vi
 export const canEditOwnProfile = (user?: User | null) => can(user, ["profiles.manage"], true);
 /** Target-user profile routes are SuperAdmin-only (full session). */
 export const canManageUserProfiles = (user?: User | null) => isAdministrator(grantsOf(user));
+
+// Guide 05: business details. Eligible types plus each operation's own permission;
+// a user type alone is not access. Full access only (no setup exception).
+export const BUSINESS_USER_TYPES: readonly string[] = ["tradeperson", "builder", "developer"];
+const businessEligible = (userTypeCode?: string | null) => !!userTypeCode && BUSINESS_USER_TYPES.includes(userTypeCode);
+export const canViewOwnBusiness = (user: User | null | undefined, userTypeCode?: string | null) =>
+  businessEligible(userTypeCode) && can(user, ["businesses.view"]);
+export const canManageOwnBusiness = (user: User | null | undefined, userTypeCode?: string | null) =>
+  businessEligible(userTypeCode) && can(user, ["businesses.manage"]);
+export const canArchiveOwnBusiness = (user: User | null | undefined, userTypeCode?: string | null) =>
+  businessEligible(userTypeCode) && can(user, ["businesses.delete"]);
+/** Admin business routes are SuperAdmin-only (full session). */
+export const canManageBusinessesAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));

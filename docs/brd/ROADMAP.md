@@ -18,8 +18,8 @@ Status: ✅ done · 🔜 next · ⬜ not started · ⏸ blocked on a decision
 | 1 Onboarding | 06 Reference choices | ✅ | 01 | 4 / 5 | `reference.view` (setup ok), `reference.manage/.delete`, `reference-admin.view` |
 | 1 Onboarding | 03 Member types and roles | ✅ | 01 | 4 / 12 | `profiles.view/.manage` (setup ok); admin: `users.*`, `roles.*` |
 | 1 Onboarding | 04 Profiles | ✅ | 03, 06 | 3 / 4 | `profiles.view/.manage` (setup ok) |
-| 2 Provider setup | 05 Business details | 🔜 | 04 | 5 / 7 | `businesses.view/.manage/.delete` |
-| 2 Provider setup | 07 Services (own listings) | ⬜ | 05, 06 | 7 / 5 (shared with discovery) | `services.view/.manage/.delete` |
+| 2 Provider setup | 05 Business details | ✅ | 04 | 5 / 7 | `businesses.view/.manage/.delete` |
+| 2 Provider setup | 07 Services (own listings) | 🔜 | 05, 06 | 7 / 5 (shared with discovery) | `services.view/.manage/.delete` |
 | 2 Provider setup | 10 Employees | ⬜ | 05, 06 | 5 / 5 | `employees.view/.manage/.delete` |
 | 3 Customer work | 07 Discovery (nearby search, provider detail) | ⬜ | 04 | (above) | `services.view` |
 | 3 Customer work | 08 Inspections | ⬜ | 07 | 11 / 6 | `inspections.view/.manage/.delete` |
@@ -77,7 +77,10 @@ and ends with a session refresh to obtain full access.
 2. **Menu → Email & password:** the backend has no change-email or change-password
    endpoint (guide 04 confirms there is no change-login-email). Remove the screen,
    or keep it hidden until the backend adds endpoints?
-3. **App icon and splash:** still the placeholder grid; replace with the AUETE
+3. **Location input (guides 05, 07):** guide 05 ships with typed latitude/longitude.
+   Approving `expo-location` (and optionally `react-native-maps`) would add "use my
+   location" and an editable map pin; guide 07's nearby search needs `expo-location` anyway.
+4. **App icon and splash:** still the placeholder grid; replace with the AUETE
    bolt mark (needs a native rebuild).
 
 ## Legacy code still to retire
