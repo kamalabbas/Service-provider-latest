@@ -1,4 +1,5 @@
 import { FormInput } from "@/components/form/FormInput";
+import { LocationPicker } from "@/components/form/LocationPicker";
 import { SelectInput } from "@/components/form/SelectInput";
 import { Loader } from "@/components/ui/loader";
 import { Notice } from "@/components/ui/Notice";
@@ -15,6 +16,7 @@ import { mapApiValidation, toAppError } from "@/services/apiError";
 import { useToastStore } from "@/stores/toastStore";
 import { canManageOwnServices } from "@/utility/access";
 import { referenceOptions } from "@/utility/referenceOptions";
+import { parseCoordinates } from "@/utility/coordinates";
 import { SERVICE_FIELDS, ServiceFormValues, allowedOccupationCodes, serviceFormValues, serviceSchema, toSaveServiceRequest } from "@/utility/serviceForm";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -70,7 +72,7 @@ function ServiceForm({ listing, business, allowedOccupations }: ServiceFormProps
   const invalidateChoices = useInvalidateReferenceChoices();
   const save = useSaveMyService(listing?.id ?? null);
 
-  const { control, handleSubmit, setError, setValue, formState: { errors } } = useForm<ServiceFormValues>({
+  const { control, handleSubmit, setError, setValue, watch, formState: { errors } } = useForm<ServiceFormValues>({
     resolver: yupResolver(serviceSchema),
     // A new listing starts at the business location; the provider can change it.
     defaultValues: serviceFormValues(listing, listing ? null : business),
@@ -81,12 +83,13 @@ function ServiceForm({ listing, business, allowedOccupations }: ServiceFormProps
     : occupations.data?.filter((choice) => allowedOccupations.includes(choice.code));
   const occupationOptions = referenceOptions(occupationChoices, listing?.occupationCode);
   const regionOptions = referenceOptions(regions.data, listing?.regionCode);
+  const [latitude, longitude] = watch(["latitude", "longitude"]);
 
   const applyBusinessLocation = () => {
     setValue("suburb", business.suburb);
     setValue("regionCode", business.regionCode);
-    setValue("latitude", String(business.latitude));
-    setValue("longitude", String(business.longitude));
+    setValue("latitude", String(business.latitude), { shouldValidate: true });
+    setValue("longitude", String(business.longitude), { shouldValidate: true });
   };
 
   const onSubmit = (values: ServiceFormValues) => {
@@ -145,8 +148,16 @@ function ServiceForm({ listing, business, allowedOccupations }: ServiceFormProps
             options={regionOptions} loading={regions.isLoading} error={errors.regionCode?.message} />
         )}
       />
-      {text("latitude", "Latitude", { keyboardType: "numbers-and-punctuation", placeholder: "-33.8688" })}
-      {text("longitude", "Longitude", { keyboardType: "numbers-and-punctuation", placeholder: "151.2093" })}
+      <LocationPicker
+        label="Listing location"
+        value={parseCoordinates(latitude, longitude)}
+        onChange={(point) => {
+          setValue("latitude", String(point.latitude), { shouldValidate: true });
+          setValue("longitude", String(point.longitude), { shouldValidate: true });
+        }}
+        error={errors.latitude?.message ?? errors.longitude?.message}
+        helperText="Drag the pin to where you offer this service. The suburb isn't checked against the pin."
+      />
 
       <PrimaryButton
         title={save.isPending ? "Saving..." : listing ? "Save changes" : "Publish service"}

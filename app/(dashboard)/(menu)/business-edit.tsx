@@ -1,23 +1,23 @@
 import { FormInput } from "@/components/form/FormInput";
+import { LocationPicker } from "@/components/form/LocationPicker";
 import { SelectInput } from "@/components/form/SelectInput";
 import { Loader } from "@/components/ui/loader";
 import { Notice } from "@/components/ui/Notice";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { Screen } from "@/components/ui/Screen";
-import { Spacing } from "@/constants/Theme";
 import { useBusinessAccess, useMyBusiness, useSaveMyBusiness } from "@/hooks/useBusiness";
 import { useInvalidateReferenceChoices, useReferenceChoices } from "@/hooks/useReferenceChoices";
 import { Business } from "@/interfaces/business.interface";
 import { mapApiValidation, toAppError } from "@/services/apiError";
 import { useToastStore } from "@/stores/toastStore";
 import { canManageOwnBusiness } from "@/utility/access";
+import { parseCoordinates } from "@/utility/coordinates";
 import { BUSINESS_FIELDS, BusinessFormValues, businessFormValues, businessSchema, toSaveBusinessRequest } from "@/utility/businessForm";
 import { referenceOptions } from "@/utility/referenceOptions";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useRouter } from "expo-router";
 import { ComponentProps } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { StyleSheet } from "react-native";
 
 // Guide 05: create (POST, only when none is active) or edit (PUT) the business.
 export default function BusinessEditScreen() {
@@ -42,12 +42,13 @@ function BusinessForm({ business }: { business: Business | null }) {
   const { refetch } = useMyBusiness();
   const save = useSaveMyBusiness(Boolean(business));
 
-  const { control, handleSubmit, setError, formState: { errors } } = useForm<BusinessFormValues>({
+  const { control, handleSubmit, setError, setValue, watch, formState: { errors } } = useForm<BusinessFormValues>({
     resolver: yupResolver(businessSchema),
     defaultValues: businessFormValues(business),
   });
   // A retired saved region stays visible while unchanged; new choices must be active.
   const regionOptions = referenceOptions(regions.data, business?.regionCode);
+  const [latitude, longitude] = watch(["latitude", "longitude"]);
 
   const onSubmit = (values: BusinessFormValues) => {
     if (save.isPending) return;
@@ -97,9 +98,16 @@ function BusinessForm({ business }: { business: Business | null }) {
         )}
       />
       {text("postalCode", "Postcode", { keyboardType: "number-pad" })}
-      <Notice message="Enter the coordinates of the business location. Your current position isn't used automatically." style={styles.notice} />
-      {text("latitude", "Latitude", { keyboardType: "numbers-and-punctuation", placeholder: "-33.8688" })}
-      {text("longitude", "Longitude", { keyboardType: "numbers-and-punctuation", placeholder: "151.2093" })}
+      <LocationPicker
+        label="Business location"
+        value={parseCoordinates(latitude, longitude)}
+        onChange={(point) => {
+          setValue("latitude", String(point.latitude), { shouldValidate: true });
+          setValue("longitude", String(point.longitude), { shouldValidate: true });
+        }}
+        error={errors.latitude?.message ?? errors.longitude?.message}
+        helperText="Place the pin on your business address. Your current position is used only if you tap the button."
+      />
 
       <PrimaryButton
         title={save.isPending ? "Saving..." : business ? "Save changes" : "Add business"}
@@ -111,6 +119,3 @@ function BusinessForm({ business }: { business: Business | null }) {
   );
 }
 
-const styles = StyleSheet.create({
-  notice: { marginBottom: Spacing.lg },
-});

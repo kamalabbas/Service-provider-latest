@@ -1,4 +1,5 @@
 import { FormInput } from "@/components/form/FormInput";
+import { LocationPicker } from "@/components/form/LocationPicker";
 import { SelectInput } from "@/components/form/SelectInput";
 import { ThemedText } from "@/components/ThemedText";
 import { ListRow, ListSection } from "@/components/ui/ListSection";
@@ -13,7 +14,7 @@ import { useServiceSearch } from "@/hooks/useServices";
 import { ServiceSearchFilters } from "@/interfaces/service.interface";
 import { useAuthStore } from "@/stores/authStore";
 import { canViewServices } from "@/utility/access";
-import { coordinateField } from "@/utility/coordinates";
+import { Coordinates } from "@/utility/coordinates";
 import { referenceOptions } from "@/utility/referenceOptions";
 import { distanceText, ratingText } from "@/utility/serviceForm";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -23,19 +24,17 @@ import { StyleSheet, View } from "react-native";
 const RADIUS_OPTIONS = ["10", "25", "50", "100", "250", "500"].map((value) => ({ label: `${value} km`, value }));
 const ANY = "";
 
-// Guide 07: nearby discovery. Location is entered or taken from the business until
-// device location is approved; results are ordered by estimated distance.
+// Guide 07: nearby discovery. Searches from the device location when allowed;
+// otherwise the member places the pin. Results are ordered by estimated distance.
 export default function FindServicesScreen() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const business = useMyBusiness();
   const occupations = useReferenceChoices("occupations");
-  const [latitude, setLatitude] = useState("");
-  const [longitude, setLongitude] = useState("");
+  const [point, setPoint] = useState<Coordinates | null>(null);
   const [radius, setRadius] = useState("50");
   const [occupation, setOccupation] = useState(ANY);
   const [membershipId, setMembershipId] = useState("");
-  const [locationError, setLocationError] = useState<string | undefined>();
   const [filters, setFilters] = useState<ServiceSearchFilters | null>(null);
   const search = useServiceSearch(filters);
 
@@ -49,18 +48,11 @@ export default function FindServicesScreen() {
     return <Screen title="Find services"><Notice tone="warning" message="You don't have permission to search services." /></Screen>;
   }
 
-  const runSearch = () => {
-    try {
-      coordinateField("latitude").validateSync(latitude);
-      coordinateField("longitude").validateSync(longitude);
-    } catch (error) {
-      setLocationError(error instanceof Error ? error.message : "Enter a valid location.");
-      return;
-    }
-    setLocationError(undefined);
+  const runSearch = (at: Coordinates | null = point) => {
+    if (!at) return;
     setFilters({
-      latitude: Number(latitude),
-      longitude: Number(longitude),
+      latitude: at.latitude,
+      longitude: at.longitude,
       radiusKm: Number(radius),
       occupationCode: occupation || undefined,
       membershipId: membershipId.trim() || undefined,
@@ -74,18 +66,25 @@ export default function FindServicesScreen() {
     <Screen title="Find services" subtitle="Search for providers near a location.">
       <ListSection title="Location">
         <View style={styles.form}>
+          <LocationPicker
+            value={point}
+            locateOnMount
+            onChange={(next) => {
+              setPoint(next);
+              // The first location found searches straight away; later moves wait for Search.
+              if (!filters) runSearch(next);
+            }}
+          />
           {ownBusiness ? (
             <PrimaryButton
               title="Use my business location"
               variant="ghost"
               size="md"
               leftIcon="business-outline"
-              onPress={() => { setLatitude(String(ownBusiness.latitude)); setLongitude(String(ownBusiness.longitude)); }}
+              onPress={() => setPoint({ latitude: ownBusiness.latitude, longitude: ownBusiness.longitude })}
               style={styles.spaced}
             />
           ) : null}
-          <FormInput label="Latitude" value={latitude} onChangeText={setLatitude} keyboardType="numbers-and-punctuation" placeholder="-33.8688" />
-          <FormInput label="Longitude" value={longitude} onChangeText={setLongitude} keyboardType="numbers-and-punctuation" placeholder="151.2093" error={locationError} />
           <SelectInput label="Within" value={radius} onChange={setRadius} options={RADIUS_OPTIONS} />
         </View>
       </ListSection>
@@ -103,7 +102,7 @@ export default function FindServicesScreen() {
         </View>
       </ListSection>
 
-      <PrimaryButton title="Search" leftIcon="search-outline" onPress={runSearch} loading={search.isFetching && !search.isFetchingNextPage} style={styles.spaced} />
+      <PrimaryButton title="Search" leftIcon="search-outline" onPress={() => runSearch()} disabled={!point} loading={search.isFetching && !search.isFetchingNextPage} style={styles.spaced} />
 
       {filters === null ? null : search.isLoading ? (
         <Loader visible overlay={false} message="Searching…" />

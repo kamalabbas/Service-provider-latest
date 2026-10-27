@@ -120,16 +120,21 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 - Account → **My business** (`app/(dashboard)/(menu)/business.tsx`) shows an empty state, the active business (`GET /api/businesses/me`, `data: null` when none), its picture, and **Archive business** behind a confirmation that lists the effects. **Business details** (`business-edit.tsx`) creates with POST only when none is active, otherwise edits with PUT; it never creates implicitly.
 - Eligibility: Tradeperson, Builder or Developer **and** the operation's own permission (`businesses.view/.manage/.delete`), full access only. A type alone, or a permission alone, is not access. Read-only members see details without edit actions.
 - ABN (11 digits, checksum) is required and ACN (9 digits, checksum) is optional; spaces are removed before sending, and the screen notes that a checksum doesn't prove registration. Rules live in `utility/businessForm.ts`.
-- Coordinates are typed explicitly (0 is valid) and range-checked again in the service. The device's position is never used automatically. Location/map input needs a package decision (see the roadmap).
+- The location is set with a map pin (`components/form/LocationPicker.tsx`): tap or drag the pin, or tap **Use my current location** (`expo-location`, asked only on tap). Coordinates are never typed; they are range-checked again in the service, and 0 is valid.
 - Archive refetches every query, since listings, roster and card requests change server-side. The picture upload shares `components/ui/PicturePicker.tsx` with the profile picture.
 - SuperAdmin list/detail/create-for-user/update/archive/history/picture routes have services and hooks (`services/businessService.ts`, `hooks/useBusiness.ts`). No admin screens yet.
 
 ## Services and discovery (guide 07)
 
-- **Find** tab (`app/(dashboard)/(find)`): search by location (typed, or "use my business location" until device location is approved), radius 1–500 km (default 50), optional occupation and membership ID. Empty filters are omitted; results are paged with **Show more** and ordered by estimated straight-line distance. Results refresh when returning to the tab.
+- **Find** tab (`app/(dashboard)/(find)`): searches from the phone's current location when the member allows it (the first fix searches straight away); otherwise they place the pin on the map or use their business location, radius 1–500 km (default 50), optional occupation and membership ID. Empty filters are omitted; results are paged with **Show more** and ordered by estimated straight-line distance. Results refresh when returning to the tab.
 - Provider detail shows business and profile pictures, membership ID, rating (a null average shows "No ratings yet"), service and business locations, and inspection availability (`canRequestInspection` plus `inspections.manage`). A listing that stops being discoverable shows "no longer available". No email or phone is exposed.
 - Account → **My services**: active and archived listings, detail, create/edit and archive. Publishing needs an eligible type, `services.manage` and an active business; a Tradeperson may list only occupations on their profile. A new listing starts at the business location but keeps its own coordinates. Archived listings are read-only.
 - Rules live in `utility/serviceForm.ts` and `utility/coordinates.ts` (shared with the business form); search parameters are built and checked by `searchParams` in `services/serviceListingService.ts`. SuperAdmin listing routes have services and hooks (`hooks/useServices.ts`). No admin screens yet.
+
+## Location and maps
+
+- `expo-location` gives the device position (`services/deviceLocation.ts`, foreground permission only; denial falls back to the map pin). `react-native-maps` shows the pin. Both work in Expo Go.
+- The permission text is set by the `expo-location` plugin in `app.json`. A release Android build that shows the map needs a Google Maps API key (`android.config.googleMaps.apiKey`) before publishing.
 
 ## Reference choices (guide 06)
 

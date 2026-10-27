@@ -65,7 +65,7 @@ and ends with a session refresh to obtain full access.
 
 | Guide | Package | Why |
 |---|---|---|
-| 05, 07 | `expo-location` (+ optionally `react-native-maps`) | Business/listing coordinates and nearby search. |
+| 05, 07 | `expo-location`, `react-native-maps` ✅ added | Map pin and current location for business/listing/search. |
 | 09 | `expo-document-picker`, `expo-sharing` | Pick a PDF to upload; open/share a downloaded quote PDF. |
 | 18 | `@microsoft/signalr` | Live notification hub connection. |
 
@@ -77,9 +77,8 @@ and ends with a session refresh to obtain full access.
 2. **Menu → Email & password:** the backend has no change-email or change-password
    endpoint (guide 04 confirms there is no change-login-email). Remove the screen,
    or keep it hidden until the backend adds endpoints?
-3. **Location input (guides 05, 07):** guide 05 ships with typed latitude/longitude.
-   Approving `expo-location` (and optionally `react-native-maps`) would add "use my
-   location" and an editable map pin; guide 07's nearby search needs `expo-location` anyway.
+3. **Google Maps API key:** release Android builds with the map need a key in
+   `android.config.googleMaps.apiKey` (Expo Go works without one).
 4. **App icon and splash:** still the placeholder grid; replace with the AUETE
    bolt mark (needs a native rebuild).
 

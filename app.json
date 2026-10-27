@@ -48,6 +48,12 @@
         {
           "photosPermission": "Service Provider accesses photos when you choose an image."
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Service Provider uses your location to find services near you and to place your business or listing on the map."
+        }
       ]
     ],
     "extra": {
