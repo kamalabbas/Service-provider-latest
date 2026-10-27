@@ -86,3 +86,7 @@ export const canManageEmployeesAsAdmin = (user?: User | null) => isAdministrator
 export const canViewInspections = (user?: User | null) => can(user, ["inspections.view"]);
 export const canRequestInspections = (user?: User | null) => can(user, ["inspections.manage"]);
 export const canManageInspectionsAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));
+
+// Guide 09: quotes. Per-action rules (participant + state + permission) live in utility/quoteRules.ts.
+export const canViewQuotes = (user?: User | null) => can(user, ["quotes.view"]);
+export const canManageQuotesAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));

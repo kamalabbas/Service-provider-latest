@@ -145,6 +145,13 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 - The completion code lives only in screen state: never cached, stored, logged or put in a URL. Every action refetches the inspection and lists, including after conflicts. Appointments are sent in UTC with seconds (`toUtcTimestamp`).
 - SuperAdmin list/detail/create-for-requester/decision/worker/rating routes have services and hooks (`services/inspectionService.ts`, `hooks/useInspections.ts`). No admin screens yet.
 
+## Quotes (guide 09)
+
+- **Quotes** tab (`app/(dashboard)/(quotes)`): quotes received and sent, with a status filter and paging. **Send a quote** appears on a completed or rated inspection for its provider (amount in AUD with at most 2 decimals, a future "valid until" date/time, optional note). The server issues the quote number; there is no payment step.
+- Detail shows the amount, number, expiry countdown, both parties, note, PDF and history. The customer can accept (final, not a payment) or reject; the provider can withdraw and attach/replace a PDF while the quote is pending. Before any decision the app refetches the quote and acts only if it is still open; status and expiry always come from the server.
+- PDFs: picked with `expo-document-picker` (PDF, 10 MB, field `document`), downloaded with Bearer authorization from the quote's own root-relative link (never a public URL), opened through the share sheet (`expo-sharing`) from a temporary file that is deleted afterwards (`services/devicePdf.ts`).
+- Rules live in `utility/quoteRules.ts`; service and hooks in `services/quoteService.ts` / `hooks/useQuotes.ts`, including SuperAdmin routes (no admin screens yet).
+
 ## Location and maps
 
 - `expo-location` gives the device position (`services/deviceLocation.ts`, foreground permission only; denial falls back to the map pin). `react-native-maps` shows the pin. Both work in Expo Go.

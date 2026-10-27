@@ -1,7 +1,7 @@
 import { IconSymbol } from "@/components/ui/IconSymbol";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { selectIsAuthenticated, selectNeedsProfileSetup, useAuthStore } from "@/stores/authStore";
-import { canViewInspections, canViewServices } from "@/utility/access";
+import { canViewInspections, canViewQuotes, canViewServices } from "@/utility/access";
 import { Tabs } from "expo-router";
 import { StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,6 +11,7 @@ export default function DashboardLayout() {
   const needsSetup = useAuthStore(selectNeedsProfileSetup);
   const canFind = useAuthStore((state) => canViewServices(state.user));
   const canInspect = useAuthStore((state) => canViewInspections(state.user));
+  const canQuote = useAuthStore((state) => canViewQuotes(state.user));
   const insets = useSafeAreaInsets();
   const tabActive = useThemeColor({}, "tabIconSelected");
   const tabInactive = useThemeColor({}, "tabIconDefault");
@@ -63,6 +64,14 @@ export default function DashboardLayout() {
           title: "Inspections",
           href: canInspect ? undefined : null,
           tabBarIcon: ({ color, size }) => <IconSymbol name="list.clipboard" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="(quotes)"
+        options={{
+          title: "Quotes",
+          href: canQuote ? undefined : null,
+          tabBarIcon: ({ color, size }) => <IconSymbol name="doc.text" color={color} size={size} />,
         }}
       />
       <Tabs.Screen

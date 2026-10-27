@@ -12,14 +12,16 @@ import { useAuthStore } from "@/stores/authStore";
 import { useToastStore } from "@/stores/toastStore";
 import { formatLocalTimestamp } from "@/utility/apiValues";
 import { STATUS_LABELS, inspectionActions, inspectionRole } from "@/utility/inspectionRules";
+import { canIssueQuoteFor } from "@/utility/quoteRules";
 import { referenceLabel } from "@/utility/referenceOptions";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 // Guide 08: detail, timeline and every action the matrix allows for this member.
 export default function InspectionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const inspectionId = Number.isSafeInteger(Number(id)) && Number(id) > 0 ? Number(id) : null;
   const user = useAuthStore((state) => state.user);
   const showToast = useToastStore((state) => state.showToast);
@@ -105,6 +107,13 @@ export default function InspectionScreen() {
       ) : null}
 
       <View style={styles.actions}>
+        {canIssueQuoteFor(inspection, user) ? (
+          <PrimaryButton
+            title="Send a quote"
+            leftIcon="document-text-outline"
+            onPress={() => router.push({ pathname: "/(dashboard)/(quotes)/new", params: { inspectionId: String(inspection.id) } })}
+          />
+        ) : null}
         {allowed.reject ? <PrimaryButton title="Reject request" variant="danger" leftIcon="close-circle-outline" onPress={() => setPrompt("reject")} /> : null}
         {allowed.cancel ? <PrimaryButton title="Cancel request" variant="danger" leftIcon="close-outline" onPress={() => setPrompt("cancel")} /> : null}
         {allowed.hide ? (
