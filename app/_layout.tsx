@@ -10,6 +10,7 @@ import 'react-native-reanimated';
 import { Toast } from '@/components/ui/Toast';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import useNotificationTaps from '@/hooks/useNotificationTaps';
 import usePushNotification from '@/hooks/usePushNotification';
 import { initializeTheme, useThemeStore } from '@/stores/theme';
 import { useToastStore } from '@/stores/toastStore';
@@ -126,6 +127,7 @@ export default function RootLayout() {
 
   const isAuthenticated = useAuthStore(selectIsAuthenticated);
   const needsSetup = useAuthStore(selectNeedsProfileSetup);
+  useNotificationTaps(ready);
 
   if (!ready) return null;
 

@@ -124,8 +124,9 @@ test("all local variants permit missing API/Firebase inputs with clear diagnosti
   for (const APP_VARIANT of ["dev", "preview", "production"]) {
     const { config, warnings } = dynamic({ APP_VARIANT }, fixture(t));
     assert.equal(config.android.googleServicesFile, base.android.googleServicesFile);
-    assert.equal(warnings.length, 2);
+    assert.equal(warnings.length, 3);
     assert.match(warnings.join("\n"), /backend-dependent features remain disabled/);
+    assert.match(warnings.join("\n"), /live updates are off/);
     assert.match(warnings.join("\n"), /JavaScript exports can continue/);
     assert.deepEqual(nativeConfigurationErrors(config, {}, root, "ios"), []);
   }
@@ -171,7 +172,23 @@ test("registered Android prebuild validation accepts a matching client", async t
   const { config } = dynamic({}, directory);
   const result = await config.mods.android.dangerous({ ...config, modRequest: { projectRoot: directory } });
   assert.equal(result.android.package, base.android.package + ".dev");
-  assert.deepEqual(configurationWarnings(config, { EXPO_PUBLIC_BASE_URL: api }, directory), []);
+  assert.deepEqual(configurationWarnings(config, { EXPO_PUBLIC_BASE_URL: api, EXPO_PUBLIC_SIGNALR_URL: hub }, directory), []);
+});
+
+const hub = "https://signalr.example.test/hubs/notifications";
+
+for (const value of [" ", "https://signalr.example.test", "https://signalr.example.test/", "http://signalr.example.test/hubs/notifications", "wss://signalr.example.test/hubs/notifications", "https://user:private@signalr.example.test/hubs/notifications", "https://signalr.example.test/hubs/notifications?access_token=private", "https://signalr.example.test/hubs/notifications#private"]) {
+  test(`invalid hub URL case ${JSON.stringify(value.split("private")[0])} produces a safe configuration error`, t => {
+    assert.throws(() => dynamic({ EXPO_PUBLIC_SIGNALR_URL: value }, fixture(t)), error => {
+      assert.match(error.message, /EXPO_PUBLIC_SIGNALR_URL must be an absolute HTTPS hub URL/);
+      assert.equal(error.message.includes("private"), false);
+      return true;
+    });
+  });
+}
+
+test("an HTTPS hub URL with its path is accepted", t => {
+  assert.equal(dynamic({ EXPO_PUBLIC_SIGNALR_URL: hub }, fixture(t)).config.extra.appVariant, "dev");
 });
 
 test("local CLI checks permit unconfigured tooling and reject invalid flags/platforms", () => {

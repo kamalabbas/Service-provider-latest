@@ -174,7 +174,7 @@ function harness(options = {}) {
       DarkTheme: { colors: { background: '#000' } }, DefaultTheme: { colors: { background: '#fff' } }, ThemeProvider: 'ThemeProvider',
     },
     'expo-font': { useFonts: () => fonts },
-    'expo-router': { Stack, Tabs, useLocalSearchParams: () => options.params ?? {} },
+    'expo-router': { Stack, Tabs, useLocalSearchParams: () => options.params ?? {}, router: { push: () => {} } },
     'expo-linking': { openURL: url => links.push(url) },
     'expo-status-bar': { StatusBar: 'StatusBar' },
     'expo-splash-screen': {
@@ -194,6 +194,8 @@ function harness(options = {}) {
     '@/components/ui/Toast': { Toast: 'Toast' },
     // Backend registration is covered by tests/notifications.test.cjs.
     '@/services/pushRegistration': { startPushRegistration: () => () => {} },
+    // The live hub lifecycle is covered by tests/liveNotifications.test.cjs.
+    '@/services/liveNotifications': { startLiveNotifications: () => () => {}, handleLiveNotice: () => true },
     '@/hooks/useColorScheme': { useColorScheme: () => options.systemScheme ?? 'light' },
     '@/stores/toastStore': { useToastStore: select => select ? select(toastState) : toastState },
     '@/hooks/useThemeColor': { useThemeColor: () => '#fff' },
@@ -415,7 +417,11 @@ test('root notification ownership survives effect replay/remount and queues a co
   h.refreshes[0].resolve(response);
   await h.flush();
   assert.ok(findView(remount.tree));
-  assert.equal(h.takeNotificationResponse(true), tap);
+  // Guide 18: the root consumes the queued tap once ready (useNotificationTaps); data
+  // without a known event type opens the app without navigating.
+  remount.render();
+  await h.flush();
+  assert.equal(h.notificationStore.getState().pendingResponse, null);
   assert.equal(h.takeNotificationResponse(true), null);
   assert.equal(h.push.maxima.received, 1);
   assert.equal(h.push.maxima.response, 1);

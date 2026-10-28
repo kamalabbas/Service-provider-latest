@@ -12,12 +12,24 @@ function validateApiUrl(value) {
   }
 }
 
+// Guide 18: the notification hub is configured separately from the API origin.
+function validateHubUrl(value) {
+  if (value === undefined || value === "") return;
+  let url;
+  try { url = new URL(value); } catch { /* Report only controlled configuration text. */ }
+  if (!url || value !== value.trim() || !value.startsWith('https://') || url.protocol !== 'https:' ||
+      !url.hostname || url.username || url.password || url.search || url.hash || url.pathname === '/') {
+    throw new Error("EXPO_PUBLIC_SIGNALR_URL must be an absolute HTTPS hub URL with its path (e.g. /hubs/notifications), without credentials, query parameters, fragments, or surrounding whitespace.");
+  }
+}
+
 function resolveAppConfig(config, env, projectRoot) {
   const variant = env.APP_VARIANT === undefined ? "dev" : env.APP_VARIANT;
   if (!["dev", "preview", "production"].includes(variant)) {
     throw new Error("APP_VARIANT must be dev, preview, or production. Unset defaults to dev for local tooling.");
   }
   validateApiUrl(env.EXPO_PUBLIC_BASE_URL);
+  validateHubUrl(env.EXPO_PUBLIC_SIGNALR_URL);
   const isDev = variant === "dev";
   const devFile = "./google-services.dev.json";
   const googleServicesFile = env.GOOGLE_SERVICES_JSON ||
@@ -36,6 +48,9 @@ function configurationWarnings(config, env, projectRoot) {
   const warnings = [];
   if (!env.EXPO_PUBLIC_BASE_URL) {
     warnings.push("EXPO_PUBLIC_BASE_URL is unset; backend-dependent features remain disabled. Supply an approved URL locally or in the selected EAS environment.");
+  }
+  if (!env.EXPO_PUBLIC_SIGNALR_URL) {
+    warnings.push("EXPO_PUBLIC_SIGNALR_URL is unset; live updates are off and screens refresh over HTTP only.");
   }
   if (!config.android?.googleServicesFile || !fs.existsSync(path.resolve(projectRoot, config.android.googleServicesFile))) {
     warnings.push("Android Firebase input is missing. Config inspection and JavaScript exports can continue; native Android builds require a matching google-services file. See README.");

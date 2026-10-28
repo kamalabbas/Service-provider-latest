@@ -202,6 +202,14 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 - Account → Help → **Report a problem**: what you were doing, what went wrong, an optional error reference (trace ID) and optional details. Platform, app version and device model are added automatically. Passwords, tokens, push tokens, emails and six-digit codes are redacted before sending, and the whole report is fitted to 8192 bytes (`utility/issueReport.ts`). The confirmation shows the report number; there is no report history for members, and reports are kept 90 days.
 - SuperAdmin investigation routes (list, detail, history, status) are in `services/notificationService.ts` (no admin screens yet).
 
+## Live updates (guide 18)
+
+- `@microsoft/signalr` connects to the notification hub at `EXPO_PUBLIC_SIGNALR_URL` (full HTTPS hub URL, configured separately from the API origin; unset turns live updates off). Local dev uses `https://dev-signalr.auete.store/hubs/notifications` in `.env.local`; set the same variable in each EAS environment. The handbook's zourwa host is wrong.
+- The connection runs while signed in, profile setup included (support notices), using the current access token (refreshed through the auth service near expiry). Delivery is targeted server-side; no user ID is sent. Sign-out or an account switch stops it and clears seen events. Failed starts and final closes retry with backoff (2 s → 60 s); returning to the app reconnects at once.
+- Each `notificationReceived` notice is validated, deduplicated by `eventId` (bounded, across SignalR and foreground pushes), shown as an info toast, and refetches the affected screens' queries (debounced). Unknown types are ignored. Connect, reconnect and resume refetch every live-updated feature, because missed events aren't replayed. Mapping and deep links live in `utility/liveEvents.ts`; the lifecycle in `services/liveNotifications.ts`.
+- Tapping a push opens its record once the session is restored (`hooks/useNotificationTaps.ts`): inspection, quote, card request, card, support conversation, item suggestion or announcement. The screen then loads it under the current permissions. Setup sessions only open support; SuperAdmin-only records (issue reports) and unknown types just open the app.
+- Connection state is kept in `notificationStore.live` (`off`, `connecting`, `live`, `reconnecting`, `retrying`); no indicator is shown yet.
+
 ## Location and maps
 
 - `expo-location` gives the device position (`services/deviceLocation.ts`, foreground permission only; denial falls back to the map pin). `react-native-maps` shows the pin. Both work in Expo Go.

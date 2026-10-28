@@ -1,4 +1,5 @@
 import { startPushNotifications } from '@/services/pushNotifications';
+import { startLiveNotifications } from '@/services/liveNotifications';
 import { startPushRegistration } from '@/services/pushRegistration';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -14,6 +15,8 @@ export default function usePushNotification(): UsePushNotificationResult {
   useEffect(() => startPushNotifications(), []);
   // Guide 17: register this installation's token with the backend for the signed-in account.
   useEffect(() => startPushRegistration(), []);
+  // Guide 18: the live hub connection and foreground push dispatch.
+  useEffect(() => startLiveNotifications(), []);
 
   const expoPushToken = useAuthStore(state => state.pushNotificationToken);
   const notification = useNotificationStore(state => state.notification);

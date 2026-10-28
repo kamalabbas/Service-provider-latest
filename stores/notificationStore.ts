@@ -6,9 +6,13 @@ export type PushTokenStatus = 'idle' | 'loading' | 'available' | 'denied' | 'una
 /** Guide 17: whether this installation is registered with the backend for the signed-in account. */
 export type PushRegistrationStatus = 'idle' | 'registered' | 'disabled' | 'refused' | 'error';
 
+/** Guide 18: the live notification hub connection for the signed-in account. */
+export type LiveConnectionStatus = 'off' | 'connecting' | 'live' | 'reconnecting' | 'retrying';
+
 interface NotificationState {
   tokenStatus: PushTokenStatus;
   registration: PushRegistrationStatus;
+  live: LiveConnectionStatus;
   notification: Notification | null;
   pendingResponse: {
     response: NotificationResponse;
@@ -22,6 +26,7 @@ interface NotificationState {
 export const useNotificationStore = create<NotificationState>(() => ({
   tokenStatus: 'idle',
   registration: 'idle',
+  live: 'off',
   notification: null,
   pendingResponse: null,
 }));
