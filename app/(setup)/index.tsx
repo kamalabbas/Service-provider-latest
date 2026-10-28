@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useMyMember } from "@/hooks/useMembership";
 import { useMyProfile } from "@/hooks/useProfile";
 import { useAuthStore } from "@/stores/authStore";
+import { canViewSupport } from "@/utility/access";
 import { useRouter } from "expo-router";
 import { StyleSheet, View } from "react-native";
 
@@ -16,7 +17,8 @@ import { StyleSheet, View } from "react-native";
 // (guide 03), then complete the profile (guide 04) and refresh the session.
 export default function SetupScreen() {
   const router = useRouter();
-  const email = useAuthStore((state) => state.user?.email);
+  const user = useAuthStore((state) => state.user);
+  const email = user?.email;
   const { logoutAndGoToLogin } = useAuth();
   const { data: member, isLoading } = useMyMember();
   const { data: profile } = useMyProfile();
@@ -50,6 +52,13 @@ export default function SetupScreen() {
           />
         </ListSection>
       )}
+
+      {canViewSupport(user) ? (
+        <ListSection title="Need help?">
+          <ListRow icon="chatbubbles-outline" title="Support" subtitle="Ask our team a question"
+            onPress={() => router.push("/(setup)/support")} />
+        </ListSection>
+      ) : null}
 
       <PrimaryButton title="Log out" variant="secondary" leftIcon="log-out-outline" onPress={logoutAndGoToLogin} />
     </Screen>

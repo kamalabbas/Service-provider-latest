@@ -121,3 +121,10 @@ export const canRegisterPushInstallation = (user?: User | null) => can(user, ["n
 export const canUnregisterPushInstallation = (user?: User | null) => can(user, ["notifications.delete"], true);
 /** Issue reports can be sent by anyone, signed in or not; only SuperAdmin investigates. */
 export const canInvestigateIssueReports = (user?: User | null) => isAdministrator(grantsOf(user));
+
+// Guide 15: support conversations (profile-setup sessions supported). Reply, close and
+// reopen rules live in utility/supportRules.ts.
+export const canViewSupport = (user?: User | null) => can(user, ["support.view"], true);
+export const canCreateSupportTickets = (user?: User | null) => can(user, ["support.manage"], true);
+/** Staff access to other members' tickets is SuperAdmin-only. */
+export const canManageSupportAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));

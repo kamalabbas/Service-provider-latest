@@ -184,6 +184,13 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 - **Item suggestions**: propose a missing item for an occupation you have an active listing in (name, optional description and suggested price), with status, decision reason and history. Approval creates a pending catalogue item; publishing and your price are separate steps.
 - Writes refetch prices and the shared price guide (averages change). Rules live in `utility/providerPriceRules.ts`; service and hooks in `services/providerPriceService.ts` / `hooks/useProviderPrices.ts`, including SuperAdmin routes (no admin screens yet).
 
+## Support (guide 15)
+
+- Account → Help → **Support**, and **Need help?** on the setup screen (`support.view`; profile-setup sessions are supported, so the screens are mounted in both stacks via `components/support/supportRoutes.ts`).
+- Conversation list with status filters (open, reply needed, closed), **New conversation** (title ≤ 200, message ≤ 5000, plain text), and a chat thread. Messages arrive newest first; pages are merged and deduplicated by ID in an inverted list, so **Show older messages** keeps the scroll position. A sent reply refetches the newest messages instead of being appended locally.
+- **Close conversation** needs `support.delete`; a closed conversation shows **Reopen conversation** instead of the composer (reopening needs `support.manage`). The ticket and messages refetch on focus and after every action, including failures.
+- Rules live in `utility/supportRules.ts`; service and hooks in `services/supportService.ts` / `hooks/useSupport.ts`. The thread screen takes an explicit `mode` (`member` / `admin`); the SuperAdmin inbox and admin routes have services and hooks only (no admin screens yet).
+
 ## Issue reports (guide 17)
 
 - Account → Help → **Report a problem**: what you were doing, what went wrong, an optional error reference (trace ID) and optional details. Platform, app version and device model are added automatically. Passwords, tokens, push tokens, emails and six-digit codes are redacted before sending, and the whole report is fitted to 8192 bytes (`utility/issueReport.ts`). The confirmation shows the report number; there is no report history for members, and reports are kept 90 days.
