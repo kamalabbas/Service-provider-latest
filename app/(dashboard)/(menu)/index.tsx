@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDeactivateMyAccount, useMyMember } from "@/hooks/useMembership";
 import { useMyProfile } from "@/hooks/useProfile";
 import { useToastStore } from "@/stores/toastStore";
-import { canDeactivateOwnAccount, canViewEmployees, canViewOwnBusiness, canViewOwnProfile, canViewServices } from "@/utility/access";
+import { canDeactivateOwnAccount, canViewCardRequests, canViewEmployees, canViewOwnBusiness, canViewOwnProfile, canViewServices } from "@/utility/access";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useAuthStore } from "@/stores/authStore";
 import { ThemePreference, useThemeStore } from "@/stores/theme";
@@ -74,6 +74,14 @@ export default function MenuScreen() {
       </View>
 
       <ListSection title="Membership">
+        {canViewCardRequests(user) ? (
+          <ListRow
+            icon="card-outline"
+            title="Membership cards"
+            subtitle="Request a card for you or an employee"
+            onPress={() => router.push("/(dashboard)/(menu)/card-requests")}
+          />
+        ) : null}
         {canViewOwnProfile(user) ? (
           <ListRow
             icon="person-circle-outline"

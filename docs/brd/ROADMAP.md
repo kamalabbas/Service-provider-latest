@@ -24,8 +24,8 @@ Status: ✅ done · 🔜 next · ⬜ not started · ⏸ blocked on a decision
 | 3 Customer work | 07 Discovery (nearby search, provider detail) | ✅ | 04 | (above) | `services.view` |
 | 3 Customer work | 08 Inspections | ✅ | 07 | 11 / 6 | `inspections.view/.manage/.delete` |
 | 3 Customer work | 09 Quotes | ✅ | 08 | 8 / 6 | `quotes.view/.manage/.delete` |
-| 4 Cards | 11 Card requests | 🔜 | 04, 10 | 6 / 6 | `card-requests.*`, `employees.manage` |
-| 4 Cards | 11-b Card issuance | ⬜ | 11 | 5 / 6 | `cards.view/.manage`, `card-requests.manage`, `employees.manage` |
+| 4 Cards | 11 Card requests | ✅ | 04, 10 | 6 / 6 | `card-requests.*`, `employees.manage` |
+| 4 Cards | 11-b Card issuance | 🔜 | 11 | 5 / 6 | `cards.view/.manage`, `card-requests.manage`, `employees.manage` |
 | 5 Relationships and pricing | 12 Client relationships | ⬜ | 08 | 3 / 2 | `clients.view/.manage/.delete` |
 | 5 Relationships and pricing | 13 Price catalogue | ⬜ | 06 | 2 / 7 | `price-catalogue.view`; admin: `price-catalogue-admin.view`, `.manage/.delete` |
 | 5 Relationships and pricing | 14 Provider prices | ⬜ | 13, 07 | 12 / 13 | `prices.view/.manage/.delete` |

@@ -152,6 +152,12 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 - PDFs: picked with `expo-document-picker` (PDF, 10 MB, field `document`), downloaded with Bearer authorization from the quote's own root-relative link (never a public URL), opened through the share sheet (`expo-sharing`) from a temporary file that is deleted afterwards (`services/devicePdf.ts`).
 - Rules live in `utility/quoteRules.ts`; service and hooks in `services/quoteService.ts` / `hooks/useQuotes.ts`, including SuperAdmin routes (no admin screens yet).
 
+## Membership card requests (guide 11)
+
+- Account → **Membership cards**: card requests for the member and their employees (filter All / Mine / Employees, paging). **Request my card** (no body; needs `card-requests.manage`) and **Request for an employee** (pick an active employee; needs a provider type, an active business, `employees.manage` and `card-requests.manage`). The buttons hide when a request for that subject is already open; the server still decides.
+- Detail shows the subject snapshot, delivery address, decision and audit history. While **Pending review** the owner can change the delivery address (all four fields) or cancel. **Approved** (API `accepted`) locks the address and doesn't mean a card was made or sent; issuance is guide 11-b.
+- Rules live in `utility/cardRequestRules.ts`; service and hooks in `services/cardRequestService.ts` / `hooks/useCardRequests.ts`, including the SuperAdmin review queue, decisions (rejection needs a reason), audited cancel and on-behalf requests (no admin screens yet).
+
 ## Location and maps
 
 - `expo-location` gives the device position (`services/deviceLocation.ts`, foreground permission only; denial falls back to the map pin). `react-native-maps` shows the pin. Both work in Expo Go.

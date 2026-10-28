@@ -90,3 +90,7 @@ export const canManageInspectionsAsAdmin = (user?: User | null) => isAdministrat
 // Guide 09: quotes. Per-action rules (participant + state + permission) live in utility/quoteRules.ts.
 export const canViewQuotes = (user?: User | null) => can(user, ["quotes.view"]);
 export const canManageQuotesAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));
+
+// Guide 11: card requests. Who may request and act lives in utility/cardRequestRules.ts.
+export const canViewCardRequests = (user?: User | null) => can(user, ["card-requests.view"]);
+export const canReviewCardRequests = (user?: User | null) => isAdministrator(grantsOf(user));
