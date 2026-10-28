@@ -191,6 +191,12 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 - **Close conversation** needs `support.delete`; a closed conversation shows **Reopen conversation** instead of the composer (reopening needs `support.manage`). The ticket and messages refetch on focus and after every action, including failures.
 - Rules live in `utility/supportRules.ts`; service and hooks in `services/supportService.ts` / `hooks/useSupport.ts`. The thread screen takes an explicit `mode` (`member` / `admin`); the SuperAdmin inbox and admin routes have services and hooks only (no admin screens yet).
 
+## Announcements (guide 16)
+
+- Home shows the latest three announcements; Account → Help → **Announcements** has the full paged list and each announcement's plain-text body (rendered as text, never HTML). Needs full access and `announcements.view`; not available during profile setup.
+- There's no unread tracking, scheduling or expiry. Lists and details refetch on focus, so retired items and audience changes (the member's current type) drop out; a detail that's no longer available says so.
+- Service and hooks in `services/announcementService.ts` / `hooks/useAnnouncements.ts`, including SuperAdmin authoring (save is separate from publish; `all` sends no member types, selected types need at least one; retired is final). Lifecycle rules live in `utility/announcementRules.ts`; no admin screens yet.
+
 ## Issue reports (guide 17)
 
 - Account → Help → **Report a problem**: what you were doing, what went wrong, an optional error reference (trace ID) and optional details. Platform, app version and device model are added automatically. Passwords, tokens, push tokens, emails and six-digit codes are redacted before sending, and the whole report is fitted to 8192 bytes (`utility/issueReport.ts`). The confirmation shows the report number; there is no report history for members, and reports are kept 90 days.

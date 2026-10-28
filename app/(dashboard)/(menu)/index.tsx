@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDeactivateMyAccount, useMyMember } from "@/hooks/useMembership";
 import { useMyProfile } from "@/hooks/useProfile";
 import { useToastStore } from "@/stores/toastStore";
-import { canDeactivateOwnAccount, canViewCardRequests, canViewCards, canViewClients, canViewProviderPrices, canViewEmployees, canViewOwnBusiness, canViewOwnProfile, canViewServices, canViewSupport } from "@/utility/access";
+import { canDeactivateOwnAccount, canViewAnnouncements,canViewCardRequests, canViewCards, canViewClients, canViewProviderPrices, canViewEmployees, canViewOwnBusiness, canViewOwnProfile, canViewServices, canViewSupport } from "@/utility/access";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useAuthStore } from "@/stores/authStore";
 import { ThemePreference, useThemeStore } from "@/stores/theme";
@@ -168,6 +168,10 @@ export default function MenuScreen() {
       </ListSection>
 
       <ListSection title="Help">
+        {canViewAnnouncements(user) ? (
+          <ListRow icon="megaphone-outline" title="Announcements" subtitle="News and updates from the team"
+            onPress={() => router.push("/(dashboard)/(menu)/announcements")} />
+        ) : null}
         {canViewSupport(user) ? (
           <ListRow icon="chatbubbles-outline" title="Support" subtitle="Talk to our team about your account"
             onPress={() => router.push("/(dashboard)/(menu)/support")} />

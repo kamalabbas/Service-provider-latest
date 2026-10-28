@@ -39,6 +39,8 @@ export default function MenuLayout() {
       <Stack.Screen name="price-requests" options={{ title: "Item suggestions" }} />
       <Stack.Screen name="price-request" options={{ title: "Suggestion" }} />
       <Stack.Screen name="price-request-new" options={{ title: "New suggestion" }} />
+      <Stack.Screen name="announcements" options={{ title: "Announcements" }} />
+      <Stack.Screen name="announcement" options={{ title: "Announcement" }} />
       <Stack.Screen name="support" options={{ title: "Support" }} />
       <Stack.Screen name="support-new" options={{ title: "New conversation" }} />
       <Stack.Screen name="support-ticket" options={{ title: "Conversation" }} />

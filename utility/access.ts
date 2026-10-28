@@ -128,3 +128,8 @@ export const canViewSupport = (user?: User | null) => can(user, ["support.view"]
 export const canCreateSupportTickets = (user?: User | null) => can(user, ["support.manage"], true);
 /** Staff access to other members' tickets is SuperAdmin-only. */
 export const canManageSupportAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));
+
+// Guide 16: announcements. Members need full access and announcements.view; authoring,
+// publishing, retirement and history are SuperAdmin-only (no permission grants them).
+export const canViewAnnouncements = (user?: User | null) => can(user, ["announcements.view"]);
+export const canManageAnnouncementsAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));
