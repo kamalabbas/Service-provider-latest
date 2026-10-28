@@ -28,8 +28,8 @@ Status: ✅ done · 🔜 next · ⬜ not started · ⏸ blocked on a decision
 | 4 Cards | 11-b Card issuance | ✅ | 11 | 5 / 6 | `cards.view/.manage`, `card-requests.manage`, `employees.manage` |
 | 5 Relationships and pricing | 12 Client relationships | ✅ | 08 | 3 / 2 | `clients.view/.manage/.delete` |
 | 5 Relationships and pricing | 13 Price catalogue | ✅ | 06 | 2 / 7 | `price-catalogue.view`; admin: `price-catalogue-admin.view`, `.manage/.delete` |
-| 5 Relationships and pricing | 14 Provider prices | 🔜 | 13, 07 | 12 / 13 | `prices.view/.manage/.delete` |
-| 6 Communication | 17 Push installations and issue reports | ⬜ | 01 | 4 / 4 | `notifications.view/.manage/.delete` (setup ok) |
+| 5 Relationships and pricing | 14 Provider prices | ✅ | 13, 07 | 12 / 13 | `prices.view/.manage/.delete` |
+| 6 Communication | 17 Push installations and issue reports | 🔜 | 01 | 4 / 4 | `notifications.view/.manage/.delete` (setup ok) |
 | 6 Communication | 18 Live notifications (SignalR) | ⬜ | 17, features it refreshes | — | — |
 | 6 Communication | 15 Support | ⬜ | 01 | 8 / 8 | `support.view/.manage/.delete` (setup ok) |
 | 6 Communication | 16 Announcements | ⬜ | 03 | 2 / 7 | `announcements.view`; admin SuperAdmin-only |

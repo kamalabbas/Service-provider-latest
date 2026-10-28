@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDeactivateMyAccount, useMyMember } from "@/hooks/useMembership";
 import { useMyProfile } from "@/hooks/useProfile";
 import { useToastStore } from "@/stores/toastStore";
-import { canDeactivateOwnAccount, canViewCardRequests, canViewCards, canViewClients, canViewEmployees, canViewOwnBusiness, canViewOwnProfile, canViewServices } from "@/utility/access";
+import { canDeactivateOwnAccount, canViewCardRequests, canViewCards, canViewClients, canViewProviderPrices, canViewEmployees, canViewOwnBusiness, canViewOwnProfile, canViewServices } from "@/utility/access";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useAuthStore } from "@/stores/authStore";
 import { ThemePreference, useThemeStore } from "@/stores/theme";
@@ -138,6 +138,14 @@ export default function MenuScreen() {
             onPress={() => router.push("/(dashboard)/(menu)/clients")} />
           <ListRow icon="storefront-outline" title="My providers" subtitle="Businesses that have worked for you"
             onPress={() => router.push("/(dashboard)/(menu)/providers")} />
+        </ListSection>
+      ) : null}
+
+      {canViewProviderPrices(user) ? (
+        // Outside Business: former providers keep read access to their price history.
+        <ListSection title="Pricing">
+          <ListRow icon="pricetags-outline" title="My prices" subtitle="Your yearly prices for price-guide items"
+            onPress={() => router.push("/(dashboard)/(menu)/prices")} />
         </ListSection>
       ) : null}
 

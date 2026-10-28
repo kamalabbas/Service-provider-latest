@@ -109,3 +109,8 @@ export const canManageClientsAsAdmin = (user?: User | null) => isAdministrator(g
 // it isn't SuperAdmin-only.
 export const canViewPriceCatalogue = (user?: User | null) => can(user, ["price-catalogue.view"]);
 export const canViewPriceCatalogueAdmin = (user?: User | null) => can(user, ["price-catalogue-admin.view"]);
+
+// Guide 14: provider prices. History reads need prices.view; write rules live in
+// utility/providerPriceRules.ts.
+export const canViewProviderPrices = (user?: User | null) => can(user, ["prices.view"]);
+export const canManageProviderPricesAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));

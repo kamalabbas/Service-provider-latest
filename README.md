@@ -177,6 +177,13 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 - Find → **Price guide** (`price-catalogue.view`): published items with search, occupation filter and paging; an empty guide is a normal state. Each item shows its guide price, the range providers can submit within, and the provider average with its count ("No provider prices yet" when there is none, never $0). No tax label; it's guidance, not a quote. Refreshes on return.
 - Management (create/edit/publish/retire/history) is delegated by permission (`price-catalogue-admin.view`, `.manage`, `.delete`; SuperAdmin bypasses), with services, hooks and rules ready (`services/priceCatalogueService.ts`, `hooks/usePriceCatalogue.ts`, `utility/priceCatalogueRules.ts`: code pattern, min ≤ guide ≤ max in cents, state table). Management screens wait for the admin-screens decision.
 
+## Provider prices (guide 14)
+
+- Account → Pricing → **My prices** (`prices.view`; kept outside Business so former providers can read their history): yearly prices with year, withdrawn and archived-business filters. **Add a price** lists the items this business can price (matching active listing) and submits the current UTC year's price within the item's range; the server picks the year.
+- Price detail: **Change price** (current year), **Withdraw** (current year, or the latest older year; it stops counting and older years don't count instead), **Restore with a new price** (current-year withdrawn). Retired items allow withdrawal only; archived businesses and ineligible types are read-only. History is paged.
+- **Item suggestions**: propose a missing item for an occupation you have an active listing in (name, optional description and suggested price), with status, decision reason and history. Approval creates a pending catalogue item; publishing and your price are separate steps.
+- Writes refetch prices and the shared price guide (averages change). Rules live in `utility/providerPriceRules.ts`; service and hooks in `services/providerPriceService.ts` / `hooks/useProviderPrices.ts`, including SuperAdmin routes (no admin screens yet).
+
 ## Location and maps
 
 - `expo-location` gives the device position (`services/deviceLocation.ts`, foreground permission only; denial falls back to the map pin). `react-native-maps` shows the pin. Both work in Expo Go.
