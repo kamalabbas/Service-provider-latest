@@ -35,7 +35,8 @@ const requestPolicies: Record<string, RequestPolicy> = {
   "/auth/credentials/changeemail": { action: "changeEmail", refresh: true },
   "/auth/credentials/verifynewemail": { action: "verifyCode", refresh: true },
   "/auth/credentials/changepassword": { action: "changePassword", refresh: true },
-  "/pushnotification/register": { refresh: true, silent: true },
+  // Guide 17: background registration; a refusal is shown in Account, not as a toast.
+  "/api/notifications/installations": { refresh: true, silent: true },
 };
 
 const getRequestPolicy = (config?: AxiosRequestConfig): RequestPolicy => {

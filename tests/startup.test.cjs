@@ -192,6 +192,8 @@ function harness(options = {}) {
       },
     },
     '@/components/ui/Toast': { Toast: 'Toast' },
+    // Backend registration is covered by tests/notifications.test.cjs.
+    '@/services/pushRegistration': { startPushRegistration: () => () => {} },
     '@/hooks/useColorScheme': { useColorScheme: () => options.systemScheme ?? 'light' },
     '@/stores/toastStore': { useToastStore: select => select ? select(toastState) : toastState },
     '@/hooks/useThemeColor': { useThemeColor: () => '#fff' },

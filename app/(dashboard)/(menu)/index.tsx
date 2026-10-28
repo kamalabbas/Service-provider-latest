@@ -1,4 +1,5 @@
 import { ThemedText } from "@/components/ThemedText";
+import { PushSettings } from "@/components/notification/PushSettings";
 import { Avatar } from "@/components/ui/Avatar";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { ListRow, ListSection } from "@/components/ui/ListSection";
@@ -158,10 +159,17 @@ export default function MenuScreen() {
         />
       </ListSection>
 
+      <PushSettings />
+
       <ListSection title="Appearance">
         <View style={styles.appearance}>
           <SegmentedControl options={THEME_OPTIONS} value={themePreference} onChange={setThemePreference} />
         </View>
+      </ListSection>
+
+      <ListSection title="Help">
+        <ListRow icon="bug-outline" title="Report a problem" subtitle="Tell us about an error in the app"
+          onPress={() => router.push("/(dashboard)/(menu)/report-problem")} />
       </ListSection>
 
       <ListSection>

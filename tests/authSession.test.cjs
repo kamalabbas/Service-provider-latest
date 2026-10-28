@@ -210,9 +210,6 @@ function harness({ saved = 'A-refresh', signedIn = true, policy = policyRecord('
           const authStore = load('stores/authStore.ts').useAuthStore;
           return { useAuthStore: Object.assign(select => select(authStore.getState()), authStore) };
         }
-        if (file === 'hooks/useAuth.ts' && id === './useNotification') {
-          return { useNotification: () => ({ registerNotification: { mutate: payload => registrations.push(payload) } }) };
-        }
         if (file.startsWith('app/') && id === '@/stores/authStore') {
           return { useAuthStore: select => select(load('stores/authStore.ts').useAuthStore.getState()) };
         }
@@ -251,7 +248,7 @@ function harness({ saved = 'A-refresh', signedIn = true, policy = policyRecord('
     apiFiles: () => load('services/apiFiles.ts'),
     errorInfo: (...args) => load('services/apiError.ts').toAppError(...args),
     authServices: () => load('services/authService.ts'),
-    notification: () => load('hooks/useNotification.ts').useNotification(),
+    notifications: () => load('services/notificationService.ts'),
     screen: name => load(`app/(auth)/${name}.tsx`).default(),
     recovery: () => load('stores/passwordRecoveryStore.ts').usePasswordRecoveryStore,
     holdNextMutation: () => {
@@ -2203,7 +2200,9 @@ for (const endpoint of ['/api/auth/mobile/refresh', '/api/auth/mobile/sign-out']
 test('background push registration remains protected but stays silent after a failed replay', async () => {
   const h = harness();
   h.setAdapter(async config => { throw httpFailure(config, config._retry ? 500 : 401); });
-  const pending = observe(h.notification().registerNotification.mutateAsync({ expoPushToken: 'synthetic-push', userId: 'A' }));
+  const pending = observe(h.notifications().registerPushInstallation({
+    installationId: '0f8c3c2a-1b2c-4d3e-8f4a-5b6c7d8e9f00', platform: 'ios', expoPushToken: 'ExpoPushToken[synthetic-push]',
+  }));
   await until(() => h.refreshes.length === 1);
   h.refreshes[0].resolve(responseFor(account('A', '-renewed')));
   assert.equal((await pending).status, 'rejected');

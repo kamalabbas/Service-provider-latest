@@ -114,3 +114,10 @@ export const canViewPriceCatalogueAdmin = (user?: User | null) => can(user, ["pr
 // utility/providerPriceRules.ts.
 export const canViewProviderPrices = (user?: User | null) => can(user, ["prices.view"]);
 export const canManageProviderPricesAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));
+
+// Guide 17: push installations (profile-setup sessions supported) and issue reports.
+export const canViewPushInstallations = (user?: User | null) => can(user, ["notifications.view"], true);
+export const canRegisterPushInstallation = (user?: User | null) => can(user, ["notifications.manage"], true);
+export const canUnregisterPushInstallation = (user?: User | null) => can(user, ["notifications.delete"], true);
+/** Issue reports can be sent by anyone, signed in or not; only SuperAdmin investigates. */
+export const canInvestigateIssueReports = (user?: User | null) => isAdministrator(grantsOf(user));
