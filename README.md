@@ -165,6 +165,13 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 - **I've received this card** appears only after dispatch, with a confirmation; receipt is never recorded automatically. **Request a replacement** appears for previously received cards: expired (from 30 days before expiry), damaged (while valid) or lost (cancels the old card immediately), each explained before confirming. It creates a new card request for approval.
 - An issued card request links to its card. Service and hooks (`services/cardService.ts`, `hooks/useCards.ts`) include SuperAdmin issue, list, dispatch/delivery-failed/resend/reissue/receive/void (audit reasons) and validity settings (1–20 years). No admin screens yet.
 
+## Client relationships (guide 12)
+
+- Account → **My clients** (providers) and **My providers** (customers), both needing `clients.view`. Rows come from accepted inspections and are keyed by business + client, so the same customer under two businesses stays separate. There is no manual create or delete.
+- Client rows show name, current membership ID (and the original one when a type change replaced it), a tap-to-call mobile (still shown for deactivated accounts), inspection counts and first/last dates. No email, profile or visit address.
+- Providers can **Hide from my list** (`clients.delete`) and restore (`clients.manage`) with **Show hidden**; hiding changes only their list. Former providers with an ineligible type keep read-only history. **Include archived businesses** shows history from earlier businesses.
+- Lists refresh on return and after inspection actions (acceptance creates or updates a relationship). Rules live in `utility/clientRules.ts`; service and hooks in `services/clientService.ts` / `hooks/useClients.ts`, including SuperAdmin routes (no admin screens yet).
+
 ## Location and maps
 
 - `expo-location` gives the device position (`services/deviceLocation.ts`, foreground permission only; denial falls back to the map pin). `react-native-maps` shows the pin. Both work in Expo Go.

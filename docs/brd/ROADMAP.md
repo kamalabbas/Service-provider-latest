@@ -26,8 +26,8 @@ Status: ✅ done · 🔜 next · ⬜ not started · ⏸ blocked on a decision
 | 3 Customer work | 09 Quotes | ✅ | 08 | 8 / 6 | `quotes.view/.manage/.delete` |
 | 4 Cards | 11 Card requests | ✅ | 04, 10 | 6 / 6 | `card-requests.*`, `employees.manage` |
 | 4 Cards | 11-b Card issuance | ✅ | 11 | 5 / 6 | `cards.view/.manage`, `card-requests.manage`, `employees.manage` |
-| 5 Relationships and pricing | 12 Client relationships | 🔜 | 08 | 3 / 2 | `clients.view/.manage/.delete` |
-| 5 Relationships and pricing | 13 Price catalogue | ⬜ | 06 | 2 / 7 | `price-catalogue.view`; admin: `price-catalogue-admin.view`, `.manage/.delete` |
+| 5 Relationships and pricing | 12 Client relationships | ✅ | 08 | 3 / 2 | `clients.view/.manage/.delete` |
+| 5 Relationships and pricing | 13 Price catalogue | 🔜 | 06 | 2 / 7 | `price-catalogue.view`; admin: `price-catalogue-admin.view`, `.manage/.delete` |
 | 5 Relationships and pricing | 14 Provider prices | ⬜ | 13, 07 | 12 / 13 | `prices.view/.manage/.delete` |
 | 6 Communication | 17 Push installations and issue reports | ⬜ | 01 | 4 / 4 | `notifications.view/.manage/.delete` (setup ok) |
 | 6 Communication | 18 Live notifications (SignalR) | ⬜ | 17, features it refreshes | — | — |

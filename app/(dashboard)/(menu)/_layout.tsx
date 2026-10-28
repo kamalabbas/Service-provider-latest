@@ -31,6 +31,8 @@ export default function MenuLayout() {
       <Stack.Screen name="card-request-employee" options={{ title: "Employee card" }} />
       <Stack.Screen name="cards" options={{ title: "My cards" }} />
       <Stack.Screen name="card" options={{ title: "Card" }} />
+      <Stack.Screen name="clients" options={{ title: "My clients" }} />
+      <Stack.Screen name="providers" options={{ title: "My providers" }} />
       <Stack.Screen name="changeEmailPassword" options={{ title: "Email & password" }} />
     </Stack>
   );

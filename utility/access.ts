@@ -99,3 +99,8 @@ export const canReviewCardRequests = (user?: User | null) => isAdministrator(gra
 export const canViewCards = (user?: User | null) => can(user, ["cards.view"]);
 /** Issue, dispatch, delivery exceptions, void and validity settings are SuperAdmin-only. */
 export const canManageCardsAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));
+
+// Guide 12: client relationships. Both member lists need clients.view; hide/restore rules
+// live in utility/clientRules.ts.
+export const canViewClients = (user?: User | null) => can(user, ["clients.view"]);
+export const canManageClientsAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));

@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDeactivateMyAccount, useMyMember } from "@/hooks/useMembership";
 import { useMyProfile } from "@/hooks/useProfile";
 import { useToastStore } from "@/stores/toastStore";
-import { canDeactivateOwnAccount, canViewCardRequests, canViewCards, canViewEmployees, canViewOwnBusiness, canViewOwnProfile, canViewServices } from "@/utility/access";
+import { canDeactivateOwnAccount, canViewCardRequests, canViewCards, canViewClients, canViewEmployees, canViewOwnBusiness, canViewOwnProfile, canViewServices } from "@/utility/access";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useAuthStore } from "@/stores/authStore";
 import { ThemePreference, useThemeStore } from "@/stores/theme";
@@ -129,6 +129,15 @@ export default function MenuScreen() {
               onPress={() => router.push("/(dashboard)/(menu)/employees")}
             />
           ) : null}
+        </ListSection>
+      ) : null}
+
+      {canViewClients(user) ? (
+        <ListSection title="Relationships">
+          <ListRow icon="people-circle-outline" title="My clients" subtitle="Customers your business has worked for"
+            onPress={() => router.push("/(dashboard)/(menu)/clients")} />
+          <ListRow icon="storefront-outline" title="My providers" subtitle="Businesses that have worked for you"
+            onPress={() => router.push("/(dashboard)/(menu)/providers")} />
         </ListSection>
       ) : null}
 

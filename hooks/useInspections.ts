@@ -30,6 +30,7 @@ import {
 import { useAuthStore } from "@/stores/authStore";
 import { canManageInspectionsAsAdmin, canViewInspections } from "@/utility/access";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { clientKeys } from "./useClients";
 import { serviceKeys } from "./useServices";
 
 const PAGE_SIZE = 20;
@@ -71,7 +72,11 @@ export function useInspection(inspectionId: number | null) {
 export function useInspectionActions(inspectionId: number) {
   const queryClient = useQueryClient();
   const accountId = useAuthStore((state) => state.user?.id ?? null);
-  const refresh = () => queryClient.invalidateQueries({ queryKey: inspectionKeys.all(accountId) });
+  // Acceptance creates or updates a client relationship (guide 12).
+  const refresh = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: inspectionKeys.all(accountId) }),
+    queryClient.invalidateQueries({ queryKey: clientKeys.all(accountId) }),
+  ]);
   const store = async (response: InspectionResponse) => {
     queryClient.setQueryData(inspectionKeys.detail(accountId, inspectionId), response);
     await refresh();
