@@ -104,3 +104,8 @@ export const canManageCardsAsAdmin = (user?: User | null) => isAdministrator(gra
 // live in utility/clientRules.ts.
 export const canViewClients = (user?: User | null) => can(user, ["clients.view"]);
 export const canManageClientsAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));
+
+// Guide 13: price catalogue. Management is delegated by permission (SuperAdmin bypasses);
+// it isn't SuperAdmin-only.
+export const canViewPriceCatalogue = (user?: User | null) => can(user, ["price-catalogue.view"]);
+export const canViewPriceCatalogueAdmin = (user?: User | null) => can(user, ["price-catalogue-admin.view"]);

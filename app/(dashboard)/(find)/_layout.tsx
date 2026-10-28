@@ -18,6 +18,8 @@ export default function FindLayout() {
     >
       <Stack.Screen name="index" options={{ title: "Find services", headerShown: false }} />
       <Stack.Screen name="[id]" options={{ title: "Service" }} />
+      <Stack.Screen name="price-guide" options={{ title: "Price guide" }} />
+      <Stack.Screen name="price-item" options={{ title: "Price" }} />
     </Stack>
   );
 }

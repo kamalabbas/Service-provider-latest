@@ -172,6 +172,11 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 - Providers can **Hide from my list** (`clients.delete`) and restore (`clients.manage`) with **Show hidden**; hiding changes only their list. Former providers with an ineligible type keep read-only history. **Include archived businesses** shows history from earlier businesses.
 - Lists refresh on return and after inspection actions (acceptance creates or updates a relationship). Rules live in `utility/clientRules.ts`; service and hooks in `services/clientService.ts` / `hooks/useClients.ts`, including SuperAdmin routes (no admin screens yet).
 
+## Price guide (guide 13)
+
+- Find → **Price guide** (`price-catalogue.view`): published items with search, occupation filter and paging; an empty guide is a normal state. Each item shows its guide price, the range providers can submit within, and the provider average with its count ("No provider prices yet" when there is none, never $0). No tax label; it's guidance, not a quote. Refreshes on return.
+- Management (create/edit/publish/retire/history) is delegated by permission (`price-catalogue-admin.view`, `.manage`, `.delete`; SuperAdmin bypasses), with services, hooks and rules ready (`services/priceCatalogueService.ts`, `hooks/usePriceCatalogue.ts`, `utility/priceCatalogueRules.ts`: code pattern, min ≤ guide ≤ max in cents, state table). Management screens wait for the admin-screens decision.
+
 ## Location and maps
 
 - `expo-location` gives the device position (`services/deviceLocation.ts`, foreground permission only; denial falls back to the map pin). `react-native-maps` shows the pin. Both work in Expo Go.

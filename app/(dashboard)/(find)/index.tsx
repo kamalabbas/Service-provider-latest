@@ -13,7 +13,7 @@ import { useReferenceChoices } from "@/hooks/useReferenceChoices";
 import { useServiceSearch } from "@/hooks/useServices";
 import { ServiceSearchFilters } from "@/interfaces/service.interface";
 import { useAuthStore } from "@/stores/authStore";
-import { canViewServices } from "@/utility/access";
+import { canViewPriceCatalogue, canViewServices } from "@/utility/access";
 import { Coordinates } from "@/utility/coordinates";
 import { referenceOptions } from "@/utility/referenceOptions";
 import { distanceText, ratingText } from "@/utility/serviceForm";
@@ -64,6 +64,10 @@ export default function FindServicesScreen() {
 
   return (
     <Screen title="Find services" subtitle="Search for providers near a location.">
+      {canViewPriceCatalogue(user) ? (
+        <PrimaryButton title="Price guide" variant="ghost" size="md" leftIcon="pricetags-outline"
+          onPress={() => router.push("/(dashboard)/(find)/price-guide")} style={styles.spaced} />
+      ) : null}
       <ListSection title="Location">
         <View style={styles.form}>
           <LocationPicker
