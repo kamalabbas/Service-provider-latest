@@ -94,3 +94,8 @@ export const canManageQuotesAsAdmin = (user?: User | null) => isAdministrator(gr
 // Guide 11: card requests. Who may request and act lives in utility/cardRequestRules.ts.
 export const canViewCardRequests = (user?: User | null) => can(user, ["card-requests.view"]);
 export const canReviewCardRequests = (user?: User | null) => isAdministrator(grantsOf(user));
+
+// Guide 11-b: issued cards. Receipt and replacement rules live in utility/cardRules.ts.
+export const canViewCards = (user?: User | null) => can(user, ["cards.view"]);
+/** Issue, dispatch, delivery exceptions, void and validity settings are SuperAdmin-only. */
+export const canManageCardsAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));

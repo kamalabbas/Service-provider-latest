@@ -158,6 +158,13 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 - Detail shows the subject snapshot, delivery address, decision and audit history. While **Pending review** the owner can change the delivery address (all four fields) or cancel. **Approved** (API `accepted`) locks the address and doesn't mean a card was made or sent; issuance is guide 11-b.
 - Rules live in `utility/cardRequestRules.ts`; service and hooks in `services/cardRequestService.ts` / `hooks/useCardRequests.ts`, including the SuperAdmin review queue, decisions (rejection needs a reason), audited cancel and on-behalf requests (no admin screens yet).
 
+## Issued cards (guide 11-b)
+
+- Account → **My cards**: cards issued to the member and their employees, each drawn from data (`components/card/CardFace.tsx`: number, name, membership/business, issue and expiry dates, validity). There is no card image, PDF or public QR link. Lists and detail refresh on return because validity is time-based.
+- A card shows **Valid** only when it has been received, is flagged valid, isn't invalidated and hasn't expired (`isCardUsable` in `utility/cardRules.ts`); delivery status is shown separately.
+- **I've received this card** appears only after dispatch, with a confirmation; receipt is never recorded automatically. **Request a replacement** appears for previously received cards: expired (from 30 days before expiry), damaged (while valid) or lost (cancels the old card immediately), each explained before confirming. It creates a new card request for approval.
+- An issued card request links to its card. Service and hooks (`services/cardService.ts`, `hooks/useCards.ts`) include SuperAdmin issue, list, dispatch/delivery-failed/resend/reissue/receive/void (audit reasons) and validity settings (1–20 years). No admin screens yet.
+
 ## Location and maps
 
 - `expo-location` gives the device position (`services/deviceLocation.ts`, foreground permission only; denial falls back to the map pin). `react-native-maps` shows the pin. Both work in Expo Go.

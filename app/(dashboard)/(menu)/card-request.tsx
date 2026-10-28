@@ -17,7 +17,7 @@ import { formatLocalTimestamp } from "@/utility/apiValues";
 import { CARD_REQUEST_STATUS_LABELS, DELIVERY_FIELDS, cardRequestActions, deliveryAddressSchema, deliveryAddressValues } from "@/utility/cardRequestRules";
 import { referenceLabel, referenceOptions } from "@/utility/referenceOptions";
 import { yupResolver } from "@hookform/resolvers/yup";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { StyleSheet, View } from "react-native";
@@ -32,6 +32,7 @@ const STATUS_NOTES: Partial<Record<CardRequest["status"], string>> = {
 // Guide 11: one card request with its delivery address, decision and audit history.
 export default function CardRequestScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const requestId = Number.isSafeInteger(Number(id)) && Number(id) > 0 ? Number(id) : null;
   const user = useAuthStore((state) => state.user);
   const showToast = useToastStore((state) => state.showToast);
@@ -84,6 +85,13 @@ export default function CardRequestScreen() {
           />
         </ListSection>
       )}
+
+      {request.cardId ? (
+        <ListSection title="Card">
+          <ListRow icon="wallet-outline" title="View the issued card"
+            onPress={() => router.push({ pathname: "/(dashboard)/(menu)/card", params: { id: String(request.cardId) } })} />
+        </ListSection>
+      ) : null}
 
       {request.decisionReason ? (
         <ListSection title="Decision">
