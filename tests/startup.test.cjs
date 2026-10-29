@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 // The root replaces navigation backgrounds with constants/Colors.ts values.
-const BRAND_BACKGROUND = { light: '#FFFFFF', dark: '#0D1A14' };
+const BRAND_BACKGROUND = { light: '#FFFFFF', dark: '#1F2A25' };
 const vm = require('node:vm');
 const ts = require('typescript');
 const { QueryClient, QueryObserver } = require('@tanstack/react-query');

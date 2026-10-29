@@ -68,7 +68,7 @@ export default function DiscoveredServiceScreen() {
         <PrimaryButton
           title="Request inspection"
           leftIcon="clipboard-outline"
-          onPress={() => router.push({ pathname: "/(dashboard)/(inspections)/request", params: { serviceId: String(service.id) } })}
+          onPress={() => router.push({ pathname: "/(dashboard)/(inspections)/request", params: { serviceId: String(service.id) } }, { withAnchor: true })}
         />
       ) : <Notice
         tone="warning"

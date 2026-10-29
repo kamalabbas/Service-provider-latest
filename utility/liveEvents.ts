@@ -32,10 +32,50 @@ export function normalizeLiveNotice(raw: unknown): LiveNotice | null {
   };
 }
 
-/** Expo custom data wraps the domain IDs one level down: { eventId, type, data: { ... } }. */
-export function normalizePushNotice(content: { title?: string | null; body?: string | null; data?: unknown }): LiveNotice | null {
-  if (!isRecord(content.data)) return null;
-  return normalizeLiveNotice({ ...content.data, title: content.title ?? "", body: content.body ?? "" });
+const parseJson = (value: unknown): unknown => {
+  if (typeof value !== "string") return value;
+  try { return JSON.parse(value); } catch { return value; }
+};
+
+/** A push request as delivered by expo-notifications (foreground, background tap or cold start). */
+export interface PushRequestLike {
+  identifier?: string;
+  content: { title?: string | null; body?: string | null; data?: unknown };
+  trigger?: unknown;
+}
+
+/**
+ * The custom data of an Expo push. The backend sends { eventId, type, data: { ...ids } }, but
+ * Android can deliver it as JSON strings, or only on the FCM trigger when the app was killed.
+ */
+function pushData(request: PushRequestLike): Record<string, unknown> | null {
+  const candidates: unknown[] = [request.content.data];
+  if (isRecord(request.trigger)) {
+    const remote = request.trigger.remoteMessage;
+    if (isRecord(remote) && isRecord(remote.data)) candidates.push(remote.data.body, remote.data);
+    if (isRecord(request.trigger.payload)) candidates.push(request.trigger.payload.body, request.trigger.payload);
+  }
+  for (const candidate of candidates) {
+    const data = parseJson(candidate);
+    if (isRecord(data) && typeof data.type === "string") return data;
+  }
+  return null;
+}
+
+/** Normalizes a push to the same notice shape as SignalR. Pushes without an event type are ignored. */
+export function normalizePushNotice(request: PushRequestLike): LiveNotice | null {
+  const data = pushData(request);
+  if (!data) return null;
+  const nested = parseJson(data.data);
+  // Older or flat payloads put the IDs next to the type instead of under data.
+  const { eventId, type, data: _nested, ...flat } = data;
+  return normalizeLiveNotice({
+    eventId: typeof eventId === "string" && eventId ? eventId : `push:${request.identifier ?? ""}:${String(type)}`,
+    type,
+    title: request.content.title ?? "",
+    body: request.content.body ?? "",
+    data: isRecord(nested) ? nested : flat,
+  });
 }
 
 /** The feature prefix, e.g. "card-request" for "card-request.accepted". */
@@ -66,30 +106,34 @@ const positiveId = (value: unknown) => {
   return typeof id === "number" && Number.isSafeInteger(id) && id > 0 ? id : null;
 };
 
-export type LiveRoute = { pathname: string; params: { id: string } };
+export type LiveRoute = { pathname: string; params?: { id: string } };
 
 /**
- * Where a push tap may lead. The ID is never authorization: the target screen fetches the
- * record under the current session's permissions. SuperAdmin-only records and unknown
- * types get no link (for example an issue-report status update for its reporter).
+ * Where a push tap leads: the record when its ID is present, else that feature's list. The
+ * ID is never authorization: the target screen fetches the record under the current
+ * session's permissions. SuperAdmin-only records and unknown types get no link (for
+ * example an issue-report status update for its reporter); the app just opens.
  */
 export function routeForNotice(notice: Pick<LiveNotice, "type" | "data">, user: User | null | undefined, inSetup: boolean): LiveRoute | null {
   if (!user) return null;
   const feature = eventFeature(notice.type);
-  const link = (key: string, pathname: string) => {
+  const link = (key: string, pathname: string, list: string): LiveRoute => {
     const id = positiveId(notice.data[key]);
-    return id ? { pathname, params: { id: String(id) } } : null;
+    return id ? { pathname, params: { id: String(id) } } : { pathname: list };
   };
-  if (feature === "support") return link("ticketId", inSetup ? "/(setup)/support-ticket" : "/(dashboard)/(menu)/support-ticket");
+  if (feature === "support") {
+    const base = inSetup ? "/(setup)" : "/(dashboard)/(menu)";
+    return link("ticketId", `${base}/support-ticket`, `${base}/support`);
+  }
   // Everything else lives behind full access.
   if (inSetup) return null;
   switch (feature) {
-    case "inspection": return link("inspectionId", "/(dashboard)/(inspections)/[id]");
-    case "quote": return link("quoteId", "/(dashboard)/(quotes)/[id]");
-    case "card-request": return link("cardRequestId", "/(dashboard)/(menu)/card-request");
-    case "card": return link("cardId", "/(dashboard)/(menu)/card");
-    case "price-item-request": return link("requestId", "/(dashboard)/(menu)/price-request");
-    case "announcement": return link("announcementId", "/(dashboard)/(menu)/announcement");
+    case "inspection": return link("inspectionId", "/(dashboard)/(inspections)/[id]", "/(dashboard)/(inspections)");
+    case "quote": return link("quoteId", "/(dashboard)/(quotes)/[id]", "/(dashboard)/(quotes)");
+    case "card-request": return link("cardRequestId", "/(dashboard)/(menu)/card-request", "/(dashboard)/(menu)/card-requests");
+    case "card": return link("cardId", "/(dashboard)/(menu)/card", "/(dashboard)/(menu)/cards");
+    case "price-item-request": return link("requestId", "/(dashboard)/(menu)/price-request", "/(dashboard)/(menu)/price-requests");
+    case "announcement": return link("announcementId", "/(dashboard)/(menu)/announcement", "/(dashboard)/(menu)/announcements");
     default: return null;
   }
 }

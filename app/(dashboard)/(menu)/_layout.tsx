@@ -1,6 +1,9 @@
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { Stack } from "expo-router";
 
+// Screens opened from another tab or a notification keep the list underneath, so Back works.
+export const unstable_settings = { initialRouteName: "index" };
+
 export default function MenuLayout() {
   const background = useThemeColor({}, "muted");
   const text = useThemeColor({}, "text");

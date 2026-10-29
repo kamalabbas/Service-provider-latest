@@ -1,6 +1,6 @@
 import { SelectInput } from "@/components/form/SelectInput";
 import { ThemedText } from "@/components/ThemedText";
-import { ListRow, ListSection } from "@/components/ui/ListSection";
+import { InspectionCard } from "@/components/inspection/InspectionCard";
 import { Loader } from "@/components/ui/loader";
 import { Notice } from "@/components/ui/Notice";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
@@ -11,9 +11,8 @@ import { useMyInspections } from "@/hooks/useInspections";
 import { InspectionSide, InspectionStatus } from "@/interfaces/inspection.interface";
 import { useAuthStore } from "@/stores/authStore";
 import { canViewInspections } from "@/utility/access";
-import { formatLocalTimestamp } from "@/utility/apiValues";
-import { STATUS_LABELS, inspectionRole } from "@/utility/inspectionRules";
-import { useFocusEffect, useRouter } from "expo-router";
+import { STATUS_LABELS } from "@/utility/inspectionRules";
+import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { StyleSheet, Switch, View } from "react-native";
 import { useThemeColor } from "@/hooks/useThemeColor";
@@ -29,7 +28,6 @@ const STATUS_OPTIONS = [{ label: "Any status", value: ANY }, ...Object.entries(S
 
 // Guide 08: requester and provider inspections, with filters and hidden copies.
 export default function InspectionsScreen() {
-  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const tint = useThemeColor({}, "tint");
   const border = useThemeColor({}, "borderColor");
@@ -65,22 +63,7 @@ export default function InspectionsScreen() {
         <Notice message="No inspections here yet. Find a service to request one." />
       ) : (
         <>
-          <ListSection>
-            {list.map((inspection) => {
-              const role = inspectionRole(inspection, user?.id);
-              const other = role === "provider" ? inspection.requesterName : inspection.businessName;
-              const when = inspection.scheduledAtUtc ? ` · ${formatLocalTimestamp(inspection.scheduledAtUtc)}` : "";
-              return (
-                <ListRow
-                  key={inspection.id}
-                  icon={role === "provider" ? "briefcase-outline" : "clipboard-outline"}
-                  title={inspection.serviceTitle}
-                  subtitle={`${STATUS_LABELS[inspection.status] ?? inspection.status}${inspection.isHidden ? " (hidden)" : ""} · ${other}${when}`}
-                  onPress={() => router.push({ pathname: "/(dashboard)/(inspections)/[id]", params: { id: String(inspection.id) } })}
-                />
-              );
-            })}
-          </ListSection>
+          {list.map((inspection) => <InspectionCard key={inspection.id} inspection={inspection} userId={user?.id} />)}
           {inspections.hasNextPage ? (
             <PrimaryButton
               title={inspections.isFetchingNextPage ? "Loading..." : "Show more"}

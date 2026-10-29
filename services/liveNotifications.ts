@@ -5,7 +5,7 @@ import { useNotificationStore, type LiveConnectionStatus } from '@/stores/notifi
 import { useToastStore } from '@/stores/toastStore';
 import { readAccessTokenClaims } from '@/utility/accessToken';
 import { ALL_LIVE_ROOTS, affectedQueryKeys, normalizeLiveNotice, normalizePushNotice, SeenEvents, type LiveNotice } from '@/utility/liveEvents';
-import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
+import { HttpTransportType, HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel, type ILogger } from '@microsoft/signalr';
 import { AppState } from 'react-native';
 
 // Guide 18: one hub connection per signed-in session. Delivery is targeted server-side
@@ -106,11 +106,33 @@ async function stop() {
   }
 }
 
+/**
+ * direct: WebSockets without the negotiate step. Negotiation hands out a connection ID
+ * that only one server instance knows; behind a load balancer without sticky sessions
+ * the WebSocket then lands elsewhere ("The connection could not be found on the server").
+ * negotiated: the standard handshake with transport fallback, for hosts that block a
+ * direct WebSocket. A failed start switches to the other mode for the next attempt.
+ */
+export type HubMode = 'direct' | 'negotiated';
+let mode: HubMode = 'direct';
+
+const isDev = () => typeof __DEV__ !== 'undefined' && __DEV__;
+
+// Library logs stay out of the red error overlay and out of release builds.
+const logger: ILogger = {
+  log(level, message) {
+    if (isDev() && level >= LogLevel.Warning) console.warn(`[live updates] ${message}`);
+  },
+};
+
 function build(url: string, key: string) {
+  const accessTokenFactory = () => getValidAccessToken();
   const connection = new HubConnectionBuilder()
-    .withUrl(url, { accessTokenFactory: () => getValidAccessToken() })
+    .withUrl(url, mode === 'direct'
+      ? { accessTokenFactory, skipNegotiation: true, transport: HttpTransportType.WebSockets }
+      : { accessTokenFactory })
     .withAutomaticReconnect([0, 2000, 5000, 15000])
-    .configureLogging(LogLevel.Error)
+    .configureLogging(logger)
     .build();
   // Handlers are registered before start and ignore events from a replaced connection.
   const current = () => hub === connection && sessionKey() === key;
@@ -169,16 +191,23 @@ async function attempt() {
     setLive('live');
     refetchLiveState();
   } catch {
-    if (hub === connection && sessionKey() === key) scheduleRetry(key);
+    if (hub !== connection || sessionKey() !== key) return;
+    // Try the other connection mode next time; the transport is fixed per connection.
+    mode = mode === 'direct' ? 'negotiated' : 'direct';
+    hub = null;
+    scheduleRetry(key);
   }
 }
+
+/** The mode the next connection will use (for diagnostics and tests). */
+export const getHubMode = () => mode;
 
 /** Root lifecycle: connect while signed in (setup included, for support); stop on sign-out or switch. */
 export function startLiveNotifications(): () => void {
   // Foreground Expo pushes share the dispatcher and deduplication, live hub or not.
   const unsubscribePush = useNotificationStore.subscribe((state, previous) => {
     if (!state.notification || state.notification === previous.notification) return;
-    const notice = normalizePushNotice(state.notification.request.content);
+    const notice = normalizePushNotice(state.notification.request);
     if (notice) handleLiveNotice(notice, 'push');
   });
   if (!hubUrl()) return unsubscribePush;

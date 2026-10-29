@@ -16,11 +16,17 @@ export default function useNotificationTaps(ready: boolean) {
   useEffect(() => {
     const response = takeNotificationResponse(ready);
     if (!response) return;
-    const notice = normalizePushNotice(response.notification.request.content);
-    if (!notice) return;
+    const notice = normalizePushNotice(response.notification.request);
+    if (!notice) {
+      if (typeof __DEV__ !== 'undefined' && __DEV__) console.warn('A tapped notification had no event type; opening the app only.');
+      return;
+    }
     handleLiveNotice(notice, 'push');
     const auth = useAuthStore.getState();
     const route = routeForNotice(notice, auth.user, selectNeedsProfileSetup(auth));
-    if (route) router.push(route);
+    if (!route) return;
+    // Wait one tick so the signed-in navigator has mounted (cold start). Not cancelled on
+    // re-render: taking the response clears `pending`, which re-runs this effect.
+    setTimeout(() => router.push(route, { withAnchor: true }), 0);
   }, [ready, pending, isAuthenticated]);
 }

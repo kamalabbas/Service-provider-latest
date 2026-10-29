@@ -40,7 +40,8 @@ const signalr = {
     build() { return new FakeHub(this.url, this.options); }
   },
   HubConnectionState: { Disconnected: 'Disconnected', Connected: 'Connected' },
-  LogLevel: { Error: 4 },
+  HttpTransportType: { WebSockets: 1 },
+  LogLevel: { Warning: 3, Error: 4 },
 };
 
 const appStateListeners = [];
@@ -121,9 +122,25 @@ test('notices: validated, plain text, unknown shapes dropped; Expo data unwrappe
   assert.equal(events.normalizeLiveNotice({ eventId: 'e', type: 'quote' }), null, 'Needs a dotted type');
   assert.equal(events.normalizeLiveNotice('nope'), null);
   assert.deepEqual(plain(events.normalizeLiveNotice({ eventId: 'e', type: 'future.thing', data: [1] })).data, {});
-  const push = events.normalizePushNotice({ title: 'New reply', body: null, data: { eventId: 'e2', type: 'support.admin_replied', data: { ticketId: 7 } } });
+  const push = events.normalizePushNotice({ content: { title: 'New reply', body: null, data: { eventId: 'e2', type: 'support.admin_replied', data: { ticketId: 7 } } } });
   assert.deepEqual(plain(push), { eventId: 'e2', type: 'support.admin_replied', title: 'New reply', body: '', data: { ticketId: 7 }, occurredAtUtc: null });
-  assert.equal(events.normalizePushNotice({ data: {} }), null, 'Ordinary pushes are ignored');
+  assert.equal(events.normalizePushNotice({ content: { data: {} } }), null, 'Ordinary pushes are ignored');
+});
+
+test('push payload shapes: JSON strings, the Android FCM trigger, flat IDs and missing event IDs', () => {
+  const expected = { eventId: 'e3', type: 'quote.issued', title: 'Quote', body: 'New quote', data: { quoteId: 5 }, occurredAtUtc: null };
+  const content = { title: 'Quote', body: 'New quote' };
+  // Nested data delivered as a JSON string.
+  assert.deepEqual(plain(events.normalizePushNotice({ content: { ...content, data: { eventId: 'e3', type: 'quote.issued', data: '{"quoteId":5}' } } })), expected);
+  // App killed on Android: content.data empty, payload on the FCM trigger as a JSON body.
+  assert.deepEqual(plain(events.normalizePushNotice({
+    content: { ...content, data: {} },
+    trigger: { remoteMessage: { data: { body: JSON.stringify({ eventId: 'e3', type: 'quote.issued', data: { quoteId: 5 } }) } } },
+  })), expected);
+  // Flat IDs next to the type.
+  assert.deepEqual(plain(events.normalizePushNotice({ content: { ...content, data: { eventId: 'e3', type: 'quote.issued', quoteId: 5 } } })), expected);
+  // No event ID: a stable per-notification key still deduplicates.
+  assert.equal(events.normalizePushNotice({ identifier: 'n1', content: { ...content, data: { type: 'quote.issued', data: { quoteId: 5 } } } }).eventId, 'push:n1:quote.issued');
 });
 
 test('affected queries: per feature, scoped to the account; unknown types refetch nothing', () => {
@@ -153,8 +170,10 @@ test('deep links: permitted screens only, IDs validated, nothing during setup ex
   assert.deepEqual(plain(events.routeForNotice(notice('a', 'support.admin_replied', { ticketId: 7 }), member, true)), { pathname: '/(setup)/support-ticket', params: { id: '7' } });
   assert.equal(events.routeForNotice(notice('a'), member, true), null, 'Setup sessions only reach support');
   assert.equal(events.routeForNotice(notice('a', 'issue-report.status-changed', { reportId: 2 }), member, false), null, 'No SuperAdmin-only link');
-  assert.equal(events.routeForNotice(notice('a', 'quote.issued', { quoteId: -1 }), member, false), null);
-  assert.equal(events.routeForNotice(notice('a', 'quote.issued', { quoteId: '1; drop' }), member, false), null);
+  // Invalid or missing IDs open the feature's list instead of a record.
+  assert.deepEqual(plain(events.routeForNotice(notice('a', 'quote.issued', { quoteId: -1 }), member, false)), { pathname: '/(dashboard)/(quotes)' });
+  assert.deepEqual(plain(events.routeForNotice(notice('a', 'quote.issued', { quoteId: '1; drop' }), member, false)), { pathname: '/(dashboard)/(quotes)' });
+  assert.deepEqual(plain(events.routeForNotice(notice('a', 'support.closed', {}), member, true)), { pathname: '/(setup)/support' });
   assert.equal(events.routeForNotice(notice('a'), null, false), null);
 });
 
@@ -258,14 +277,21 @@ test('failed starts and final closes retry with backoff while signed in; resume 
   const failing = new Error('negotiate failed');
   const originalStart = FakeHub.prototype.start;
   FakeHub.prototype.start = async function () { this.starts += 1; throw failing; };
+  assert.equal(live.getHubMode(), 'direct');
   const stop = live.startLiveNotifications();
   await flush();
-  const hub = hubs.at(-1);
+  const direct = hubs.at(-1);
+  assert.equal(direct.options.skipNegotiation, true, 'First a direct WebSocket, no negotiate');
+  assert.equal(direct.options.transport, signalr.HttpTransportType.WebSockets);
   assert.equal(useNotificationStore.getState().live, 'retrying');
   assert.deepEqual(timers.map(timer => timer.delay), [2000]);
+  assert.equal(live.getHubMode(), 'negotiated', 'A failed start switches mode');
   FakeHub.prototype.start = originalStart;
   await runTimers();
   await flush();
+  const hub = hubs.at(-1);
+  assert.notEqual(hub, direct, 'A new connection for the new mode');
+  assert.equal(hub.options.skipNegotiation, undefined, 'Negotiated with transport fallback');
   assert.equal(hub.state, 'Connected');
   assert.equal(useNotificationStore.getState().live, 'live');
 

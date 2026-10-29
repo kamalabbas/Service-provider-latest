@@ -1,17 +1,20 @@
+import { SelectInput } from "@/components/form/SelectInput";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
-import { ListRow, ListSection } from "@/components/ui/ListSection";
 import { Loader } from "@/components/ui/loader";
 import { Notice } from "@/components/ui/Notice";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { Screen } from "@/components/ui/Screen";
+import { Spacing } from "@/constants/Theme";
 import { useBusinessAccess, useMyBusiness } from "@/hooks/useBusiness";
 import { useCardRequestActions, useMyCardRequests } from "@/hooks/useCardRequests";
 import { useMyEmployees } from "@/hooks/useEmployees";
-import { Employee } from "@/interfaces/employee.interface";
 import { useToastStore } from "@/stores/toastStore";
+import { canViewEmployees } from "@/utility/access";
 import { canRequestEmployeeCard, hasOpenCardRequest } from "@/utility/cardRequestRules";
 import { employeeName } from "@/utility/employeeForm";
 import { useRouter } from "expo-router";
 import { useState } from "react";
+import { StyleSheet } from "react-native";
 
 // Guide 11: pick an active employee to request a card for. Employees never sign in.
 export default function EmployeeCardRequestScreen() {
@@ -22,7 +25,8 @@ export default function EmployeeCardRequestScreen() {
   const employees = useMyEmployees({}, 100);
   const requests = useMyCardRequests({ subjectType: "employee" });
   const actions = useCardRequestActions();
-  const [selected, setSelected] = useState<Employee | null>(null);
+  const [employeeId, setEmployeeId] = useState("");
+  const [confirming, setConfirming] = useState(false);
 
   if (member.isLoading || business.isLoading || employees.isLoading || requests.isLoading) {
     return <Screen hasHeader><Loader visible overlay={false} message="Loading your team…" /></Screen>;
@@ -33,8 +37,26 @@ export default function EmployeeCardRequestScreen() {
   if (!business.data) {
     return <Screen hasHeader><Notice tone="warning" message="Add your business first. Employee cards are for your active business's employees." /></Screen>;
   }
+  if (!canViewEmployees(user, userTypeCode)) {
+    return <Screen hasHeader><Notice tone="warning" message="You need permission to view employees before you can choose one." /></Screen>;
+  }
+  if (employees.isError) {
+    return (
+      <Screen hasHeader>
+        <Notice tone="error" message="Your employees couldn't be loaded." style={styles.spaced} />
+        <PrimaryButton title="Try again" variant="secondary" leftIcon="refresh-outline" onPress={() => employees.refetch()} />
+      </Screen>
+    );
+  }
 
   const active = (employees.data ?? []).filter((employee) => !employee.archivedAtUtc);
+  const options = active.map((employee) => {
+    const open = hasOpenCardRequest(requests.data ?? [], { employeeId: employee.id });
+    const detail = open ? "request already open" : [employee.occupationName, employee.positionName].filter(Boolean).join(", ");
+    return { label: detail ? `${employeeName(employee)} (${detail})` : employeeName(employee), value: String(employee.id), open };
+  });
+  const selected = active.find((employee) => String(employee.id) === employeeId) ?? null;
+  const selectedOpen = options.find((option) => option.value === employeeId)?.open ?? false;
 
   const request = () =>
     selected && actions.requestEmployee.mutate(selected.id, {
@@ -43,40 +65,50 @@ export default function EmployeeCardRequestScreen() {
         if (response.data) router.replace({ pathname: "/(dashboard)/(menu)/card-request", params: { id: String(response.data.id) } });
         else router.back();
       },
-      onSettled: () => setSelected(null),
+      onSettled: () => setConfirming(false),
     });
 
   return (
-    <Screen hasHeader title="Choose an employee" subtitle="The card is sent to your business address by default.">
+    <Screen hasHeader title="Employee card" subtitle="Choose who the card is for. It's sent to your business address by default.">
       {active.length === 0 ? (
-        <Notice message="You have no active employees. Add one under Employees first." />
+        <>
+          <Notice message="You have no active employees yet. Add one first, then come back to request their card." style={styles.spaced} />
+          <PrimaryButton title="Add an employee" leftIcon="person-add-outline" onPress={() => router.push("/(dashboard)/(menu)/employee-edit")} />
+        </>
       ) : (
-        <ListSection>
-          {active.map((employee) => {
-            const open = hasOpenCardRequest(requests.data ?? [], { employeeId: employee.id });
-            return (
-              <ListRow
-                key={employee.id}
-                icon="person-outline"
-                title={employeeName(employee)}
-                subtitle={open ? "A request is already open" : [employee.occupationName, employee.positionName].filter(Boolean).join(" · ")}
-                onPress={open ? undefined : () => setSelected(employee)}
-              />
-            );
-          })}
-        </ListSection>
+        <>
+          <SelectInput
+            label="Employee"
+            placeholder="Choose an employee"
+            pickerLabel="Choose an employee"
+            value={employeeId}
+            onChange={setEmployeeId}
+            options={options.map(({ label, value, open }) => ({ label, value, disabled: open }))}
+            error={selectedOpen ? "This employee already has an open card request." : undefined}
+          />
+          <PrimaryButton
+            title="Request card"
+            leftIcon="card-outline"
+            onPress={() => setConfirming(true)}
+            disabled={!selected || selectedOpen}
+          />
+        </>
       )}
 
       <ConfirmModal
-        visible={selected !== null}
+        visible={confirming && selected !== null}
         icon="card-outline"
         title={selected ? `Request a card for ${employeeName(selected)}?` : ""}
         message="An administrator reviews the request. You can change the delivery address while it's pending."
         confirmLabel="Request card"
         isLoading={actions.requestEmployee.isPending}
         onConfirm={request}
-        onCancel={() => setSelected(null)}
+        onCancel={() => setConfirming(false)}
       />
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  spaced: { marginBottom: Spacing.lg },
+});

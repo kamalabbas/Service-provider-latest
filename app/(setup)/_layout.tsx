@@ -2,6 +2,9 @@ import { useThemeColor } from "@/hooks/useThemeColor";
 import { selectNeedsProfileSetup, useAuthStore } from "@/stores/authStore";
 import { Stack } from "expo-router";
 
+// Screens opened from another tab or a notification keep the list underneath, so Back works.
+export const unstable_settings = { initialRouteName: "index" };
+
 export default function SetupLayout() {
   const needsSetup = useAuthStore(selectNeedsProfileSetup);
   const background = useThemeColor({}, "muted");

@@ -97,3 +97,12 @@ export function expiryText(expiresAtUtc: string, now = Date.now()): string {
   if (hours < 48) return `Expires in ${hours} h ${minutes % 60} min`;
   return `Expires in ${Math.floor(hours / 24)} days`;
 }
+
+/** Badge colors for list cards. */
+export const QUOTE_STATUS_TONES: Record<QuoteStatus, "info" | "success" | "warning" | "danger" | "neutral"> = {
+  pending: "warning",
+  accepted: "success",
+  rejected: "danger",
+  withdrawn: "neutral",
+  expired: "neutral",
+};

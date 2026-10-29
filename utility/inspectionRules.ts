@@ -115,3 +115,13 @@ export const toCreateInspectionRequest = (serviceId: number, values: InspectionR
   postalCode: values.postalCode.trim(),
   note: values.note.trim() || null,
 });
+
+/** Badge colors for list cards. */
+export const STATUS_TONES: Record<InspectionStatus, "info" | "success" | "warning" | "danger" | "neutral"> = {
+  pending: "warning",
+  accepted: "info",
+  rejected: "danger",
+  cancelled: "neutral",
+  completed: "success",
+  rated: "success",
+};

@@ -1,6 +1,6 @@
 import { SelectInput } from "@/components/form/SelectInput";
 import { ThemedText } from "@/components/ThemedText";
-import { ListRow, ListSection } from "@/components/ui/ListSection";
+import { QuoteCard } from "@/components/quote/QuoteCard";
 import { Loader } from "@/components/ui/loader";
 import { Notice } from "@/components/ui/Notice";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
@@ -11,9 +11,8 @@ import { useMyQuotes } from "@/hooks/useQuotes";
 import { QuoteSide, QuoteStatus } from "@/interfaces/quote.interface";
 import { useAuthStore } from "@/stores/authStore";
 import { canViewQuotes } from "@/utility/access";
-import { formatAud } from "@/utility/apiValues";
-import { QUOTE_STATUS_LABELS, quoteRole } from "@/utility/quoteRules";
-import { useFocusEffect, useRouter } from "expo-router";
+import { QUOTE_STATUS_LABELS } from "@/utility/quoteRules";
+import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { StyleSheet } from "react-native";
 
@@ -28,7 +27,6 @@ const STATUS_OPTIONS = [{ label: "Any status", value: ANY }, ...Object.entries(Q
 
 // Guide 09: quotes sent by my business and quotes I received.
 export default function QuotesScreen() {
-  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const [side, setSide] = useState<QuoteSide>("all");
   const [status, setStatus] = useState(ANY);
@@ -57,20 +55,7 @@ export default function QuotesScreen() {
         <Notice message="No quotes here yet." />
       ) : (
         <>
-          <ListSection>
-            {list.map((quote) => {
-              const role = quoteRole(quote, user?.id);
-              return (
-                <ListRow
-                  key={quote.id}
-                  icon={role === "provider" ? "paper-plane-outline" : "document-text-outline"}
-                  title={`${quote.quoteNumber} · ${formatAud(quote.totalAmount)}`}
-                  subtitle={`${QUOTE_STATUS_LABELS[quote.status] ?? quote.status} · ${quote.serviceTitle} · ${role === "provider" ? quote.customerName : quote.businessName}`}
-                  onPress={() => router.push({ pathname: "/(dashboard)/(quotes)/[id]", params: { id: String(quote.id) } })}
-                />
-              );
-            })}
-          </ListSection>
+          {list.map((quote) => <QuoteCard key={quote.id} quote={quote} userId={user?.id} />)}
           {quotes.hasNextPage ? (
             <PrimaryButton
               title={quotes.isFetchingNextPage ? "Loading..." : "Show more"}

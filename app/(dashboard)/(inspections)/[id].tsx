@@ -111,7 +111,7 @@ export default function InspectionScreen() {
           <PrimaryButton
             title="Send a quote"
             leftIcon="document-text-outline"
-            onPress={() => router.push({ pathname: "/(dashboard)/(quotes)/new", params: { inspectionId: String(inspection.id) } })}
+            onPress={() => router.push({ pathname: "/(dashboard)/(quotes)/new", params: { inspectionId: String(inspection.id) } }, { withAnchor: true })}
           />
         ) : null}
         {allowed.reject ? <PrimaryButton title="Reject request" variant="danger" leftIcon="close-circle-outline" onPress={() => setPrompt("reject")} /> : null}

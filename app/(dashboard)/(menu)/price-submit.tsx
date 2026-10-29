@@ -11,7 +11,6 @@ import { useAvailablePriceItems, useProviderPriceActions } from "@/hooks/useProv
 import { PriceCatalogueItem } from "@/interfaces/priceCatalogue.interface";
 import { useToastStore } from "@/stores/toastStore";
 import { formatAud } from "@/utility/apiValues";
-import { priceRangeText } from "@/utility/priceCatalogueRules";
 import { canWriteProviderPrices, currentUtcYear } from "@/utility/providerPriceRules";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -49,7 +48,7 @@ export default function PriceSubmitScreen() {
                 key={item.id}
                 icon="pricetag-outline"
                 title={`${item.name} · guide ${formatAud(item.guidePrice)}`}
-                subtitle={`${item.occupationName} · range ${priceRangeText(item)}`}
+                subtitle={`${item.occupationName} · Min ${formatAud(item.minProviderPrice)} · Max ${formatAud(item.maxProviderPrice)}`}
                 onPress={() => setSelected(item)}
               />
             ))}
