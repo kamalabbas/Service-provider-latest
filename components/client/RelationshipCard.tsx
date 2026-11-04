@@ -23,7 +23,7 @@ export function RelationshipCard({ relationship, perspective, children }: Relati
   const archived = !!relationship.businessArchivedAtUtc;
   const badges = [
     perspective === "client" && relationship.clientAccountDeactivated ? "Account deactivated" : null,
-    archived ? "Business archived" : null,
+    archived ? "Business deleted" : null,
     perspective === "client" && relationship.isHidden ? "Hidden" : null,
   ].filter(Boolean);
 

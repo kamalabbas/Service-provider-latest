@@ -34,7 +34,7 @@ export default function EmployeeScreen() {
     archive.mutate(employee.id, {
       onSuccess: () => {
         setConfirmArchive(false);
-        showToast(`${employeeName(employee)} has been archived.`, "success");
+        showToast(`${employeeName(employee)} has been deleted.`, "success");
       },
       onError: () => refetch(),
     });
@@ -43,7 +43,7 @@ export default function EmployeeScreen() {
     <Screen hasHeader title={employeeName(employee)} subtitle={employee.positionName ?? undefined}>
       {archived ? (
         <Notice
-          message={`Archived ${formatLocalTimestamp(employee.archivedAtUtc!)}. Archived employees can't be assigned to inspections or receive cards.`}
+          message={`Deleted ${formatLocalTimestamp(employee.archivedAtUtc!)}. Deleted employees can't be assigned to inspections or receive cards.`}
           style={styles.notice}
         />
       ) : null}
@@ -75,18 +75,18 @@ export default function EmployeeScreen() {
             />
           ) : null}
           {canArchiveEmployees(user, userTypeCode) ? (
-            <PrimaryButton title="Archive employee" variant="danger" leftIcon="archive-outline" onPress={() => setConfirmArchive(true)} />
+            <PrimaryButton title="Delete employee" variant="danger" leftIcon="trash-outline" onPress={() => setConfirmArchive(true)} />
           ) : null}
         </View>
       )}
 
       <ConfirmModal
         visible={confirmArchive}
-        icon="archive-outline"
+        icon="trash-outline"
         tone="danger"
-        title={`Archive ${employeeName(employee)}?`}
-        message="Their record is kept as history. Accepted inspection assignments may be cleared, and their pending card requests and cards cancelled or invalidated. Archived employees can't be assigned again."
-        confirmLabel="Archive"
+        title={`Delete ${employeeName(employee)}?`}
+        message="They're removed from your team and can't be assigned again. Accepted inspection assignments may be cleared, and their pending card requests and cards are cancelled."
+        confirmLabel="Delete"
         isLoading={archive.isPending}
         onConfirm={archiveEmployee}
         onCancel={() => setConfirmArchive(false)}

@@ -36,8 +36,8 @@ export default function ProvidersScreen() {
   return (
     <Screen hasHeader title="My providers" subtitle="Businesses that accepted your inspection requests.">
       <View style={styles.switchRow}>
-        <ThemedText style={styles.switchLabel}>Include archived businesses</ThemedText>
-        <Switch value={includeArchived} onValueChange={setIncludeArchived} trackColor={{ true: tint, false: border }} accessibilityLabel="Include archived businesses" />
+        <ThemedText style={styles.switchLabel}>Include deleted businesses</ThemedText>
+        <Switch value={includeArchived} onValueChange={setIncludeArchived} trackColor={{ true: tint, false: border }} accessibilityLabel="Include deleted businesses" />
       </View>
 
       {providers.isLoading ? (

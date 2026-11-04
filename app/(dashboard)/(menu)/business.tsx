@@ -1,4 +1,5 @@
 import { ThemedText } from "@/components/ThemedText";
+import { VisibilityPrompt } from "@/components/business/VisibilityPrompt";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { ListRow, ListSection } from "@/components/ui/ListSection";
 import { Loader } from "@/components/ui/loader";
@@ -18,7 +19,7 @@ import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 const ARCHIVE_EFFECTS =
-  "Your service listings and employee roster are archived, accepted worker assignments may be cleared, and related employee card requests and cards are cancelled. " +
+  "Your service listings and employees are deleted, accepted worker assignments may be cleared, and related employee card requests and cards are cancelled. " +
   "Price contributions stop and pending quotes for this business can no longer be accepted. Clients, inspections, quotes and history stay with this business. " +
   "You can create a new business later, but it won't inherit the old roster or clients.";
 
@@ -61,7 +62,7 @@ export default function BusinessScreen() {
     archive.mutate(undefined, {
       onSuccess: () => {
         setConfirmArchive(false);
-        showToast("Your business has been archived.", "success");
+        showToast("Your business has been deleted.", "success");
       },
       // A failed or timed-out archive may still have landed; show the server's state.
       onError: () => refetch(),
@@ -71,6 +72,7 @@ export default function BusinessScreen() {
 
   return (
     <Screen hasHeader title={business.businessName}>
+      <VisibilityPrompt />
       <PicturePicker
         shape="cover"
         pictureUrl={business.pictureUrl}
@@ -102,17 +104,17 @@ export default function BusinessScreen() {
           <ThemedText type="footnote" tone="muted" style={styles.readOnly}>You can view this business but not change it.</ThemedText>
         )}
         {canArchiveOwnBusiness(user, userTypeCode) ? (
-          <PrimaryButton title="Archive business" variant="danger" leftIcon="archive-outline" onPress={() => setConfirmArchive(true)} />
+          <PrimaryButton title="Delete business" variant="danger" leftIcon="trash-outline" onPress={() => setConfirmArchive(true)} />
         ) : null}
       </View>
 
       <ConfirmModal
         visible={confirmArchive}
-        icon="archive-outline"
+        icon="trash-outline"
         tone="danger"
-        title="Archive this business?"
+        title="Delete this business?"
         message={ARCHIVE_EFFECTS}
-        confirmLabel="Archive"
+        confirmLabel="Delete"
         isLoading={archive.isPending}
         onConfirm={archiveBusiness}
         onCancel={() => setConfirmArchive(false)}

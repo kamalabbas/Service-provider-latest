@@ -38,7 +38,7 @@ export default function EmployeeEditScreen() {
     return <Screen hasHeader><Notice tone="warning" message="Add your business first. Employees belong to your active business." /></Screen>;
   }
   if (employeeId !== null && (!employee.data || employee.data.archivedAtUtc)) {
-    return <Screen hasHeader><Notice tone="warning" message="Archived employees can't be edited." /></Screen>;
+    return <Screen hasHeader><Notice tone="warning" message="Deleted employees can't be edited." /></Screen>;
   }
   return <EmployeeForm key={employee.data?.id ?? "new"} employee={employee.data ?? null} />;
 }

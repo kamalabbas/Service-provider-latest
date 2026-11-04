@@ -118,7 +118,7 @@ export default function MenuScreen() {
             <ListRow
               icon="construct-outline"
               title="My services"
-              subtitle="Listings customers find nearby"
+              subtitle="Required to appear in customer search"
               onPress={() => router.push("/(dashboard)/(menu)/my-services")}
             />
           ) : null}

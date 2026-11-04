@@ -1,3 +1,4 @@
+import { VisibilityPrompt } from "@/components/business/VisibilityPrompt";
 import { ListRow, ListSection } from "@/components/ui/ListSection";
 import { Loader } from "@/components/ui/loader";
 import { Notice } from "@/components/ui/Notice";
@@ -14,7 +15,7 @@ import { StyleSheet } from "react-native";
 
 const FILTERS = [
   { label: "Active", value: "active" },
-  { label: "Archived", value: "archived" },
+  { label: "Deleted", value: "archived" },
 ] as const;
 
 // Guide 07: the provider's own listings, including archived history.
@@ -38,21 +39,26 @@ export default function MyServicesScreen() {
   return (
     <Screen hasHeader title="My services" subtitle="Listings customers find when they search nearby.">
       {canPublish && business ? (
-        <PrimaryButton title="Add a service" leftIcon="add-circle-outline" onPress={() => router.push("/(dashboard)/(menu)/my-service-edit")} style={styles.add} />
-      ) : canPublish ? (
-        <Notice message="Add your business first. Listings are published under your active business." style={styles.add} />
-      ) : null}
+        <>
+          {services.every((service) => service.archivedAtUtc) ? (
+            <Notice tone="warning" message="You're not visible in search yet. Add at least one service so customers can find you." style={styles.add} />
+          ) : null}
+          <PrimaryButton title="Add a service" leftIcon="add-circle-outline" onPress={() => router.push("/(dashboard)/(menu)/my-service-edit")} style={styles.add} />
+        </>
+      ) : (
+        <VisibilityPrompt />
+      )}
 
       <SegmentedControl options={FILTERS} value={filter} onChange={setFilter} style={styles.filter} />
 
       {shown.length === 0 ? (
-        <Notice message={filter === "active" ? "You have no active listings." : "You have no archived listings."} />
+        <Notice message={filter === "active" ? "You have no active listings." : "You have no deleted listings."} />
       ) : (
         <ListSection>
           {shown.map((service) => (
             <ListRow
               key={service.id}
-              icon={service.archivedAtUtc ? "archive-outline" : "construct-outline"}
+              icon={service.archivedAtUtc ? "trash-outline" : "construct-outline"}
               title={service.title}
               subtitle={`${service.occupationName} · ${service.suburb}`}
               onPress={() => router.push({ pathname: "/(dashboard)/(menu)/my-service", params: { id: String(service.id) } })}

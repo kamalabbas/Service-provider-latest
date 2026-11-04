@@ -16,7 +16,7 @@ import { StyleSheet } from "react-native";
 
 const FILTERS = [
   { label: "Active", value: "active" },
-  { label: "Include archived", value: "all" },
+  { label: "Include deleted", value: "all" },
 ] as const;
 
 // Guide 10: the business roster. Employees are records, not sign-in accounts.
@@ -57,7 +57,7 @@ export default function EmployeesScreen() {
             {list.map((employee) => (
               <ListRow
                 key={employee.id}
-                icon={employee.archivedAtUtc ? "archive-outline" : "person-outline"}
+                icon={employee.archivedAtUtc ? "trash-outline" : "person-outline"}
                 title={employee.archivedAtUtc ? `${employeeName(employee)} (archived)` : employeeName(employee)}
                 subtitle={[employee.occupationName, employee.positionName].filter(Boolean).join(" · ")}
                 onPress={() => router.push({ pathname: "/(dashboard)/(menu)/employee", params: { id: String(employee.id) } })}

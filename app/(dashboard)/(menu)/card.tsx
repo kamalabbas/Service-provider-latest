@@ -1,31 +1,32 @@
 import { CardFace } from "@/components/card/CardFace";
+import { CardProgress } from "@/components/card/CardProgress";
 import { SelectInput } from "@/components/form/SelectInput";
+import { ThemedText } from "@/components/ThemedText";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { ListRow, ListSection } from "@/components/ui/ListSection";
 import { Loader } from "@/components/ui/loader";
 import { Notice } from "@/components/ui/Notice";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { Screen } from "@/components/ui/Screen";
-import { Spacing } from "@/constants/Theme";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { Radius, Spacing } from "@/constants/Theme";
 import { useBusinessAccess } from "@/hooks/useBusiness";
 import { useCard, useCardActions } from "@/hooks/useCards";
 import { useReferenceChoices } from "@/hooks/useReferenceChoices";
+import { useThemeColor } from "@/hooks/useThemeColor";
 import { CardReplacementReason } from "@/interfaces/cardRequest.interface";
 import { useToastStore } from "@/stores/toastStore";
 import { formatLocalTimestamp } from "@/utility/apiValues";
-import { CARD_STATUS_LABELS, REPLACEMENT_EFFECTS, REPLACEMENT_LABELS, cardActions } from "@/utility/cardRules";
+import { CARD_STATUS_LABELS, REPLACEMENT_EFFECTS, REPLACEMENT_LABELS, cardActions, cardSteps, cardSummary, receiveBlockedReason } from "@/utility/cardRules";
 import { referenceLabel } from "@/utility/referenceOptions";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
-const FULFILMENT_NOTES: Partial<Record<string, string>> = {
-  issued: "Your card has been made. You'll see when it's sent.",
-  dispatched: "Your card is on its way. Confirm only once it has actually arrived.",
-  delivery_failed: "Delivery failed. An administrator will resend or reissue it; you can't request a replacement yet.",
-};
+const HISTORY_PREVIEW = 3;
 
-// Guide 11-b: one card with fulfilment, receipt and replacement.
+// Guide 11-b: one card. Reads top to bottom: the card, where it is now, what to do next,
+// then delivery details, replacement and history.
 export default function CardScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -38,6 +39,9 @@ export default function CardScreen() {
   const [confirmReceive, setConfirmReceive] = useState(false);
   const [replacing, setReplacing] = useState(false);
   const [reason, setReason] = useState<CardReplacementReason | "">("");
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  const surface = useThemeColor({}, "surface");
+  const border = useThemeColor({}, "separatorColor");
 
   useFocusEffect(useCallback(() => {
     if (cardId) refetch();
@@ -48,8 +52,11 @@ export default function CardScreen() {
   if (!card) return <Screen hasHeader><Notice tone="warning" message="This card is unavailable." /></Screen>;
 
   const allowed = cardActions(card, user, userTypeCode);
+  const blocked = receiveBlockedReason(card, user);
+  const summary = cardSummary(card);
   const address = card.deliveryAddress;
   const reasonOptions = allowed.replacementReasons.map((value) => ({ label: REPLACEMENT_LABELS[value], value }));
+  const history = showAllHistory ? card.history : card.history.slice(-HISTORY_PREVIEW);
 
   const replace = () =>
     reason && actions.replace.mutate({ card, reason }, {
@@ -64,27 +71,44 @@ export default function CardScreen() {
     <Screen hasHeader>
       <CardFace card={card} />
 
-      {FULFILMENT_NOTES[card.status] ? <Notice message={FULFILMENT_NOTES[card.status]!} style={styles.notice} /> : null}
-      {card.invalidationReason ? <Notice tone="warning" message={`No longer valid: ${card.invalidationReason}`} style={styles.notice} /> : null}
+      {/* Where the card is now, and the one thing to do next. */}
+      <View style={[styles.summary, { backgroundColor: surface, borderColor: border }]}>
+        <StatusBadge label={CARD_STATUS_LABELS[card.status] ?? card.status} tone={summary.tone} />
+        <ThemedText type="title">{summary.title}</ThemedText>
+        {summary.text ? <ThemedText type="callout" tone="muted">{summary.text}</ThemedText> : null}
+        {allowed.receive ? (
+          <PrimaryButton title="I've received my card" leftIcon="checkmark-circle-outline" onPress={() => setConfirmReceive(true)} />
+        ) : null}
+        {blocked ? <Notice tone="warning" message={blocked} /> : null}
+      </View>
+
+      <ThemedText type="label" tone="muted" style={styles.sectionLabel}>PROGRESS</ThemedText>
+      <CardProgress steps={cardSteps(card)} />
 
       <ListSection title="Delivery">
-        <ListRow icon="cube-outline" title="Status" subtitle={CARD_STATUS_LABELS[card.status] ?? card.status} />
-        <ListRow icon="mail-outline" title={address.streetAddress} subtitle={`${address.suburb} ${referenceLabel(regions.data, address.regionCode)} ${address.postalCode}`} />
-        {card.dispatchedAtUtc ? <ListRow icon="send-outline" title="Sent" subtitle={formatLocalTimestamp(card.dispatchedAtUtc)} /> : null}
+        <ListRow icon="home-outline" title={address.streetAddress} subtitle={`${address.suburb} ${referenceLabel(regions.data, address.regionCode)} ${address.postalCode}`} />
         {card.carrier || card.trackingReference ? (
-          <ListRow icon="navigate-outline" title={card.carrier ?? "Tracking"} subtitle={card.trackingReference ?? undefined} />
+          <ListRow icon="navigate-outline" title={card.carrier ?? "Tracking number"} subtitle={card.trackingReference ?? undefined} />
         ) : null}
-        {card.receivedAtUtc ? <ListRow icon="checkmark-done-outline" title="Received" subtitle={formatLocalTimestamp(card.receivedAtUtc)} /> : null}
       </ListSection>
 
-      <ListSection title="Validity" footer={`Cards are valid for ${card.validityYears} year${card.validityYears === 1 ? "" : "s"} from issue.`}>
+      <ListSection title="Validity" footer={`Cards are valid for ${card.validityYears} year${card.validityYears === 1 ? "" : "s"} from the day they're made.`}>
         <ListRow icon="calendar-outline" title="Issued" subtitle={formatLocalTimestamp(card.issuedAtUtc)} />
         <ListRow icon="hourglass-outline" title="Expires" subtitle={formatLocalTimestamp(card.expiresAtUtc)} />
       </ListSection>
 
+      {reasonOptions.length ? (
+        <ListSection title="Need a new card?">
+          <View style={styles.replace}>
+            <ThemedText type="callout" tone="muted">If your card is expiring, damaged, lost or stolen, request a replacement. An administrator reviews it.</ThemedText>
+            <PrimaryButton title="Request a replacement" variant="secondary" leftIcon="refresh-outline" onPress={() => { setReason(""); setReplacing(true); }} />
+          </View>
+        </ListSection>
+      ) : null}
+
       {card.history.length ? (
         <ListSection title="History">
-          {card.history.map((event, index) => (
+          {history.map((event, index) => (
             <ListRow
               key={`${event.createdAtUtc}-${index}`}
               icon="time-outline"
@@ -94,24 +118,25 @@ export default function CardScreen() {
           ))}
         </ListSection>
       ) : null}
-
-      <View style={styles.actions}>
-        {allowed.receive ? <PrimaryButton title="I've received this card" leftIcon="checkmark-circle-outline" onPress={() => setConfirmReceive(true)} /> : null}
-        {reasonOptions.length ? (
-          <PrimaryButton title="Request a replacement" variant="secondary" leftIcon="refresh-outline" onPress={() => { setReason(""); setReplacing(true); }} />
-        ) : null}
-      </View>
+      {card.history.length > HISTORY_PREVIEW ? (
+        <PrimaryButton
+          title={showAllHistory ? "Show less" : `Show all history (${card.history.length})`}
+          variant="ghost"
+          size="md"
+          onPress={() => setShowAllHistory((value) => !value)}
+        />
+      ) : null}
 
       <ConfirmModal
         visible={confirmReceive}
         icon="checkmark-circle-outline"
         title="Has the card arrived?"
-        message="Confirm only once you have the physical card. This is recorded as proof of receipt."
+        message="Confirm only once you have the physical card in your hands. This is recorded as proof of receipt and activates the card."
         confirmLabel="Yes, it arrived"
         isLoading={actions.receive.isPending}
         onCancel={() => setConfirmReceive(false)}
         onConfirm={() => actions.receive.mutate(undefined, {
-          onSuccess: () => showToast("Receipt confirmed.", "success"),
+          onSuccess: () => showToast("Receipt confirmed. Your card is active.", "success"),
           onSettled: () => setConfirmReceive(false),
         })}
       />
@@ -133,6 +158,7 @@ export default function CardScreen() {
 }
 
 const styles = StyleSheet.create({
-  notice: { marginBottom: Spacing.lg },
-  actions: { gap: Spacing.md, marginBottom: Spacing.lg },
+  summary: { borderRadius: Radius.lg, borderWidth: StyleSheet.hairlineWidth, padding: Spacing.lg, gap: Spacing.md, marginBottom: Spacing.xl },
+  sectionLabel: { marginBottom: Spacing.sm, marginLeft: Spacing.xs, letterSpacing: 0.6 },
+  replace: { padding: Spacing.lg, gap: Spacing.md },
 });

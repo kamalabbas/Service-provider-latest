@@ -24,7 +24,7 @@ import { StyleSheet, View } from "react-native";
 
 const STATUS_NOTES: Partial<Record<CardRequest["status"], string>> = {
   pending: "An administrator will review this request. You can change the delivery address or cancel until then.",
-  accepted: "Approved. Approval doesn't mean a card has been made or sent; issuing the card is a separate step. The address is now locked.",
+  accepted: "Approved. Next, an administrator makes and sends your card; it then appears under My cards, where you confirm when it arrives. The address is now locked.",
   rejected: "Rejected. You can submit a new request if you're still eligible.",
   cancelled: "Cancelled. You can submit a new request if you're still eligible.",
 };
@@ -52,6 +52,9 @@ export default function CardRequestScreen() {
     <Screen hasHeader title={request.subjectName} subtitle={CARD_REQUEST_STATUS_LABELS[request.status] ?? request.status}>
       {STATUS_NOTES[request.status] ? (
         <Notice tone={request.status === "rejected" ? "warning" : "info"} message={STATUS_NOTES[request.status]!} style={styles.notice} />
+      ) : null}
+      {request.status === "accepted" ? (
+        <PrimaryButton title="Go to My cards" variant="secondary" leftIcon="wallet-outline" onPress={() => router.push("/(dashboard)/(menu)/cards")} style={styles.notice} />
       ) : null}
 
       <ListSection title="Card for">

@@ -46,7 +46,7 @@ export default function PriceScreen() {
       ) : !current ? (
         <Notice message="Prices from earlier years can't be changed. This one still counts towards the average while it's your latest." style={styles.notice} />
       ) : null}
-      {row.businessArchivedAtUtc ? <Notice tone="warning" message="This business is archived. This price is history only." style={styles.notice} /> : null}
+      {row.businessArchivedAtUtc ? <Notice tone="warning" message="This business was deleted. This price is history only." style={styles.notice} /> : null}
 
       <ListSection title="Price">
         <ListRow icon="pricetag-outline" title={formatAud(row.price)} subtitle={`${row.itemCode} · ${row.calendarYear}`} />

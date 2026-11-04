@@ -51,9 +51,50 @@ export function cardActions(card: Card, user: User | null | undefined, userTypeC
     reasons.push("lost");
   }
   return {
-    receive: owner && card.status === "dispatched" && can(user, ["cards.manage"]),
+    // Offered once the card exists (issued or sent): admins don't always record dispatch
+    // separately, and the server still decides whether receipt is allowed.
+    receive: owner && RECEIVABLE.includes(card.status) && can(user, ["cards.manage"]),
     replacementReasons: reasons,
   };
+}
+
+const RECEIVABLE: readonly CardStatus[] = ["issued", "dispatched"];
+
+/** Why "I've received it" isn't offered, when the card could otherwise be received. */
+export function receiveBlockedReason(card: Card, user: User | null | undefined): string | null {
+  if (!RECEIVABLE.includes(card.status)) return null;
+  if (!isOwner(card, user)) return null;
+  if (!can(user, ["cards.manage"])) return "Your account doesn't have permission to confirm card receipt. Contact support.";
+  return null;
+}
+
+export type CardStep = "issued" | "sent" | "received" | "active";
+
+/** The fulfilment tracker: which steps are done and the date of each. */
+export function cardSteps(card: Card, now = Date.now()): { step: CardStep; label: string; done: boolean; at?: string | null }[] {
+  return [
+    { step: "issued", label: "Card made", done: true, at: card.issuedAtUtc },
+    { step: "sent", label: "Sent to you", done: !!card.dispatchedAtUtc || !!card.receivedAtUtc, at: card.dispatchedAtUtc },
+    { step: "received", label: "Received", done: !!card.receivedAtUtc, at: card.receivedAtUtc },
+    { step: "active", label: "Ready to use", done: isCardUsable(card, now) },
+  ];
+}
+
+/** A plain-language headline and explanation for the card's current situation. */
+export function cardSummary(card: Card, now = Date.now()): { title: string; text: string; tone: "info" | "success" | "warning" | "danger" | "neutral" } {
+  const expiry = new Date(card.expiresAtUtc).toLocaleDateString();
+  if (isCardUsable(card, now)) return { title: "Your card is active", text: `It's valid until ${expiry}.`, tone: "success" };
+  if (card.status === "replaced") return { title: "Replaced", text: "A newer card replaced this one. It's kept here as history.", tone: "neutral" };
+  if (card.invalidatedAtUtc || card.status === "voided") {
+    return { title: "No longer valid", text: card.invalidationReason ?? "This card was cancelled.", tone: "danger" };
+  }
+  if (Date.parse(card.expiresAtUtc) <= now) return { title: "Expired", text: `It expired on ${expiry}. Request a replacement to get a new card.`, tone: "danger" };
+  switch (card.status) {
+    case "issued": return { title: "Your card has been made", text: "It will be sent to your delivery address. Once you have it in your hands, confirm below.", tone: "info" };
+    case "dispatched": return { title: "Your card is on its way", text: "Once it arrives, confirm below to activate it.", tone: "info" };
+    case "delivery_failed": return { title: "Delivery failed", text: "An administrator will resend or reissue your card. You don't need to do anything yet.", tone: "warning" };
+    default: return { title: CARD_STATUS_LABELS[card.status] ?? card.status, text: "", tone: "neutral" };
+  }
 }
 
 /** One line for the card face: validity first, then fulfilment. */

@@ -1,4 +1,4 @@
-import { Layout, Radius, Spacing, Typography } from "@/constants/Theme";
+import { Layout, Radius, Shadow, Spacing, Typography } from "@/constants/Theme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { ComponentProps } from "react";
@@ -11,7 +11,7 @@ type Props = {
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
-  /** primary: main action; secondary: outlined; ghost: text-only; danger: destructive. */
+  /** primary: main action; secondary: tinted and outlined; ghost: tinted, no outline (minor actions); danger: destructive. */
   variant?: "primary" | "secondary" | "ghost" | "danger";
   size?: "md" | "lg";
   leftIcon?: IconName;
@@ -36,16 +36,14 @@ export function PrimaryButton({
   const primaryPressed = useThemeColor({}, "primaryPressed");
   const onPrimary = useThemeColor({}, "buttonText");
   const tint = useThemeColor({}, "tint");
-  const border = useThemeColor({}, "borderColor");
-  const surface = useThemeColor({}, "surface");
-  const muted = useThemeColor({}, "muted");
+  const tintSurface = useThemeColor({}, "primaryLight");
   const error = useThemeColor({}, "error");
-  const text = useThemeColor({}, "text");
 
   const palette = {
     primary: { background: primary, pressed: primaryPressed, content: onPrimary, border: "transparent" },
-    secondary: { background: surface, pressed: muted, content: text, border },
-    ghost: { background: "transparent", pressed: muted, content: tint, border: "transparent" },
+    // Every variant has a visible fill so it reads as a button, not as text.
+    secondary: { background: tintSurface, pressed: tintSurface, content: tint, border: tint },
+    ghost: { background: tintSurface, pressed: tintSurface, content: tint, border: "transparent" },
     danger: { background: error, pressed: error, content: onPrimary, border: "transparent" },
   }[variant];
   const inactive = disabled || loading;
@@ -60,10 +58,12 @@ export function PrimaryButton({
       style={({ pressed }) => [
         styles.button,
         size === "md" ? styles.medium : styles.large,
+        variant === "primary" || variant === "danger" ? Shadow.card : null,
         {
           backgroundColor: pressed ? palette.pressed : palette.background,
           borderColor: palette.border,
-          opacity: disabled && !loading ? 0.5 : pressed && variant === "danger" ? 0.85 : 1,
+          opacity: disabled && !loading ? 0.45 : pressed && variant !== "primary" ? 0.8 : 1,
+          transform: [{ scale: pressed && !inactive ? 0.98 : 1 }],
         },
         style,
       ]}
@@ -86,7 +86,7 @@ export function PrimaryButton({
 const styles = StyleSheet.create({
   button: {
     borderRadius: Radius.md,
-    borderWidth: 1,
+    borderWidth: 1.5,
     paddingHorizontal: Spacing.lg,
     alignItems: "center",
     justifyContent: "center",
@@ -94,6 +94,6 @@ const styles = StyleSheet.create({
   large: { minHeight: Layout.controlHeight },
   medium: { minHeight: 44 },
   content: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm },
-  text: { ...Typography.bodyStrong },
+  text: { ...Typography.bodyStrong, fontWeight: "700" },
   textMedium: { ...Typography.label },
 });

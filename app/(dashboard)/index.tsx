@@ -1,3 +1,4 @@
+import { VisibilityPrompt } from "@/components/business/VisibilityPrompt";
 import { ActionTile } from "@/components/home/ActionTile";
 import { InspectionCard } from "@/components/inspection/InspectionCard";
 import { QuoteCard } from "@/components/quote/QuoteCard";
@@ -83,6 +84,8 @@ export default function HomeScreen() {
         </Pressable>
       }
     >
+      <VisibilityPrompt />
+
       {canViewServices(user) ? (
         <View style={[styles.hero, Shadow.card, { backgroundColor: primary }]}>
           <View style={styles.heroTop}>

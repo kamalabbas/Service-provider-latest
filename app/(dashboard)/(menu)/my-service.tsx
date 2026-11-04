@@ -37,7 +37,7 @@ export default function MyServiceScreen() {
     archive.mutate(service.id, {
       onSuccess: () => {
         setConfirmArchive(false);
-        showToast("The listing has been archived.", "success");
+        showToast("The listing has been deleted.", "success");
         refetch();
       },
       onError: () => refetch(),
@@ -47,7 +47,7 @@ export default function MyServiceScreen() {
     <Screen hasHeader title={service.title}>
       {archived ? (
         <Notice
-          message={`Archived ${formatLocalTimestamp(service.archivedAtUtc!)}. It no longer appears in search and can't be edited. Create a new listing if you offer this again.`}
+          message={`Deleted ${formatLocalTimestamp(service.archivedAtUtc!)}. It no longer appears in search and can't be edited. Create a new listing if you offer this again.`}
           style={styles.notice}
         />
       ) : null}
@@ -80,18 +80,18 @@ export default function MyServiceScreen() {
             />
           ) : null}
           {canArchiveOwnServices(user, userTypeCode) ? (
-            <PrimaryButton title="Archive listing" variant="danger" leftIcon="archive-outline" onPress={() => setConfirmArchive(true)} />
+            <PrimaryButton title="Delete listing" variant="danger" leftIcon="trash-outline" onPress={() => setConfirmArchive(true)} />
           ) : null}
         </View>
       )}
 
       <ConfirmModal
         visible={confirmArchive}
-        icon="archive-outline"
+        icon="trash-outline"
         tone="danger"
-        title="Archive this listing?"
-        message="It's removed from search and can't be edited or republished. Its history stays with your business. You can create a new listing later."
-        confirmLabel="Archive"
+        title="Delete this listing?"
+        message="It's removed from search and can't be restored. Past inspections and quotes keep their details. You can create a new listing later."
+        confirmLabel="Delete"
         isLoading={archive.isPending}
         onConfirm={archiveService}
         onCancel={() => setConfirmArchive(false)}

@@ -17,7 +17,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { isAxiosError } from "axios";
 import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
-import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, View } from "react-native";
+import { FlatList, KeyboardAvoidingView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MessageBubble } from "./MessageBubble";
 
@@ -79,7 +79,7 @@ export default function SupportThreadScreen({ mode = "member" }: { mode?: Suppor
   return (
     <KeyboardAvoidingView
       style={[styles.fill, { backgroundColor: background }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior="padding"
       keyboardVerticalOffset={headerHeight}
     >
       <View style={[styles.header, { borderColor: border }]}>

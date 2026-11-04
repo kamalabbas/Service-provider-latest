@@ -104,9 +104,10 @@ test('usable only when received, valid, not invalidated and unexpired', () => {
   assert.equal(rules.cardValidityText(card({ expiresAtUtc: '2030-05-31T00:00:00Z' }), now), 'Expired');
 });
 
-test('receipt: only the owner, only once dispatched, never automatic', () => {
+test('receipt: only the owner, once the card is made or sent, never automatic', () => {
   assert.equal(rules.cardActions(card({ status: 'dispatched', receivedAtUtc: null }), owner(), null, now).receive, true);
-  for (const status of ['issued', 'delivery_failed', 'received']) {
+  assert.equal(rules.cardActions(card({ status: 'issued', receivedAtUtc: null }), owner(), null, now).receive, true, 'Issued cards too; the server decides');
+  for (const status of ['delivery_failed', 'received', 'voided']) {
     assert.equal(rules.cardActions(card({ status, receivedAtUtc: null }), owner(), null, now).receive, false, `${status}: no receipt`);
   }
   assert.equal(rules.cardActions(card({ status: 'dispatched', receivedAtUtc: null }), { ...owner(), id: '6' }, null, now).receive, false);
@@ -133,4 +134,17 @@ test('gates: owners view with cards.view; only SuperAdmin manages issuance', () 
   assert.equal(access.canManageCardsAsAdmin(owner()), false);
   assert.equal(access.canManageCardsAsAdmin({ ...owner([]), roles: ['SuperAdmin'] }), true);
   assert.match(rules.REPLACEMENT_EFFECTS.lost, /cancelled straight away/);
+});
+
+test('card page summary, progress and why receipt is unavailable', () => {
+  const sent = card({ status: 'dispatched', receivedAtUtc: null, dispatchedAtUtc: '2030-01-05T00:00:00Z', issuedAtUtc: '2030-01-01T00:00:00Z' });
+  assert.equal(rules.cardSummary(sent, now).title, 'Your card is on its way');
+  assert.deepEqual(plain(rules.cardSteps(sent, now).map(step => step.done)), [true, true, false, false]);
+  assert.equal(rules.cardSummary(card({ issuedAtUtc: '2030-01-01T00:00:00Z' }), now).tone, 'success', 'Received and valid');
+  assert.deepEqual(plain(rules.cardSteps(card({ issuedAtUtc: '2030-01-01T00:00:00Z' }), now).map(step => step.done)), [true, true, true, true],
+    'Received implies sent even without a dispatch time');
+  assert.equal(rules.cardSummary(card({ expiresAtUtc: '2030-05-31T00:00:00Z' }), now).title, 'Expired');
+  assert.match(rules.receiveBlockedReason(card({ status: 'issued', receivedAtUtc: null }), owner(['cards.view'])), /permission/);
+  assert.equal(rules.receiveBlockedReason(card({ status: 'issued', receivedAtUtc: null }), owner()), null);
+  assert.equal(rules.receiveBlockedReason(card({ status: 'received' }), owner(['cards.view'])), null);
 });

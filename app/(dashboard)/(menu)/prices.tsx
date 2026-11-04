@@ -59,7 +59,7 @@ export default function PricesScreen() {
 
       <SelectInput label="Year" value={year} onChange={setYear} options={years} />
       {toggle("Show withdrawn", includeWithdrawn, setIncludeWithdrawn)}
-      {toggle("Include archived businesses", includeArchived, setIncludeArchived)}
+      {toggle("Include deleted businesses", includeArchived, setIncludeArchived)}
 
       {prices.isLoading ? (
         <Loader visible overlay={false} message="Loading prices…" />

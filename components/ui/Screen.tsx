@@ -3,7 +3,8 @@ import { Layout, Spacing } from "@/constants/Theme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useQueryClient } from "@tanstack/react-query";
 import { PropsWithChildren, ReactNode, useCallback, useState } from "react";
-import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { RefreshControl, StyleSheet, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type ScreenProps = PropsWithChildren<{
@@ -21,7 +22,7 @@ type ScreenProps = PropsWithChildren<{
   refreshable?: boolean;
 }>;
 
-// Scrollable page for signed-in tabs, with a large title header and pull-to-refresh.
+// Scrollable page for signed-in tabs: large title header, pull-to-refresh, and inputs kept above the keyboard.
 export function Screen({ title, subtitle, accessory, grouped = true, hasHeader = false, onRefresh, refreshable = true, children }: ScreenProps) {
   const background = useThemeColor({}, grouped ? "muted" : "background");
   const tint = useThemeColor({}, "tint");
@@ -42,10 +43,15 @@ export function Screen({ title, subtitle, accessory, grouped = true, hasHeader =
   }, [onRefresh, queryClient]);
 
   return (
-    <ScrollView
+    // Android draws edge to edge, so the window never resizes for the keyboard: scroll the
+    // focused input into view instead.
+    <KeyboardAwareScrollView
       style={{ flex: 1, backgroundColor: background }}
       contentContainerStyle={[styles.content, { paddingTop: (hasHeader ? 0 : insets.top) + Spacing.lg }]}
       keyboardShouldPersistTaps="handled"
+      enableOnAndroid
+      enableResetScrollToCoords={false}
+      extraScrollHeight={Spacing.xxl}
       refreshControl={refreshable ? (
         <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={tint} colors={[tint]} progressViewOffset={hasHeader ? 0 : insets.top} />
       ) : undefined}
@@ -60,7 +66,7 @@ export function Screen({ title, subtitle, accessory, grouped = true, hasHeader =
         </View>
       ) : null}
       {children}
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 

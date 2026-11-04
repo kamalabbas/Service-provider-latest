@@ -54,8 +54,14 @@ function BusinessForm({ business }: { business: Business | null }) {
     if (save.isPending) return;
     save.mutate(toSaveBusinessRequest(values), {
       onSuccess: () => {
-        showToast(business ? "Your business has been updated." : "Your business has been added.", "success");
-        router.back();
+        if (business) {
+          showToast("Your business has been updated.", "success");
+          router.back();
+        } else {
+          // A new business isn't searchable until it has a service: go straight to adding one.
+          showToast("Your business has been added. Now add a service so customers can find you.", "success");
+          router.replace("/(dashboard)/(menu)/my-service-edit");
+        }
       },
       onError: (error) => {
         const info = toAppError(error);

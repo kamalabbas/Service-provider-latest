@@ -2,7 +2,7 @@ import { Radius, Shadow, Spacing } from "@/constants/Theme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import React, { ComponentProps } from "react";
-import { Modal, Pressable, StyleSheet, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, View } from "react-native";
 import { ThemedText } from "../ThemedText";
 import { PrimaryButton } from "./PrimaryButton";
 
@@ -45,7 +45,8 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
-      <View style={[styles.overlay, { backgroundColor: overlay }]}>
+      {/* Lift dialogs with inputs above the keyboard (the window doesn't resize edge to edge). */}
+      <KeyboardAvoidingView behavior="padding" style={[styles.overlay, { backgroundColor: overlay }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} accessibilityLabel="Close dialog" />
 
         <View style={[styles.modal, Shadow.floating, { backgroundColor: surface }]} accessibilityViewIsModal>
@@ -56,11 +57,8 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           ) : null}
           <ThemedText type="headline" style={styles.title}>{title}</ThemedText>
 
-          {customContent ? (
-            <View style={styles.custom}>{customContent}</View>
-          ) : message ? (
-            <ThemedText type="callout" tone="muted" style={styles.message}>{message}</ThemedText>
-          ) : null}
+          {message ? <ThemedText type="callout" tone="muted" style={styles.message}>{message}</ThemedText> : null}
+          {customContent ? <View style={styles.custom}>{customContent}</View> : null}
 
           <View style={styles.buttonRow}>
             <PrimaryButton title={cancelLabel} variant="secondary" size="md" onPress={onCancel} disabled={isLoading} style={styles.button} />
@@ -74,7 +72,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
             />
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };

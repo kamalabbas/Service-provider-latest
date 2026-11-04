@@ -46,7 +46,7 @@ export default function ClientsScreen() {
   return (
     <Screen hasHeader title="My clients" subtitle="Customers whose inspection requests your business accepted.">
       {toggle("Show hidden", includeHidden, setIncludeHidden)}
-      {toggle("Include archived businesses", includeArchived, setIncludeArchived)}
+      {toggle("Include deleted businesses", includeArchived, setIncludeArchived)}
 
       {clients.isLoading ? (
         <Loader visible overlay={false} message="Loading clients…" />

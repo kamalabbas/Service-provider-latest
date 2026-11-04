@@ -1,5 +1,5 @@
 import { ThemedText } from "@/components/ThemedText";
-import { ListRow, ListSection } from "@/components/ui/ListSection";
+import { RecordCard } from "@/components/ui/RecordCard";
 import { Loader } from "@/components/ui/loader";
 import { Notice } from "@/components/ui/Notice";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
@@ -8,7 +8,8 @@ import { Spacing } from "@/constants/Theme";
 import { useMyCards } from "@/hooks/useCards";
 import { useAuthStore } from "@/stores/authStore";
 import { canViewCards } from "@/utility/access";
-import { CARD_STATUS_LABELS, cardValidityText } from "@/utility/cardRules";
+import { formatLocalTimestamp } from "@/utility/apiValues";
+import { CARD_STATUS_LABELS, cardSummary } from "@/utility/cardRules";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback } from "react";
 import { StyleSheet } from "react-native";
@@ -33,24 +34,30 @@ export default function CardsScreen() {
 
   return (
     <Screen hasHeader title="My cards" subtitle="Cards issued to you and your employees.">
-      <PrimaryButton title="Card requests" variant="ghost" leftIcon="document-text-outline" onPress={() => router.push("/(dashboard)/(menu)/card-requests")} style={styles.spaced} />
+      <PrimaryButton title="Card requests" variant="secondary" leftIcon="document-text-outline" onPress={() => router.push("/(dashboard)/(menu)/card-requests")} style={styles.spaced} />
       {cards.isLoading ? (
         <Loader visible overlay={false} message="Loading cards…" />
       ) : list.length === 0 ? (
         <Notice message="No cards yet. A card is issued after an administrator approves your request." />
       ) : (
         <>
-          <ListSection>
-            {list.map((card) => (
-              <ListRow
+          {list.map((card) => {
+            const summary = cardSummary(card);
+            return (
+              <RecordCard
                 key={card.id}
                 icon={card.subjectType === "employee" ? "people-outline" : "card-outline"}
-                title={`${card.subjectName} · ${card.cardNumber}`}
-                subtitle={`${cardValidityText(card)} · ${CARD_STATUS_LABELS[card.status] ?? card.status}`}
+                title={card.subjectName}
+                status={{ label: summary.title, tone: summary.tone }}
+                details={[
+                  { icon: "card-outline", text: `Card ${card.cardNumber}` },
+                  { icon: "cube-outline", text: CARD_STATUS_LABELS[card.status] ?? card.status },
+                  { icon: "hourglass-outline", text: `Expires ${formatLocalTimestamp(card.expiresAtUtc)}` },
+                ]}
                 onPress={() => router.push({ pathname: "/(dashboard)/(menu)/card", params: { id: String(card.id) } })}
               />
-            ))}
-          </ListSection>
+            );
+          })}
           {cards.hasNextPage ? (
             <PrimaryButton
               title={cards.isFetchingNextPage ? "Loading..." : "Show more"}

@@ -15,7 +15,7 @@ const STATUS_NOTES: Record<string, string> = {
   pending: "An administrator will review this suggestion.",
   approved: "Approved. The item will appear in the price guide once it's published; then you can submit your price.",
   rejected: "Rejected. See the reason below.",
-  cancelled: "Cancelled, for example because the business was archived.",
+  cancelled: "Cancelled, for example because the business was deleted.",
 };
 
 // Guide 14: one item suggestion and its history.

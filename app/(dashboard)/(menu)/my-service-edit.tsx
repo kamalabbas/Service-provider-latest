@@ -43,7 +43,7 @@ export default function MyServiceEditScreen() {
     return <Screen hasHeader><Notice tone="warning" message="Add your business first. Listings are published under your active business." /></Screen>;
   }
   if (serviceId !== null && (!service.data || service.data.archivedAtUtc)) {
-    return <Screen hasHeader><Notice tone="warning" message="Archived listings can't be edited. Create a new listing instead." /></Screen>;
+    return <Screen hasHeader><Notice tone="warning" message="Deleted listings can't be edited. Create a new listing instead." /></Screen>;
   }
 
   const allowed = allowedOccupationCodes(userTypeCode, profile.data?.occupations.map((item) => item.occupationCode) ?? []);
