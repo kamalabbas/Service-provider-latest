@@ -122,7 +122,40 @@ export interface AdminPriceItemRequestFilters extends PriceItemRequestFilters {
 export type ProviderPriceResponse = ApiResponse<ProviderPrice>;
 export type ProviderPricePageResponse = ApiResponse<ApiPage<ProviderPrice>>;
 export type ProviderPriceEventPageResponse = ApiResponse<ApiPage<ProviderPriceEvent>>;
-export type AvailablePriceItemPageResponse = ApiResponse<ApiPage<PriceCatalogueItem>>;
+/** The provider's pricing inputs for an item: the current range and Guide (private/admin views only). */
+export interface PriceRange {
+  guidePrice?: number | null;
+  minProviderPrice: number;
+  maxProviderPrice: number;
+}
+
+/** Items this business can price; unlike the Global list, these include Guide and Min/Max. */
+export type AvailablePriceItem = PriceCatalogueItem & PriceRange & { guidePrice: number };
+
+/**
+ * Guide 22: one row per published item matching the business's active services. `id` is the
+ * catalogue item; `submissionId` is the annual custom record (if any). The effective price is
+ * the latest custom price, or Guide when there is none or it was withdrawn.
+ */
+export interface ProviderCurrentPrice extends PriceRange {
+  id: number;
+  code: string;
+  name: string;
+  description?: string | null;
+  occupationCode: string;
+  occupationName: string;
+  currencyCode: string;
+  guidePrice: number;
+  effectivePrice: number;
+  /** "guide" or "custom". */
+  priceSource: string;
+  submissionId?: number | null;
+  calendarYear?: number | null;
+  withdrawnAtUtc?: string | null;
+}
+
+export type AvailablePriceItemPageResponse = ApiResponse<ApiPage<AvailablePriceItem>>;
+export type ProviderCurrentPricePageResponse = ApiResponse<ApiPage<ProviderCurrentPrice>>;
 export type PriceItemRequestResponse = ApiResponse<PriceItemRequest>;
 export type PriceItemRequestPageResponse = ApiResponse<ApiPage<PriceItemRequest>>;
 export type PriceItemRequestEventPageResponse = ApiResponse<ApiPage<PriceItemRequestEvent>>;

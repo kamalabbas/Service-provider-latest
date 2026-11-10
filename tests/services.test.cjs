@@ -75,17 +75,15 @@ test('discovery detail and admin routes use stable IDs', async () => {
   ]);
 });
 
-test('search: location required, zero allowed, empty filters omitted, both filters applied', async () => {
+test('search: location required, zero allowed, empty filters omitted, both filters applied; no radius (guide 22)', async () => {
   await service.searchServices({ latitude: 0, longitude: 0 });
   assert.deepEqual(plain(calls[0].params), { latitude: 0, longitude: 0, page: 1, pageSize: 20 });
   await service.searchServices({ latitude: -33.8, longitude: 151.2, radiusKm: 25, membershipId: ' T100000 ', occupationCode: 'electrical_services' }, 3, 20);
   assert.deepEqual(plain(calls[1].params), {
-    latitude: -33.8, longitude: 151.2, radiusKm: 25, membershipId: 'T100000', occupationCode: 'electrical_services', page: 3, pageSize: 20,
-  });
+    latitude: -33.8, longitude: 151.2, membershipId: 'T100000', occupationCode: 'electrical_services', page: 3, pageSize: 20,
+  }, 'The radius is a server setting and is never sent');
   assert.deepEqual(plain(service.searchParams({ latitude: 1, longitude: 1, membershipId: '  ', occupationCode: '' })),
     { latitude: 1, longitude: 1, page: 1, pageSize: 20 });
-  assert.throws(() => service.searchParams({ latitude: 1, longitude: 1, radiusKm: 0.5 }), /1–500/);
-  assert.throws(() => service.searchParams({ latitude: 1, longitude: 1, radiusKm: 501 }), /1–500/);
   assert.throws(() => service.searchParams({ latitude: Number.NaN, longitude: 1 }), /outside its valid range/);
   assert.throws(() => service.searchParams({ latitude: 1, longitude: 1 }, 1001), /Page/);
 });
@@ -131,12 +129,17 @@ test('gates: view, publish by eligible type, archive, inspection availability', 
   assert.equal(access.canViewServices(user([])), false);
   assert.equal(access.canViewServices(user(['services.view'], 'profile_setup')), false);
   const manager = user(['services.view', 'services.manage', 'services.delete']);
-  assert.equal(access.canManageOwnServices(manager, 'builder'), true);
+  assert.equal(access.canManageOwnServices(manager, 'tradeperson'), true);
   assert.equal(access.canManageOwnServices(manager, 'individual'), false);
-  assert.equal(access.canManageOwnServices(user(['services.view']), 'builder'), false);
-  assert.equal(access.canArchiveOwnServices(user(['services.manage']), 'builder'), false);
+  assert.equal(access.canManageOwnServices(user(['services.view']), 'tradeperson'), false);
+  assert.equal(access.canArchiveOwnServices(user(['services.manage']), 'tradeperson'), false);
   const available = { canRequestInspection: true };
-  assert.equal(access.canRequestInspectionFor(user(['inspections.manage']), available), true);
+  assert.equal(access.canRequestInspectionFor(user(['inspections.manage', 'payments.manage']), available), true);
+  assert.equal(access.canRequestInspectionFor(user(['inspections.manage']), available), false, 'Booking is paid (guide 21): payments.manage too');
   assert.equal(access.canRequestInspectionFor(user([]), available), false, 'Advisory flag alone is not enough');
-  assert.equal(access.canRequestInspectionFor(user(['inspections.manage']), { canRequestInspection: false }), false);
+  assert.equal(access.canRequestInspectionFor(user(['inspections.manage', 'payments.manage']), { canRequestInspection: false }), false);
+});
+
+test('only tradespeople publish services (guide 22)', () => {
+  for (const type of ['builder', 'developer']) assert.equal(access.canManageOwnServices(user(['services.manage']), type), false, type);
 });

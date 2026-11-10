@@ -7,10 +7,16 @@ import {
   CardRequestListFilters,
   CardRequestPageResponse,
   CardRequestResponse,
-  CreateEmployeeCardRequest,
+  CardAllowanceResponse,
+  CardPaymentRefundPageResponse,
+  CardPaymentRequest,
+  CardReplacementReason,
 } from "@/interfaces/cardRequest.interface";
 import { pageParams } from "@/utility/apiTransport";
 import { requireDatabaseId } from "@/utility/apiValues";
+import type { PaymentOperationResponse } from "@/interfaces/payment.interface";
+import type { ApiResponse } from "@/interfaces/serviceProviderApi.interface";
+import { requireRequestId } from "@/services/paymentService";
 import { getData, postData, putData } from "./api";
 
 const path = (requestId: number, action = "") => `/api/card-requests/${requireDatabaseId(requestId)}${action}`;
@@ -37,15 +43,39 @@ export const listMyCardRequests = (filters: CardRequestListFilters = {}, page = 
 export const getCardRequest = (requestId: number, signal?: AbortSignal) =>
   getData<CardRequestResponse>(path(requestId), { signal });
 
-/** The member's own card. No body: the server takes the signed-in member as the subject. */
-export const requestPersonalCard = () =>
-  postData<undefined, CardRequestResponse>("/api/card-requests/personal", undefined);
+/** Guide 22: free card credits, the fee and whether requests are paused. */
+export const getCardAllowances = (signal?: AbortSignal) =>
+  getData<CardAllowanceResponse>("/api/card-requests/allowances", { signal });
 
-/** An owned, active employee of the active business. */
-export const requestEmployeeCard = (employeeId: number) =>
-  postData<CreateEmployeeCardRequest, CardRequestResponse>("/api/card-requests/employee", { employeeId: requireDatabaseId(employeeId) });
+/** Automatic card refunds. */
+export const listCardRefunds = (page = 1, pageSize = 20, signal?: AbortSignal) =>
+  getData<CardPaymentRefundPageResponse>("/api/card-requests/refunds", { params: pageParams(page, pageSize), signal });
 
-/** Pending only; locks once approved. */
+const REPLACEMENT_REASONS: readonly CardReplacementReason[] = ["expired", "damaged", "lost"];
+
+/**
+ * One funded Checkout for personal, employee and replacement cards (the old per-kind routes
+ * are gone). A request exists only once the operation returns its cardRequestId.
+ */
+export function startCardCheckout(body: CardPaymentRequest) {
+  const hasPrevious = body.previousCardId != null;
+  if (hasPrevious !== (body.replacementReason != null)) throw new Error("A replacement needs both the previous card and the reason.");
+  if (body.replacementReason && !REPLACEMENT_REASONS.includes(body.replacementReason)) throw new Error("Choose expired, damaged or lost.");
+  return postData<CardPaymentRequest, PaymentOperationResponse>("/api/card-requests/checkout", {
+    requestId: requireRequestId(body.requestId),
+    consentAccepted: body.consentAccepted === true,
+    ...address(body),
+    employeeId: body.employeeId == null ? null : requireDatabaseId(body.employeeId),
+    previousCardId: hasPrevious ? requireDatabaseId(body.previousCardId!) : null,
+    replacementReason: body.replacementReason ?? null,
+  });
+}
+
+/** Immediately invalidates the card, even if the replacement payment is then abandoned. */
+export const reportCardLost = (cardId: number) =>
+  postData<undefined, ApiResponse<boolean>>(`/api/card-requests/cards/${requireDatabaseId(cardId)}/report-lost`, undefined);
+
+/** Editable until the card is first dispatched. */
 export const updateCardDeliveryAddress = (requestId: number, body: CardDeliveryAddress) =>
   putData<CardDeliveryAddress, CardRequestResponse>(path(requestId, "/delivery-address"), address(body));
 
@@ -68,8 +98,10 @@ export const adminGetCardRequest = (requestId: number, signal?: AbortSignal) =>
 
 export const adminCreateCardRequest = (ownerUserId: number, body: AdminCreateCardRequest) => {
   const hasPrevious = body.previousCardId != null;
+  if (!body.auditReason?.trim()) throw new Error("An audit reason is required.");
   if (hasPrevious !== (body.replacementReason != null)) throw new Error("A replacement needs both the previous card and the reason.");
   return postData<AdminCreateCardRequest, CardRequestResponse>(`/api/admin/card-requests/users/${requireDatabaseId(ownerUserId)}`, {
+    auditReason: body.auditReason.trim(),
     employeeId: body.employeeId == null ? null : requireDatabaseId(body.employeeId),
     previousCardId: hasPrevious ? requireDatabaseId(body.previousCardId!) : null,
     replacementReason: body.replacementReason ?? null,

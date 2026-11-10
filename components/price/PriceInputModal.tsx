@@ -3,7 +3,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Radius, Spacing } from "@/constants/Theme";
 import { useThemeColor } from "@/hooks/useThemeColor";
-import { PriceCatalogueItem } from "@/interfaces/priceCatalogue.interface";
+import type { PriceRange } from "@/interfaces/providerPrice.interface";
 import { audToCents, centsToAud, formatAud } from "@/utility/apiValues";
 import { priceRangeError } from "@/utility/providerPriceRules";
 import { useEffect, useState } from "react";
@@ -14,7 +14,7 @@ type PriceInputModalProps = {
   title: string;
   confirmLabel: string;
   /** The item's current range; null when it can't be loaded (the server still checks). */
-  item: (Pick<PriceCatalogueItem, "minProviderPrice" | "maxProviderPrice"> & Partial<Pick<PriceCatalogueItem, "guidePrice">>) | null;
+  item: PriceRange | null;
   initialPrice?: number | null;
   isLoading: boolean;
   onConfirm: (price: number) => void;

@@ -40,6 +40,7 @@ export default function MyServicesScreen() {
     <Screen hasHeader title="My services" subtitle="Listings customers find when they search nearby.">
       {canPublish && business ? (
         <>
+          <VisibilityPrompt hideWhenOnServices />
           {services.every((service) => service.archivedAtUtc) ? (
             <Notice tone="warning" message="You're not visible in search yet. Add at least one service so customers can find you." style={styles.add} />
           ) : null}

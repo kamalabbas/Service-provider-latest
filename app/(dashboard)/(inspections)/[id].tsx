@@ -11,7 +11,8 @@ import { useReferenceChoices } from "@/hooks/useReferenceChoices";
 import { useAuthStore } from "@/stores/authStore";
 import { useToastStore } from "@/stores/toastStore";
 import { formatLocalTimestamp } from "@/utility/apiValues";
-import { STATUS_LABELS, inspectionActions, inspectionRole } from "@/utility/inspectionRules";
+import { STATUS_LABELS, inspectionActions, inspectionRole, lateCancelNote } from "@/utility/inspectionRules";
+import { REFUND_STATUS_LABELS, formatMinor } from "@/utility/paymentRules";
 import { canIssueQuoteFor } from "@/utility/quoteRules";
 import { referenceLabel } from "@/utility/referenceOptions";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -56,6 +57,23 @@ export default function InspectionScreen() {
           subtitle={worker ? [worker.name, worker.occupationName, worker.positionName].filter(Boolean).join(" · ") : `${inspection.providerName} (provider)`}
         />
       </ListSection>
+
+      {/* Guide 21: financial details are only returned to the requester (and SuperAdmin). */}
+      {role === "requester" && !inspection.isLegacyBilling && (inspection.chargedNowMinor != null || inspection.refundStatus) ? (
+        <ListSection title="Payment" footer="Refunds are automatic if the provider declines or the booking is cancelled before the visit.">
+          <ListRow icon="cash-outline" title="Booking fee"
+            subtitle={inspection.chargedNowMinor ? formatMinor(inspection.chargedNowMinor, inspection.currency) : "Free (inspection credit)"} />
+          {inspection.refundStatus ? (
+            <ListRow icon="return-down-back-outline" title={REFUND_STATUS_LABELS[inspection.refundStatus] ?? inspection.refundStatus}
+              subtitle={inspection.chargedNowMinor ? "Full amount" : "Your free credit is returned"} />
+          ) : null}
+          {inspection.informativeInspectionPriceMinor != null ? (
+            <ListRow icon="pricetag-outline" title="Typical inspection price"
+              subtitle={`${formatMinor(inspection.informativeInspectionPriceMinor, inspection.currency)}, paid to the provider directly`} />
+          ) : null}
+        </ListSection>
+      ) : null}
+      {lateCancelNote(inspection) && role !== null ? <Notice message={lateCancelNote(inspection)!} style={styles.notice} /> : null}
 
       <ListSection title="Visit">
         <ListRow icon="home-outline" title="Address" subtitle={`${address.streetAddress}, ${address.suburb} ${referenceLabel(regions.data, address.regionCode)} ${address.postalCode}`} />
@@ -130,7 +148,9 @@ export default function InspectionScreen() {
       <ReasonModal
         visible={prompt !== null}
         title={prompt === "reject" ? "Reject this request?" : "Cancel this request?"}
-        message={prompt === "reject" ? "The customer will be told it was rejected." : "The other party will be told it was cancelled."}
+        message={prompt === "reject"
+          ? "The customer will be told it was rejected, and their booking fee is refunded automatically."
+          : "The other party will be told it was cancelled. Any booking fee is refunded automatically."}
         confirmLabel={prompt === "reject" ? "Reject" : "Cancel request"}
         isLoading={actions.reject.isPending || actions.cancel.isPending}
         onCancel={() => setPrompt(null)}
@@ -145,4 +165,5 @@ export default function InspectionScreen() {
 
 const styles = StyleSheet.create({
   actions: { gap: Spacing.md, marginBottom: Spacing.lg },
+  notice: { marginBottom: Spacing.lg },
 });

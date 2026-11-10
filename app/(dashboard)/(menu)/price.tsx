@@ -7,8 +7,7 @@ import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { Screen } from "@/components/ui/Screen";
 import { Spacing } from "@/constants/Theme";
 import { useBusinessAccess } from "@/hooks/useBusiness";
-import { usePriceCatalogueItem } from "@/hooks/usePriceCatalogue";
-import { useMyProviderPrices, useProviderPrice, useProviderPriceActions, useProviderPriceHistory } from "@/hooks/useProviderPrices";
+import { useCurrentProviderPrices, useMyProviderPrices, useProviderPrice, useProviderPriceActions, useProviderPriceHistory } from "@/hooks/useProviderPrices";
 import { useToastStore } from "@/stores/toastStore";
 import { formatAud, formatLocalTimestamp } from "@/utility/apiValues";
 import { currentUtcYear, providerPriceActions } from "@/utility/providerPriceRules";
@@ -27,7 +26,9 @@ export default function PriceScreen() {
   const { data: row, isLoading } = useProviderPrice(priceId);
   // Other years of the same item tell whether an older row is still the latest.
   const siblings = useMyProviderPrices(row ? { itemId: row.itemId, businessId: row.businessId } : {});
-  const item = usePriceCatalogueItem(row && row.itemStatus === "published" ? row.itemId : null);
+  // The current range comes from the private price list; Global reads no longer include it (guide 22).
+  const currentList = useCurrentProviderPrices(100, !!row && row.itemStatus === "published");
+  const range = (currentList.data ?? []).find((entry) => row && entry.id === row.itemId) ?? null;
   const history = useProviderPriceHistory(priceId);
   const actions = useProviderPriceActions();
   const [editing, setEditing] = useState<"edit" | "restore" | null>(null);
@@ -74,7 +75,7 @@ export default function PriceScreen() {
         visible={editing !== null}
         title={editing === "restore" ? "Restore this price" : "Change this price"}
         confirmLabel={editing === "restore" ? "Restore" : "Save"}
-        item={item.data ?? null}
+        item={range}
         initialPrice={editing === "edit" ? row.price : null}
         isLoading={actions.update.isPending || actions.restore.isPending}
         onCancel={() => setEditing(null)}

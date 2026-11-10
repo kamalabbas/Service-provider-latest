@@ -17,8 +17,8 @@ import {
   cancelCardRequest,
   getCardRequest,
   listMyCardRequests,
-  requestEmployeeCard,
-  requestPersonalCard,
+  getCardAllowances,
+  listCardRefunds,
   updateCardDeliveryAddress,
 } from "@/services/cardRequestService";
 import { useAuthStore } from "@/stores/authStore";
@@ -70,8 +70,6 @@ export function useCardRequestActions() {
     onError: () => { refresh(); },
   };
   return {
-    requestPersonal: useMutation({ mutationFn: () => requestPersonalCard(), ...options }),
-    requestEmployee: useMutation({ mutationFn: (employeeId: number) => requestEmployeeCard(employeeId), ...options }),
     updateAddress: useMutation({
       mutationFn: ({ requestId, address }: { requestId: number; address: CardDeliveryAddress }) => updateCardDeliveryAddress(requestId, address),
       ...options,
@@ -125,4 +123,27 @@ export function useAdminCardRequestActions() {
       onSettled,
     }),
   };
+}
+
+// Guide 22: card fee, free card credits and automatic refunds.
+export function useCardAllowances() {
+  const user = useAuthStore((state) => state.user);
+  return useQuery({
+    queryKey: [...cardRequestKeys.all(user?.id ?? null), "allowances"],
+    queryFn: ({ signal }) => getCardAllowances(signal),
+    enabled: canViewCardRequests(user),
+    select: (response) => response.data ?? null,
+  });
+}
+
+export function useCardRefunds() {
+  const user = useAuthStore((state) => state.user);
+  return useInfiniteQuery({
+    queryKey: [...cardRequestKeys.all(user?.id ?? null), "refunds"],
+    queryFn: ({ pageParam, signal }) => listCardRefunds(pageParam, PAGE_SIZE, signal),
+    initialPageParam: 1,
+    getNextPageParam: (last, _pages, page) => (last.data?.hasMore ? page + 1 : undefined),
+    enabled: canViewCardRequests(user),
+    select: (data) => data.pages.flatMap((page) => page.data?.items ?? []),
+  });
 }

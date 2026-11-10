@@ -13,12 +13,19 @@ export interface PriceCatalogueItem {
   name: string;
   description?: string | null;
   currencyCode: string;
-  guidePrice: number;
-  minProviderPrice: number;
-  maxProviderPrice: number;
+  /**
+   * Guide 22: the one displayed price (AUD): the admin override, else the provider average, else
+   * Guide. Ordinary subscriber reads return only this.
+   */
+  price: number;
+  // Management/admin views only; absent for ordinary members, including subscribed tradespeople.
+  guidePrice?: number | null;
+  minProviderPrice?: number | null;
+  maxProviderPrice?: number | null;
   /** From provider submissions; null means no data, not zero. */
   providerAveragePrice?: number | null;
-  providerSubmissionCount: number;
+  providerSubmissionCount?: number | null;
+  globalOverride?: number | null;
   status: PriceCatalogueStatus;
   publishedAtUtc?: string | null;
   retiredAtUtc?: string | null;

@@ -8,7 +8,7 @@ import { Screen } from "@/components/ui/Screen";
 import { Spacing } from "@/constants/Theme";
 import { useBusinessAccess, useMyBusiness } from "@/hooks/useBusiness";
 import { useAvailablePriceItems, useProviderPriceActions } from "@/hooks/useProviderPrices";
-import { PriceCatalogueItem } from "@/interfaces/priceCatalogue.interface";
+import type { AvailablePriceItem } from "@/interfaces/providerPrice.interface";
 import { useToastStore } from "@/stores/toastStore";
 import { formatAud } from "@/utility/apiValues";
 import { canWriteProviderPrices, currentUtcYear } from "@/utility/providerPriceRules";
@@ -24,7 +24,7 @@ export default function PriceSubmitScreen() {
   const business = useMyBusiness();
   const items = useAvailablePriceItems();
   const actions = useProviderPriceActions();
-  const [selected, setSelected] = useState<PriceCatalogueItem | null>(null);
+  const [selected, setSelected] = useState<AvailablePriceItem | null>(null);
 
   if (member.isLoading || business.isLoading) return <Screen hasHeader><Loader visible overlay={false} message="Loading…" /></Screen>;
   if (!canWriteProviderPrices(user, userTypeCode)) {

@@ -2,7 +2,8 @@
 
 Source: frontend handbook at `C:\Users\kamal\Desktop\Work\Service provider\frontend\`
 (204 controller endpoints: ~102 member, ~102 admin). Implement each guide with
-[IMPLEMENTATION_TEMPLATE.md](IMPLEMENTATION_TEMPLATE.md). Update the **Status**
+[IMPLEMENTATION_TEMPLATE.md](IMPLEMENTATION_TEMPLATE.md). Guides 20–22 (payments and marketplace
+updates, November 2026) are in `docs/brd new fixes/`. Update the **Status**
 column when a guide lands on `main`.
 
 Status: ✅ done · 🔜 next · ⬜ not started · ⏸ blocked on a decision
@@ -33,7 +34,9 @@ Status: ✅ done · 🔜 next · ⬜ not started · ⏸ blocked on a decision
 | 6 Communication | 18 Live notifications (SignalR) | ✅ | 17, features it refreshes | — | — |
 | 6 Communication | 15 Support | ✅ | 01 | 8 / 8 | `support.view/.manage/.delete` (setup ok) |
 | 6 Communication | 16 Announcements | ✅ | 03 | 2 / 7 | `announcements.view`; admin SuperAdmin-only |
-| 7 Administration | 19 Admin screens (admin routes of 03–17) | ⏸ | everything above | ~102 admin | SuperAdmin / delegated roles |
+| 8 Payments | 21 Payments and subscriptions (Stripe) | ✅ | 08, 11, 18 | 15 / 13 | `payments.view/.manage/.delete` (reads, card removal and stopping renewal: setup ok) |
+| 8 Payments | 22 Marketplace updates (discovery, paid cards, price lists) | ✅ | 07, 11, 13, 14, 21 | 6 new, 4 removed / 7 | Tradeperson-only providers; price list needs the paid benefit |
+| 7 Administration | 19 Admin screens (admin routes of 03–17, 21, 22) | ⏸ | everything above | ~122 admin | SuperAdmin / delegated roles |
 
 Phase 1 order: **02 → 06 → 03 → 04**. Guide 04's form needs region/occupation
 choices (06) and the member type (03). Guide 04 replaces the `(setup)` placeholder
@@ -67,7 +70,8 @@ and ends with a session refresh to obtain full access.
 |---|---|---|
 | 05, 07 | `expo-location`, `react-native-maps` ✅ added | Map pin and current location for business/listing/search. |
 | 09 | `expo-document-picker`, `expo-sharing` ✅ added | Pick a PDF to upload; open/share a downloaded quote PDF. |
-| 18 | `@microsoft/signalr` | Live notification hub connection. |
+| 18 | `@microsoft/signalr` ✅ added | Live notification hub connection. |
+| 21, 22 | none | Stripe's hosted pages open in `expo-web-browser` (already installed); no Stripe SDK. |
 
 ## Open decisions
 

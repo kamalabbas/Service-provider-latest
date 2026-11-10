@@ -1,4 +1,5 @@
 import type { CardDeliveryAddress, CardRequest, CardRequestStatus } from "@/interfaces/cardRequest.interface";
+import type { Profile } from "@/interfaces/profile.interface";
 import type { User } from "@/interfaces/user.interface";
 import { BUSINESS_USER_TYPES, can } from "@/utility/access";
 import * as yup from "yup";
@@ -23,12 +24,16 @@ export interface CardRequestActions {
   cancel: boolean;
 }
 
-/** Only the owner, only while pending. Approved requests can't be cancelled. */
-export function cardRequestActions(request: Pick<CardRequest, "status" | "ownerUserId">, user: User | null | undefined): CardRequestActions {
+/**
+ * Only the owner. The address can change until the card is first dispatched (guide 22);
+ * cancelling (with an automatic refund) is for pending requests only.
+ */
+export function cardRequestActions(request: Pick<CardRequest, "status" | "ownerUserId" | "firstDispatchedAtUtc">, user: User | null | undefined): CardRequestActions {
   const owner = !!user?.id && String(request.ownerUserId) === user.id;
   const pending = request.status === "pending";
+  const beforeDispatch = (pending || request.status === "accepted") && !request.firstDispatchedAtUtc;
   return {
-    editAddress: owner && pending && can(user, ["card-requests.manage"]),
+    editAddress: owner && beforeDispatch && can(user, ["card-requests.manage"]),
     cancel: owner && pending && can(user, ["card-requests.delete"]),
   };
 }
@@ -60,3 +65,13 @@ export const deliveryAddressSchema: yup.ObjectSchema<CardDeliveryAddress> = yup.
   regionCode: yup.string().trim().required("Choose a state or territory"),
   postalCode: required("the postcode", 20),
 });
+
+/** The profile's postal address (or its main address when they're the same), to prefill delivery. */
+export function profileDeliveryAddress(profile?: Pick<Profile,
+  "streetAddress" | "suburb" | "regionCode" | "postalCode" | "isPostalSameAsAddress" | "postalAddress" | "postalSuburb" | "postalRegionCode" | "postalPostalCode"> | null): CardDeliveryAddress | null {
+  if (!profile) return null;
+  if (profile.isPostalSameAsAddress || !profile.postalAddress) {
+    return { streetAddress: profile.streetAddress, suburb: profile.suburb, regionCode: profile.regionCode, postalCode: profile.postalCode };
+  }
+  return { streetAddress: profile.postalAddress, suburb: profile.postalSuburb, regionCode: profile.postalRegionCode, postalCode: profile.postalPostalCode };
+}

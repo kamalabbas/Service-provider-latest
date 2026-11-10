@@ -8,6 +8,7 @@ Provider backend. Branding follows the AUETE logo (green `#1A543C`).
 The "BRDs" are the frontend handbook guides in
 `C:\Users\kamal\Desktop\Work\Service provider\frontend\NN-*.md`.
 
+- The newer guides 20–22 (payments, marketplace updates) are in `docs/brd new fixes/`.
 - Follow [docs/brd/IMPLEMENTATION_TEMPLATE.md](docs/brd/IMPLEMENTATION_TEMPLATE.md) for every guide.
 - Pick the next guide and check dependencies in [docs/brd/ROADMAP.md](docs/brd/ROADMAP.md); update its Status when a guide lands.
 - The API host is `https://dev-api-sp.auete.store` and the SignalR hub is `https://dev-signalr.auete.store/hubs/notifications` (`EXPO_PUBLIC_SIGNALR_URL`). The handbook's `zourwa.com` hosts are wrong.
@@ -36,6 +37,7 @@ npx expo export --platform android --output-dir <scratch dir>
 | HTTP client, interceptors, error toasts | `services/api.ts`, `services/apiError.ts` |
 | Session (refresh, restore, logout) | `services/authSession.ts`, `hooks/useAuth.ts` |
 | Push and live updates (SignalR), event → query refetch, push-tap links | `services/pushNotifications.ts`, `services/liveNotifications.ts`, `utility/liveEvents.ts` |
+| Payments (guides 21/22): Stripe hosted pages, operation polling, request-ID reuse | `services/paymentService.ts`, `services/paymentFlow.ts`, `hooks/usePayments.ts` (`usePaymentFlow`), `utility/paymentRules.ts` |
 | Signed-in identity from JWT claims | `utility/accessToken.ts`, `interfaces/user.interface.ts` |
 | Permissions | `utility/permissions.ts`; per-guide gates in `utility/access.ts` |
 | Reference choices (regions, occupations, positions, licence types) | `hooks/useReferenceChoices.ts` + `utility/referenceOptions.ts` → `SelectInput` / `SelectMultiInput` |

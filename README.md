@@ -212,6 +212,22 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 - Push data is read from `content.data`, JSON-string payloads, or the Android FCM trigger (app killed). Pushes without an ID open that feature's list.
 - Connection state is kept in `notificationStore.live` (`off`, `connecting`, `live`, `reconnecting`, `retrying`); no indicator is shown yet.
 
+## Payments and subscriptions (guide 21)
+
+- Card details are entered only on Stripe's hosted pages (Checkout, invoices, receipts), opened in the system browser with `expo-web-browser`. The app never sees card numbers and has no Stripe keys; it opens only `https` links on Stripe hosts (`isTrustedPaymentUrl`). No new packages.
+- Every purchase is one logical operation (`usePaymentFlow`): a UUID request ID is reused for identical input until the server answers (no double charges after a network failure), the operation is remembered in SecureStore so it can be resumed, Stripe opens when the operation needs action, and `GET /api/payments/operations/{id}` is polled every 2.5 s (10 s after a 429, again on resume) until it settles. Returning from Stripe is never treated as payment; only the verified server state counts. Polling failures are silent; the status panel shows the state, the reference, "Open the secure payment page" and "Cancel payment" (unpaid Checkout).
+- Account → **Plans & billing**: verified benefits (price list, visible in search, free inspection credits), the subscription (renewal date, renewal off, pending downgrade, payment-failed recovery), plans with subscribe/upgrade (prorated)/switch at renewal and explicit consent, **Turn off renewal**, saved cards (add via Stripe, make default, remove), payments still in progress, and **Payment history** (receipts, inspection and card refunds, free credits). Amounts ending in `Minor` are AUD cents (`formatMinor`).
+- Inspection booking goes through `POST /api/payments/inspections/checkout`: a free credit is used first (no consent needed); otherwise the booking fee is shown with consent and paid on Stripe. The informative inspection price is shown as paid to the provider directly. Inspection pages show the fee and automatic refund status to the requester; providers never get financial details. Members can cancel pending inspections, and accepted ones only before the scheduled time (`canCancel` from the server decides).
+
+## Marketplace updates (guide 22)
+
+- **Tradeperson is the only provider type** (`BUSINESS_USER_TYPES`): only tradespeople manage a business, services, employees, provider prices and employee cards. Builders, developers and others request services and their own cards.
+- **Search** no longer sends or shows a radius; the server's setting applies. Only providers with the Provider plan's visibility benefit appear. The add-a-service prompt now also asks tradespeople with services to subscribe.
+- **Price guide** (Find → Price guide) needs the price-list benefit from either plan; non-subscribers see a "See plans" prompt. It shows one price per item (override, else average, else Guide); Guide, Min/Max and averages are no longer returned to members.
+- **My prices** has a **Price list** tab (`GET /api/provider-prices/current`): each item's effective price (your custom price, or Guide), its source and the allowed range; tap a Guide row to set your own price, or a custom one to edit, withdraw or restore it. The yearly records tab is unchanged.
+- **Membership cards** use one funded flow (`POST /api/card-requests/checkout`, screen `card-request-new`) for personal, employee and replacement cards: a free card credit first, otherwise the card fee with consent on Stripe. Requests can be paused by the admin. A lost card is reported first (`report-lost`, which cancels it at once), then the replacement is paid for. Requests show their funding and refund; the address can change until first dispatch; cancelling a pending request refunds it automatically. The old `/personal`, `/employee` and `/replacement` routes are gone.
+- Live `payment.*` and `marketplace.changed` events refresh billing, bookings, cards, prices and search (`utility/liveEvents.ts`); a payment push opens Plans & billing.
+
 ## Location and maps
 
 - `expo-location` gives the device position (`services/deviceLocation.ts`, foreground permission only; denial falls back to the map pin). `react-native-maps` shows the pin. Both work in Expo Go.

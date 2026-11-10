@@ -29,14 +29,17 @@ const pages = {
   getNextPageParam: (last: { data?: { hasMore: boolean } | null }, _pages: unknown, page: number) => (last.data?.hasMore ? page + 1 : undefined),
 };
 
-/** Published items; a new filter set starts at page 1. */
-export function usePriceCatalogue(filters: PriceCatalogueFilters) {
+/**
+ * Published items; a new filter set starts at page 1. `enabled`: the Global list also needs the
+ * price-list benefit (guide 22), known from billing.
+ */
+export function usePriceCatalogue(filters: PriceCatalogueFilters, enabled = true) {
   const user = useAuthStore((state) => state.user);
   return useInfiniteQuery({
     queryKey: priceCatalogueKeys.list(user?.id ?? null, filters),
     queryFn: ({ pageParam, signal }) => listPriceCatalogue(filters, pageParam, PAGE_SIZE, signal),
     ...pages,
-    enabled: canViewPriceCatalogue(user),
+    enabled: enabled && canViewPriceCatalogue(user),
     select: (data) => data.pages.flatMap((page) => page.data?.items ?? []),
   });
 }

@@ -43,7 +43,11 @@ export interface InspectionActions {
  * The guide's state/action matrix. Permission never substitutes for being the
  * right participant; the server still decides.
  */
-export function inspectionActions(inspection: Pick<Inspection, "status" | "isHidden" | "requesterUserId" | "providerUserId">, user: User | null | undefined): InspectionActions {
+export function inspectionActions(
+  inspection: Pick<Inspection, "status" | "isHidden" | "requesterUserId" | "providerUserId"> & Partial<Pick<Inspection, "canCancel" | "scheduledAtUtc">>,
+  user: User | null | undefined,
+  now = Date.now(),
+): InspectionActions {
   const role = inspectionRole(inspection, user?.id);
   const manage = can(user, ["inspections.manage"]);
   const remove = can(user, ["inspections.delete"]);
@@ -54,7 +58,10 @@ export function inspectionActions(inspection: Pick<Inspection, "status" | "isHid
   return {
     accept: provider && status === "pending" && manage,
     reject: provider && status === "pending" && remove,
-    cancel: role !== null && (status === "pending" || status === "accepted") && remove,
+    // Guide 21: members can't cancel at or after the scheduled time (only SuperAdmin can then);
+    // the server's canCancel has the final say.
+    cancel: role !== null && remove && inspection.canCancel !== false &&
+      (status === "pending" || (status === "accepted" && !isAtOrPastSchedule(inspection.scheduledAtUtc, now))),
     issueCode: requester && status === "accepted" && manage,
     complete: provider && status === "accepted" && manage,
     assignWorker: provider && status === "accepted" && manage,
@@ -63,6 +70,16 @@ export function inspectionActions(inspection: Pick<Inspection, "status" | "isHid
     restore: hideable && inspection.isHidden && manage,
   };
 }
+
+/** True once the appointment time has arrived; unscheduled visits never are. */
+export const isAtOrPastSchedule = (scheduledAtUtc: string | null | undefined, now = Date.now()) =>
+  !!scheduledAtUtc && Date.parse(scheduledAtUtc) <= now;
+
+/** Explains a missing Cancel button on an accepted inspection after its scheduled time. */
+export const lateCancelNote = (inspection: Pick<Inspection, "status" | "scheduledAtUtc">, now = Date.now()) =>
+  inspection.status === "accepted" && isAtOrPastSchedule(inspection.scheduledAtUtc, now)
+    ? "The scheduled time has passed, so this can no longer be cancelled here. Contact support if you need it cancelled."
+    : null;
 
 /** Active roster workers whose occupation matches the inspected service. */
 export const matchingEmployees = (employees: readonly Employee[], occupationCode: string) =>

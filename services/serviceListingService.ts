@@ -13,18 +13,14 @@ import { deleteData, getData, postData, putData } from "./api";
 
 const checked = (body: SaveServiceRequest): SaveServiceRequest => ({ ...body, ...requireCoordinates(body.latitude, body.longitude) });
 
-/** Search query: required location, validated radius, and only non-empty filters. */
+/** Search query: required location and only non-empty filters. The radius is a server setting (guide 22). */
 export function searchParams(filters: ServiceSearchFilters, page = 1, pageSize = 20) {
   const { latitude, longitude } = requireCoordinates(filters.latitude, filters.longitude);
-  if (filters.radiusKm !== undefined && !(filters.radiusKm >= 1 && filters.radiusKm <= 500)) {
-    throw new RangeError("The search radius must be 1–500 km.");
-  }
   const membershipId = filters.membershipId?.trim();
   const occupationCode = filters.occupationCode?.trim();
   return {
     latitude,
     longitude,
-    ...(filters.radiusKm !== undefined ? { radiusKm: filters.radiusKm } : {}),
     ...(membershipId ? { membershipId } : {}),
     ...(occupationCode ? { occupationCode } : {}),
     ...pageParams(page, pageSize),

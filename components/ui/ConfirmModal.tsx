@@ -15,6 +15,8 @@ interface ConfirmModalProps {
   onConfirm: () => void;
   onCancel: () => void;
   isLoading?: boolean;
+  /** Keeps the confirm action disabled, e.g. until consent is given. */
+  confirmDisabled?: boolean;
   /** danger styles the confirm action as destructive. */
   tone?: "default" | "danger";
   icon?: ComponentProps<typeof Ionicons>["name"];
@@ -33,6 +35,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   onCancel,
   customContent,
   isLoading = false,
+  confirmDisabled = false,
   tone = "default",
   icon,
 }) => {
@@ -68,6 +71,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
               size="md"
               onPress={onConfirm}
               loading={isLoading}
+              disabled={confirmDisabled}
               style={styles.button}
             />
           </View>

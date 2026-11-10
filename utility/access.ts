@@ -46,9 +46,10 @@ export const canEditOwnProfile = (user?: User | null) => can(user, ["profiles.ma
 /** Target-user profile routes are SuperAdmin-only (full session). */
 export const canManageUserProfiles = (user?: User | null) => isAdministrator(grantsOf(user));
 
-// Guide 05: business details. Eligible types plus each operation's own permission;
-// a user type alone is not access. Full access only (no setup exception).
-export const BUSINESS_USER_TYPES: readonly string[] = ["tradeperson", "builder", "developer"];
+// Guide 05 / BRD 19 (guide 22): Tradeperson is the only provider type. Only they manage a
+// business, services, employees and provider prices; everyone else requests services. Each
+// operation still needs its own permission. Full access only (no setup exception).
+export const BUSINESS_USER_TYPES: readonly string[] = ["tradeperson"];
 const businessEligible = (userTypeCode?: string | null) => !!userTypeCode && BUSINESS_USER_TYPES.includes(userTypeCode);
 export const canViewOwnBusiness = (user: User | null | undefined, userTypeCode?: string | null) =>
   businessEligible(userTypeCode) && can(user, ["businesses.view"]);
@@ -66,9 +67,9 @@ export const canManageOwnServices = (user: User | null | undefined, userTypeCode
   businessEligible(userTypeCode) && can(user, ["services.manage"]);
 export const canArchiveOwnServices = (user: User | null | undefined, userTypeCode?: string | null) =>
   businessEligible(userTypeCode) && can(user, ["services.delete"]);
-/** The listing flag is advisory; the requester also needs inspections.manage. */
+/** The listing flag is advisory; booking (guide 21) needs inspections.manage and payments.manage. */
 export const canRequestInspectionFor = (user: User | null | undefined, service: { canRequestInspection: boolean }) =>
-  service.canRequestInspection && can(user, ["inspections.manage"]);
+  service.canRequestInspection && can(user, ["inspections.manage", "payments.manage"]);
 export const canManageServicesAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));
 
 // Guide 10: employees (roster records, not accounts). Eligible type plus each operation's
@@ -133,3 +134,10 @@ export const canManageSupportAsAdmin = (user?: User | null) => isAdministrator(g
 // publishing, retirement and history are SuperAdmin-only (no permission grants them).
 export const canViewAnnouncements = (user?: User | null) => can(user, ["announcements.view"]);
 export const canManageAnnouncementsAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));
+
+// Guide 21: payments and subscriptions. Reads, card removal, stopping renewal and cancelling an
+// unpaid Checkout support profile-setup sessions; purchases and card setup need full access.
+// Paid-feature visibility comes from the server's verified benefits, not from these gates.
+export const canViewPayments = (user?: User | null) => can(user, ["payments.view"], true);
+export const canManagePayments = (user?: User | null) => can(user, ["payments.manage"]);
+export const canDeletePayments = (user?: User | null) => can(user, ["payments.delete"], true);

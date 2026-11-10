@@ -1,5 +1,4 @@
-import { FormInput } from "@/components/form/FormInput";
-import { SelectInput } from "@/components/form/SelectInput";
+import { DeliveryAddressForm } from "@/components/card/DeliveryAddressForm";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { ListRow, ListSection } from "@/components/ui/ListSection";
 import { Loader } from "@/components/ui/loader";
@@ -9,21 +8,20 @@ import { Screen } from "@/components/ui/Screen";
 import { Spacing } from "@/constants/Theme";
 import { useCardRequest, useCardRequestActions } from "@/hooks/useCardRequests";
 import { useReferenceChoices } from "@/hooks/useReferenceChoices";
-import { CardDeliveryAddress, CardRequest } from "@/interfaces/cardRequest.interface";
+import { CardRequest } from "@/interfaces/cardRequest.interface";
 import { mapApiValidation } from "@/services/apiError";
 import { useAuthStore } from "@/stores/authStore";
 import { useToastStore } from "@/stores/toastStore";
 import { formatLocalTimestamp } from "@/utility/apiValues";
-import { CARD_REQUEST_STATUS_LABELS, DELIVERY_FIELDS, cardRequestActions, deliveryAddressSchema, deliveryAddressValues } from "@/utility/cardRequestRules";
-import { referenceLabel, referenceOptions } from "@/utility/referenceOptions";
-import { yupResolver } from "@hookform/resolvers/yup";
+import { FUNDING_LABELS, REFUND_STATUS_LABELS, formatMinor } from "@/utility/paymentRules";
+import { CARD_REQUEST_STATUS_LABELS, DELIVERY_FIELDS, cardRequestActions } from "@/utility/cardRequestRules";
+import { referenceLabel } from "@/utility/referenceOptions";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { Controller, useForm } from "react-hook-form";
 import { StyleSheet, View } from "react-native";
 
 const STATUS_NOTES: Partial<Record<CardRequest["status"], string>> = {
-  pending: "An administrator will review this request. You can change the delivery address or cancel until then.",
+  pending: "An administrator will review this request. You can change the delivery address or cancel (with a full refund) until then.",
   accepted: "Approved. Next, an administrator makes and sends your card; it then appears under My cards, where you confirm when it arrives. The address is now locked.",
   rejected: "Rejected. You can submit a new request if you're still eligible.",
   cancelled: "Cancelled. You can submit a new request if you're still eligible.",
@@ -66,8 +64,9 @@ export default function CardRequestScreen() {
       </ListSection>
 
       {editing ? (
-        <AddressForm
-          request={request}
+        <DeliveryAddressForm
+          initial={request.deliveryAddress}
+          submitLabel="Save address"
           isSaving={actions.updateAddress.isPending}
           onCancel={() => setEditing(false)}
           onSave={(next, setFieldError) => actions.updateAddress.mutate({ requestId: request.id, address: next }, {
@@ -88,6 +87,14 @@ export default function CardRequestScreen() {
           />
         </ListSection>
       )}
+
+      {request.fundingSource ? (
+        <ListSection title="Payment">
+          <ListRow icon="cash-outline" title={FUNDING_LABELS[request.fundingSource] ?? request.fundingSource}
+            subtitle={request.paidAmountMinor != null ? formatMinor(request.paidAmountMinor) : undefined} />
+          {request.refundStatus ? <ListRow icon="return-down-back-outline" title={REFUND_STATUS_LABELS[request.refundStatus] ?? request.refundStatus} subtitle="Automatic refund of the full amount" /> : null}
+        </ListSection>
+      ) : null}
 
       {request.cardId ? (
         <ListSection title="Card">
@@ -127,7 +134,10 @@ export default function CardRequestScreen() {
         icon="close-circle-outline"
         tone="danger"
         title="Cancel this card request?"
-        message="It stays in your history. You can submit a new request later if you're eligible."
+        message={request.fundingSource === "paid"
+          ? "Your payment is refunded in full automatically. It stays in your history, and you can request again later."
+          : request.fundingSource === "allowance" ? "Your free card credit is returned. It stays in your history, and you can request again later."
+          : "It stays in your history. You can submit a new request later if you're eligible."}
         confirmLabel="Cancel request"
         isLoading={actions.cancel.isPending}
         onCancel={() => setConfirmCancel(false)}
@@ -140,54 +150,7 @@ export default function CardRequestScreen() {
   );
 }
 
-type AddressFormProps = {
-  request: CardRequest;
-  isSaving: boolean;
-  onCancel: () => void;
-  onSave: (address: CardDeliveryAddress, setFieldError: (field: keyof CardDeliveryAddress, message: string) => void) => void;
-};
-
-/** All four fields are required; the saved address is a snapshot on this request only. */
-function AddressForm({ request, isSaving, onCancel, onSave }: AddressFormProps) {
-  const regions = useReferenceChoices("regions");
-  const { control, handleSubmit, setError, formState: { errors } } = useForm<CardDeliveryAddress>({
-    resolver: yupResolver(deliveryAddressSchema),
-    defaultValues: deliveryAddressValues(request.deliveryAddress),
-  });
-  const text = (name: "streetAddress" | "suburb" | "postalCode", label: string, extra: object = {}) => (
-    <Controller
-      control={control}
-      name={name}
-      render={({ field: { onChange, onBlur, value } }) => (
-        <FormInput label={label} value={value} onChangeText={onChange} onBlur={onBlur} error={errors[name]?.message} {...extra} />
-      )}
-    />
-  );
-
-  return (
-    <View style={styles.form}>
-      {text("streetAddress", "Street address")}
-      {text("suburb", "Suburb")}
-      <Controller
-        control={control}
-        name="regionCode"
-        render={({ field: { onChange, value } }) => (
-          <SelectInput label="State or territory" value={value} onChange={onChange}
-            options={referenceOptions(regions.data, request.deliveryAddress?.regionCode)} loading={regions.isLoading} error={errors.regionCode?.message} />
-        )}
-      />
-      {text("postalCode", "Postcode", { keyboardType: "number-pad" })}
-      <View style={styles.actions}>
-        <PrimaryButton title={isSaving ? "Saving..." : "Save address"}
-          onPress={handleSubmit((values) => onSave(values, (field, message) => setError(field, { message })))} loading={isSaving} disabled={isSaving} />
-        <PrimaryButton title="Discard changes" variant="ghost" onPress={onCancel} disabled={isSaving} />
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   notice: { marginBottom: Spacing.xl },
-  form: { marginBottom: Spacing.xl },
   actions: { gap: Spacing.md, marginBottom: Spacing.lg },
 });

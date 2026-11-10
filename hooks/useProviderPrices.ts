@@ -24,6 +24,7 @@ import {
   getProviderPrice,
   getProviderPriceHistory,
   listAvailablePriceItems,
+  listCurrentProviderPrices,
   listMyPriceItemRequests,
   listMyProviderPrices,
   restoreProviderPrice,
@@ -43,6 +44,7 @@ export const providerPriceKeys = {
   all: (accountId: string | null) => ["provider-prices", accountId] as const,
   mine: (accountId: string | null, filters: ProviderPriceFilters) => [...providerPriceKeys.all(accountId), "mine", filters] as const,
   available: (accountId: string | null) => [...providerPriceKeys.all(accountId), "available"] as const,
+  current: (accountId: string | null) => [...providerPriceKeys.all(accountId), "current"] as const,
   detail: (accountId: string | null, id: number) => [...providerPriceKeys.all(accountId), "detail", id] as const,
   requests: (accountId: string | null, filters: PriceItemRequestFilters) => [...providerPriceKeys.all(accountId), "requests", filters] as const,
   request: (accountId: string | null, id: number) => [...providerPriceKeys.all(accountId), "request", id] as const,
@@ -80,6 +82,18 @@ export function useAvailablePriceItems(enabled = true) {
   return useInfiniteQuery({
     queryKey: providerPriceKeys.available(user?.id ?? null),
     queryFn: ({ pageParam, signal }) => listAvailablePriceItems(pageParam, PAGE_SIZE, signal),
+    ...pages,
+    enabled: enabled && canViewProviderPrices(user),
+    select: (data) => data.pages.flatMap((page) => page.data?.items ?? []),
+  });
+}
+
+/** Guide 22: the private price list: effective price (custom or Guide), range and source per item. */
+export function useCurrentProviderPrices(pageSize = PAGE_SIZE, enabled = true) {
+  const user = useAuthStore((state) => state.user);
+  return useInfiniteQuery({
+    queryKey: [...providerPriceKeys.current(user?.id ?? null), pageSize],
+    queryFn: ({ pageParam, signal }) => listCurrentProviderPrices(pageParam, pageSize, signal),
     ...pages,
     enabled: enabled && canViewProviderPrices(user),
     select: (data) => data.pages.flatMap((page) => page.data?.items ?? []),

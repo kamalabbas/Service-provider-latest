@@ -43,23 +43,18 @@ const plain = value => JSON.parse(JSON.stringify(value));
 
 test.beforeEach(() => { calls.length = 0; });
 
-test('member routes: list, detail, receipt (no body) and subject-specific replacement', async () => {
+test('member routes: list, detail and receipt (no body); replacements go through card checkout', async () => {
   await service.listMyCards();
   await service.listMyCards({ status: 'dispatched' }, 2);
   await service.getCard(30);
   await service.receiveCard(30);
-  await service.requestCardReplacement({ id: 30, subjectType: 'personal' }, 'damaged');
-  await service.requestCardReplacement({ id: 31, subjectType: 'employee' }, 'lost');
   assert.deepEqual(plain(calls).map(call => `${call.method} ${call.url}`), [
     'get /api/cards/me', 'get /api/cards/me', 'get /api/cards/30', 'post /api/cards/30/receive',
-    'post /api/card-requests/personal/replacement', 'post /api/card-requests/employee/replacement',
   ]);
   assert.deepEqual(plain(calls[0].params), { page: 1, pageSize: 20 });
   assert.deepEqual(plain(calls[1].params), { status: 'dispatched', page: 2, pageSize: 20 });
   assert.equal(calls[3].body, undefined, 'Receipt has no body');
-  assert.deepEqual(plain(calls[4].body), { cardId: 30, reason: 'damaged' });
-  assert.deepEqual(plain(calls[5].body), { cardId: 31, reason: 'lost' });
-  assert.throws(() => service.requestCardReplacement({ id: 30, subjectType: 'personal' }, 'stolen'), /expired, damaged or lost/);
+  assert.equal(service.requestCardReplacement, undefined, 'The per-subject replacement routes were removed');
 });
 
 test('admin routes: issue, actions with audit reasons, and 1-20 year settings', async () => {
@@ -123,8 +118,8 @@ test('replacement reasons: received cards only; renewal within 30 days; damaged 
   assert.deepEqual(reasons({ status: 'replaced', isValid: false }), [], 'Already superseded');
   assert.deepEqual(reasons({ status: 'voided', isValid: false, invalidatedAtUtc: '2030-05-01T00:00:00Z' }), ['lost'], 'Historically received');
   assert.deepEqual(reasons({ subjectType: 'employee' }, owner(), 'individual'), [], 'Employee cards need a provider type');
-  assert.deepEqual(reasons({ subjectType: 'employee' }, owner(['card-requests.manage']), 'builder'), [], 'and employees.manage');
-  assert.deepEqual(reasons({ subjectType: 'employee' }, owner(), 'builder'), ['damaged', 'lost']);
+  assert.deepEqual(reasons({ subjectType: 'employee' }, owner(['card-requests.manage']), 'tradeperson'), [], 'and employees.manage');
+  assert.deepEqual(reasons({ subjectType: 'employee' }, owner(), 'tradeperson'), ['damaged', 'lost']);
   assert.deepEqual(reasons({}, owner(['cards.view'])), []);
 });
 

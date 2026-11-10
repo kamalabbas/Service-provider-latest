@@ -46,11 +46,6 @@ export interface Card {
 }
 
 /** Creates a new approval request, not a valid card. Needs a previously received card. */
-export interface ReplaceCardRequest {
-  cardId: number;
-  reason: CardReplacementReason;
-}
-
 export interface CardListFilters {
   status?: CardStatus;
 }

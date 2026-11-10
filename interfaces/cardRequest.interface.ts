@@ -25,6 +25,9 @@ export interface CardRequestEvent {
 }
 
 /** Subject name, membership and employee occupation are snapshots. */
+/** Guide 22: how a request was funded. */
+export type CardFundingSource = "paid" | "allowance" | "admin_waiver" | "legacy";
+
 export interface CardRequest {
   id: number;
   ownerUserId: number;
@@ -50,11 +53,54 @@ export interface CardRequest {
   createdAtUtc: string;
   updatedAtUtc: string;
   history: CardRequestEvent[];
+  /** Guide 22 payment fields. */
+  fundingSource?: CardFundingSource | string;
+  /** Integer AUD cents when paid. */
+  paidAmountMinor?: number | null;
+  refundStatus?: string | null;
+  /** The first dispatch closes ordinary cancellation and address edits. */
+  firstDispatchedAtUtc?: string | null;
 }
 
-/** Employee route only; the personal route has no body. */
-export interface CreateEmployeeCardRequest {
-  employeeId: number;
+/**
+ * Guide 22: every new request (personal, employee or replacement) starts through one funded
+ * Checkout. A free card credit funds it automatically; otherwise the fee is charged on Stripe.
+ */
+export interface CardPaymentRequest extends CardDeliveryAddress {
+  requestId: string;
+  consentAccepted: boolean;
+  employeeId?: number | null;
+  previousCardId?: number | null;
+  replacementReason?: CardReplacementReason | null;
+}
+
+export interface CardAllowanceUnit {
+  id: number;
+  status: string;
+  createdAtUtc: string;
+}
+
+/** GET /api/card-requests/allowances: free card credits and the current fee. */
+export interface CardAllowance {
+  available: number;
+  /** Integer AUD cents; null until configured. */
+  cardFeeMinor?: number | null;
+  /** New requests are paused when false, including free ones. */
+  cardRequestsEnabled: boolean;
+  allowances: CardAllowanceUnit[];
+}
+
+/** Automatic card refunds; cardRequestId is null when creation failed after payment. */
+export interface CardPaymentRefund {
+  id: number;
+  userId: number;
+  cardRequestId?: number | null;
+  amountMinor: number;
+  operationId: string;
+  status: string;
+  reason: string;
+  createdAtUtc: string;
+  updatedAtUtc: string;
 }
 
 export interface CardRequestListFilters {
@@ -64,6 +110,8 @@ export interface CardRequestListFilters {
 
 /** Previous card and replacement reason go together or not at all. */
 export interface AdminCreateCardRequest {
+  /** Guide 22: a one-off free request needs an audit reason. */
+  auditReason: string;
   employeeId?: number | null;
   previousCardId?: number | null;
   replacementReason?: CardReplacementReason | null;
@@ -85,3 +133,5 @@ export interface AdminCardRequestListFilters extends CardRequestListFilters {
 
 export type CardRequestResponse = ApiResponse<CardRequest>;
 export type CardRequestPageResponse = ApiResponse<ApiPage<CardRequest>>;
+export type CardAllowanceResponse = ApiResponse<CardAllowance>;
+export type CardPaymentRefundPageResponse = ApiResponse<ApiPage<CardPaymentRefund>>;

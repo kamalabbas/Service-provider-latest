@@ -103,9 +103,13 @@ const user = (permissions, accessLevel = 'full') => ({ id: '1', accessLevel, rol
 test('gates: eligible type plus view, manage and delete separately', () => {
   assert.equal(access.canViewEmployees(user(['employees.view']), 'tradeperson'), true);
   assert.equal(access.canViewEmployees(user(['employees.view']), 'individual'), false);
-  assert.equal(access.canManageEmployees(user(['employees.view']), 'builder'), false, 'Read-only roster');
-  assert.equal(access.canManageEmployees(user(['employees.manage']), 'builder'), true);
-  assert.equal(access.canArchiveEmployees(user(['employees.manage']), 'builder'), false);
-  assert.equal(access.canArchiveEmployees(user(['employees.delete']), 'developer'), true);
-  assert.equal(access.canViewEmployees(user(['employees.view'], 'profile_setup'), 'builder'), false);
+  assert.equal(access.canManageEmployees(user(['employees.view']), 'tradeperson'), false, 'Read-only roster');
+  assert.equal(access.canManageEmployees(user(['employees.manage']), 'tradeperson'), true);
+  assert.equal(access.canArchiveEmployees(user(['employees.manage']), 'tradeperson'), false);
+  assert.equal(access.canArchiveEmployees(user(['employees.delete']), 'tradeperson'), true);
+  assert.equal(access.canViewEmployees(user(['employees.view'], 'profile_setup'), 'tradeperson'), false);
+});
+
+test('only tradespeople manage employees (guide 22)', () => {
+  for (const type of ['builder', 'developer']) assert.equal(access.canManageEmployees(user(['employees.manage']), type), false, type);
 });

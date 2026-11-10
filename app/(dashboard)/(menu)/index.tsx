@@ -10,7 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDeactivateMyAccount, useMyMember } from "@/hooks/useMembership";
 import { useMyProfile } from "@/hooks/useProfile";
 import { useToastStore } from "@/stores/toastStore";
-import { canDeactivateOwnAccount, canViewAnnouncements,canViewCardRequests, canViewCards, canViewClients, canViewProviderPrices, canViewEmployees, canViewOwnBusiness, canViewOwnProfile, canViewServices, canViewSupport } from "@/utility/access";
+import { canDeactivateOwnAccount, canViewAnnouncements,canViewCardRequests, canViewCards, canViewClients, canViewProviderPrices, canViewEmployees, canViewOwnBusiness, canViewOwnProfile, canViewPayments, canViewServices, canViewSupport } from "@/utility/access";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useAuthStore } from "@/stores/authStore";
 import { ThemePreference, useThemeStore } from "@/stores/theme";
@@ -145,8 +145,15 @@ export default function MenuScreen() {
       {canViewProviderPrices(user) ? (
         // Outside Business: former providers keep read access to their price history.
         <ListSection title="Pricing">
-          <ListRow icon="pricetags-outline" title="My prices" subtitle="Your yearly prices for price-guide items"
+          <ListRow icon="pricetags-outline" title="My prices" subtitle="Your price list and yearly prices"
             onPress={() => router.push("/(dashboard)/(menu)/prices")} />
+        </ListSection>
+      ) : null}
+
+      {canViewPayments(user) ? (
+        <ListSection title="Billing">
+          <ListRow icon="card-outline" title="Plans & billing" subtitle="Subscription, saved cards, payments and refunds"
+            onPress={() => router.push("/(dashboard)/(menu)/billing")} />
         </ListSection>
       ) : null}
 

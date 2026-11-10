@@ -31,7 +31,7 @@ export default function MenuLayout() {
       <Stack.Screen name="employee-edit" options={{ title: "Employee details" }} />
       <Stack.Screen name="card-requests" options={{ title: "Membership cards" }} />
       <Stack.Screen name="card-request" options={{ title: "Card request" }} />
-      <Stack.Screen name="card-request-employee" options={{ title: "Employee card" }} />
+      <Stack.Screen name="card-request-new" options={{ title: "New card request" }} />
       <Stack.Screen name="cards" options={{ title: "My cards" }} />
       <Stack.Screen name="card" options={{ title: "Card" }} />
       <Stack.Screen name="clients" options={{ title: "My clients" }} />
@@ -44,6 +44,8 @@ export default function MenuLayout() {
       <Stack.Screen name="price-request-new" options={{ title: "New suggestion" }} />
       <Stack.Screen name="announcements" options={{ title: "Announcements" }} />
       <Stack.Screen name="announcement" options={{ title: "Announcement" }} />
+      <Stack.Screen name="billing" options={{ title: "Billing" }} />
+      <Stack.Screen name="billing-history" options={{ title: "Payment history" }} />
       <Stack.Screen name="support" options={{ title: "Support" }} />
       <Stack.Screen name="support-new" options={{ title: "New conversation" }} />
       <Stack.Screen name="support-ticket" options={{ title: "Conversation" }} />

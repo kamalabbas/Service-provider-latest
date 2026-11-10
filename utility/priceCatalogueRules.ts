@@ -1,4 +1,5 @@
 import type { PriceCatalogueItem, UpdatePriceCatalogueItemRequest } from "@/interfaces/priceCatalogue.interface";
+import type { PriceRange } from "@/interfaces/providerPrice.interface";
 import type { User } from "@/interfaces/user.interface";
 import { can } from "@/utility/access";
 import { audToCents, centsToAud, formatAud } from "@/utility/apiValues";
@@ -24,14 +25,14 @@ export function checkedPrices(body: UpdatePriceCatalogueItemRequest): UpdatePric
 }
 
 /** The provider average is separate from the guide price; null is "no data", not $0. */
+// Management views only: ordinary Global reads omit the average and its count (guide 22).
 export function providerAverageText(item: Pick<PriceCatalogueItem, "providerAveragePrice" | "providerSubmissionCount">): string {
-  if (item.providerAveragePrice == null || item.providerSubmissionCount === 0) return "No provider prices yet";
-  const count = item.providerSubmissionCount;
+  const count = item.providerSubmissionCount ?? 0;
+  if (item.providerAveragePrice == null || count === 0) return "No provider prices yet";
   return `Providers average ${formatAud(item.providerAveragePrice)} (${count} ${count === 1 ? "price" : "prices"})`;
 }
 
-export const priceRangeText = (item: Pick<PriceCatalogueItem, "minProviderPrice" | "maxProviderPrice">) =>
-  `${formatAud(item.minProviderPrice)} – ${formatAud(item.maxProviderPrice)}`;
+export const priceRangeText = (item: PriceRange) => `${formatAud(item.minProviderPrice)} – ${formatAud(item.maxProviderPrice)}`;
 
 export interface CatalogueManagerActions {
   edit: boolean;

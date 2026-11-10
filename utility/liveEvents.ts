@@ -83,19 +83,32 @@ export const eventFeature = (type: string) => type.slice(0, type.indexOf("."));
 
 // Query-key roots per feature (the first element of each hooks/use*.ts `…Keys.all`).
 // Unknown features refetch nothing.
+// Guide 21/22: bookings and card requests carry funding and refunds, so they refresh billing too;
+// payment events can change benefits (price list, provider visibility).
 const AFFECTED_ROOTS: Record<string, readonly string[]> = {
-  inspection: ["inspections", "clients"],
+  inspection: ["inspections", "clients", "payments"],
   quote: ["quotes"],
-  "card-request": ["card-requests", "cards"],
-  card: ["cards", "card-requests"],
+  "card-request": ["card-requests", "cards", "payments"],
+  card: ["cards", "card-requests", "payments"],
   support: ["support"],
   "price-item-request": ["provider-prices", "price-catalogue"],
   announcement: ["announcements"],
+  payment: ["payments", "inspections", "card-requests", "price-catalogue", "provider-prices", "services"],
+  marketplace: ["services", "price-catalogue", "provider-prices"],
 };
 
-/** Query keys to refetch for a notice type, scoped to the signed-in account. */
-export function affectedQueryKeys(type: string, accountId: string | null): (readonly [string, string | null])[] {
-  return (AFFECTED_ROOTS[eventFeature(type)] ?? []).map((root) => [root, accountId] as const);
+/** marketplace.changed names its area: discovery (search) or catalogue (prices). */
+const MARKETPLACE_AREAS: Record<string, readonly string[]> = {
+  discovery: ["services"],
+  catalogue: ["price-catalogue", "provider-prices"],
+};
+
+/** Query keys to refetch for a notice, scoped to the signed-in account. */
+export function affectedQueryKeys(type: string, accountId: string | null, data: Record<string, unknown> = {}): (readonly [string, string | null])[] {
+  const feature = eventFeature(type);
+  const area = typeof data.area === "string" ? MARKETPLACE_AREAS[data.area] : undefined;
+  const roots = feature === "marketplace" && area ? area : AFFECTED_ROOTS[feature] ?? [];
+  return roots.map((root) => [root, accountId] as const);
 }
 
 /** Every private root refetched after connect, reconnect and resume (a missed event is never replayed). */
@@ -134,6 +147,7 @@ export function routeForNotice(notice: Pick<LiveNotice, "type" | "data">, user: 
     case "card": return link("cardId", "/(dashboard)/(menu)/card", "/(dashboard)/(menu)/cards");
     case "price-item-request": return link("requestId", "/(dashboard)/(menu)/price-request", "/(dashboard)/(menu)/price-requests");
     case "announcement": return link("announcementId", "/(dashboard)/(menu)/announcement", "/(dashboard)/(menu)/announcements");
+    case "payment": return { pathname: "/(dashboard)/(menu)/billing" };
     default: return null;
   }
 }

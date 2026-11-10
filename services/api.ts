@@ -18,6 +18,7 @@ const staleAuthentication = (config?: SessionRequestConfig) => Boolean(
 
 type RequestPolicy = { action?: ApiErrorAction; refresh: boolean; silent?: boolean };
 const protectedRequest: RequestPolicy = { refresh: true };
+const silentPoll: RequestPolicy = { refresh: true, silent: true };
 // Only the retained endpoints with established request purposes are listed.
 // Other configured API calls keep their existing protected-request behavior.
 const requestPolicies: Record<string, RequestPolicy> = {
@@ -45,7 +46,11 @@ const getRequestPolicy = (config?: AxiosRequestConfig): RequestPolicy => {
     try { path = new URL(path).pathname; } catch { return protectedRequest; }
   }
   path = path.split(/[?#]/)[0].replace(/\/+$/, "").toLowerCase();
-  return requestPolicies[path.startsWith("/") ? path : `/${path}`] ?? protectedRequest;
+  if (!path.startsWith("/")) path = `/${path}`;
+  // Guide 21: payment status polling runs every few seconds; the payment sheet shows its
+  // state, so a failed poll mustn't toast each time.
+  if (path.startsWith("/api/payments/operations/") && (config?.method ?? "get").toLowerCase() === "get") return silentPoll;
+  return requestPolicies[path] ?? protectedRequest;
 };
 
 const handledErrors = new WeakSet<object>();

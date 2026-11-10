@@ -19,7 +19,6 @@ import {
   assignInspectionEmployee,
   cancelInspection,
   completeInspection,
-  createInspection,
   getInspection,
   issueCompletionCode,
   listMyInspections,
@@ -31,7 +30,6 @@ import { useAuthStore } from "@/stores/authStore";
 import { canManageInspectionsAsAdmin, canViewInspections } from "@/utility/access";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { clientKeys } from "./useClients";
-import { serviceKeys } from "./useServices";
 
 const PAGE_SIZE = 20;
 
@@ -72,10 +70,12 @@ export function useInspection(inspectionId: number | null) {
 export function useInspectionActions(inspectionId: number) {
   const queryClient = useQueryClient();
   const accountId = useAuthStore((state) => state.user?.id ?? null);
-  // Acceptance creates or updates a client relationship (guide 12).
+  // Acceptance creates or updates a client relationship (guide 12); rejection and cancellation
+  // refund the booking fee or return the free credit (guide 21).
   const refresh = () => Promise.all([
     queryClient.invalidateQueries({ queryKey: inspectionKeys.all(accountId) }),
     queryClient.invalidateQueries({ queryKey: clientKeys.all(accountId) }),
+    queryClient.invalidateQueries({ queryKey: ["payments", accountId] }),
   ]);
   const store = async (response: InspectionResponse) => {
     queryClient.setQueryData(inspectionKeys.detail(accountId, inspectionId), response);
@@ -97,18 +97,6 @@ export function useInspectionActions(inspectionId: number) {
   };
 }
 
-/** Discovery's canRequestInspection changes too, so service results refetch. */
-export function useCreateInspection() {
-  const queryClient = useQueryClient();
-  const accountId = useAuthStore((state) => state.user?.id ?? null);
-  return useMutation({
-    mutationFn: (body: CreateInspectionRequest) => createInspection(body),
-    onSuccess: () => Promise.all([
-      queryClient.invalidateQueries({ queryKey: inspectionKeys.all(accountId) }),
-      queryClient.invalidateQueries({ queryKey: serviceKeys.all(accountId) }),
-    ]),
-  });
-}
 
 // Admin (guide 19): SuperAdmin inspections.
 export function useAdminInspections(filters: AdminInspectionListFilters = {}) {

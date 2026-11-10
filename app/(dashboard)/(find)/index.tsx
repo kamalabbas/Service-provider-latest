@@ -21,18 +21,17 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
-const RADIUS_OPTIONS = ["10", "25", "50", "100", "250", "500"].map((value) => ({ label: `${value} km`, value }));
 const ANY = "";
 
 // Guide 07: nearby discovery. Searches from the device location when allowed;
-// otherwise the member places the pin. Results are ordered by estimated distance.
+// otherwise the member places the pin. Results are ordered by estimated distance; the search
+// radius is an admin setting, so it isn't shown or sent (guide 22). Only subscribed providers appear.
 export default function FindServicesScreen() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const business = useMyBusiness();
   const occupations = useReferenceChoices("occupations");
   const [point, setPoint] = useState<Coordinates | null>(null);
-  const [radius, setRadius] = useState("50");
   const [occupation, setOccupation] = useState(ANY);
   const [membershipId, setMembershipId] = useState("");
   const [filters, setFilters] = useState<ServiceSearchFilters | null>(null);
@@ -53,7 +52,6 @@ export default function FindServicesScreen() {
     setFilters({
       latitude: at.latitude,
       longitude: at.longitude,
-      radiusKm: Number(radius),
       occupationCode: occupation || undefined,
       membershipId: membershipId.trim() || undefined,
     });
@@ -89,7 +87,6 @@ export default function FindServicesScreen() {
               style={styles.spaced}
             />
           ) : null}
-          <SelectInput label="Within" value={radius} onChange={setRadius} options={RADIUS_OPTIONS} />
         </View>
       </ListSection>
 
@@ -111,7 +108,7 @@ export default function FindServicesScreen() {
       {filters === null ? null : search.isLoading ? (
         <Loader visible overlay={false} message="Searching…" />
       ) : results.length === 0 ? (
-        <Notice message="No services found. Try a larger distance or fewer filters." />
+        <Notice message="No services found nearby. Try another location or fewer filters." />
       ) : (
         <>
           <ListSection title="Results" footer="Distances are estimated in a straight line, not by road.">

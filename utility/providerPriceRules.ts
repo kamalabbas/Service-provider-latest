@@ -1,5 +1,5 @@
 import type { PriceCatalogueItem } from "@/interfaces/priceCatalogue.interface";
-import type { PriceItemRequestStatus, ProviderPrice } from "@/interfaces/providerPrice.interface";
+import type { PriceItemRequestStatus, PriceRange, ProviderPrice } from "@/interfaces/providerPrice.interface";
 import type { User } from "@/interfaces/user.interface";
 import { BUSINESS_USER_TYPES, can } from "@/utility/access";
 import { audToCents } from "@/utility/apiValues";
@@ -54,7 +54,7 @@ export function providerPriceActions(
 }
 
 /** Positive AUD with at most 2 decimals, inside the item's current min–max range. */
-export function priceRangeError(value: string, item: Pick<PriceCatalogueItem, "minProviderPrice" | "maxProviderPrice">): string | null {
+export function priceRangeError(value: string, item: PriceRange): string | null {
   let cents: number;
   try { cents = audToCents(value.trim()); } catch { return "Enter a positive amount with at most 2 decimal places."; }
   if (cents < audToCents(item.minProviderPrice) || cents > audToCents(item.maxProviderPrice)) return "Enter a price within the allowed range.";

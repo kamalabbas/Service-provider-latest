@@ -132,15 +132,16 @@ const user = (permissions, accessLevel = 'full', roles = []) => ({
 
 test('eligibility: business types plus each operation permission; no setup exception', () => {
   const all = user(['businesses.view', 'businesses.manage', 'businesses.delete']);
-  for (const type of ['tradeperson', 'builder', 'developer']) assert.equal(access.canViewOwnBusiness(all, type), true);
-  for (const type of ['individual', 'public_government_sector', null]) {
+  assert.equal(access.canViewOwnBusiness(all, 'tradeperson'), true);
+  // Guide 22: Tradeperson is the only provider type.
+  for (const type of ['builder', 'developer', 'individual', 'public_government_sector', null]) {
     assert.equal(access.canViewOwnBusiness(all, type), false, 'A type alone is not access, nor permission alone');
   }
   const viewOnly = user(['businesses.view']);
-  assert.equal(access.canViewOwnBusiness(viewOnly, 'builder'), true);
-  assert.equal(access.canManageOwnBusiness(viewOnly, 'builder'), false, 'Read-only permission');
-  assert.equal(access.canArchiveOwnBusiness(user(['businesses.manage']), 'builder'), false);
-  assert.equal(access.canViewOwnBusiness(user(['businesses.view'], 'profile_setup'), 'builder'), false);
+  assert.equal(access.canViewOwnBusiness(viewOnly, 'tradeperson'), true);
+  assert.equal(access.canManageOwnBusiness(viewOnly, 'tradeperson'), false, 'Read-only permission');
+  assert.equal(access.canArchiveOwnBusiness(user(['businesses.manage']), 'tradeperson'), false);
+  assert.equal(access.canViewOwnBusiness(user(['businesses.view'], 'profile_setup'), 'tradeperson'), false);
   assert.equal(access.canManageBusinessesAsAdmin(all), false);
   assert.equal(access.canManageBusinessesAsAdmin(user([], 'full', ['SuperAdmin'])), true);
 });

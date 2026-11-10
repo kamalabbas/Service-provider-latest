@@ -1,5 +1,5 @@
-import { AdminCardActionRequest, AdminCardListFilters, Card, CardListFilters, CardResponse, UpdateCardSettingsRequest } from "@/interfaces/card.interface";
-import { CardReplacementReason } from "@/interfaces/cardRequest.interface";
+import { AdminCardActionRequest, AdminCardListFilters, CardListFilters, CardResponse, UpdateCardSettingsRequest } from "@/interfaces/card.interface";
+import { reportCardLost } from "@/services/cardRequestService";
 import {
   adminCardAction,
   adminGetCard,
@@ -10,7 +10,6 @@ import {
   getCard,
   listMyCards,
   receiveCard,
-  requestCardReplacement,
 } from "@/services/cardService";
 import { useAuthStore } from "@/stores/authStore";
 import { canManageCardsAsAdmin, canViewCards } from "@/utility/access";
@@ -50,8 +49,7 @@ export function useCard(cardId: number | null) {
 }
 
 /**
- * Receipt and replacement change both cards and card requests (a lost
- * replacement cancels the old card at once), so both are refetched.
+ * Receipt and loss reports change both cards and card requests, so both are refetched.
  */
 export function useCardActions(cardId: number) {
   const queryClient = useQueryClient();
@@ -69,8 +67,9 @@ export function useCardActions(cardId: number) {
       },
       onError: () => { refresh(); },
     }),
-    replace: useMutation({
-      mutationFn: ({ card, reason }: { card: Pick<Card, "id" | "subjectType">; reason: CardReplacementReason }) => requestCardReplacement(card, reason),
+    /** Guide 22: invalidates the card at once; the replacement is then paid for separately. */
+    reportLost: useMutation({
+      mutationFn: () => reportCardLost(cardId),
       onSettled: () => { refresh(); },
     }),
   };

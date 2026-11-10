@@ -39,7 +39,7 @@ export default function BusinessScreen() {
     return <Screen hasHeader><Loader visible overlay={false} message="Loading your business…" /></Screen>;
   }
   if (!userTypeCode || !BUSINESS_USER_TYPES.includes(userTypeCode)) {
-    return <Screen hasHeader><Notice message="Business details are available to tradespeople, builders and developers." /></Screen>;
+    return <Screen hasHeader><Notice message="Business details are for tradespeople. Other members can find and request services from the Find tab." /></Screen>;
   }
   if (!canViewOwnBusiness(user, userTypeCode)) {
     return <Screen hasHeader><Notice tone="warning" message="You don't have permission to view business details." /></Screen>;

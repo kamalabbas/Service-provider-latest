@@ -144,10 +144,15 @@ test('push payload shapes: JSON strings, the Android FCM trigger, flat IDs and m
 });
 
 test('affected queries: per feature, scoped to the account; unknown types refetch nothing', () => {
-  assert.deepEqual(plain(events.affectedQueryKeys('inspection.accept', '1')), [['inspections', '1'], ['clients', '1']]);
+  assert.deepEqual(plain(events.affectedQueryKeys('inspection.accept', '1')), [['inspections', '1'], ['clients', '1'], ['payments', '1']], 'Refunds and credits change too');
   assert.deepEqual(plain(events.affectedQueryKeys('quote.pdf_replaced', '1')), [['quotes', '1']]);
-  assert.deepEqual(plain(events.affectedQueryKeys('card-request.accepted', '1')), [['card-requests', '1'], ['cards', '1']]);
-  assert.deepEqual(plain(events.affectedQueryKeys('card.dispatched', '1')), [['cards', '1'], ['card-requests', '1']]);
+  assert.deepEqual(plain(events.affectedQueryKeys('card-request.accepted', '1')), [['card-requests', '1'], ['cards', '1'], ['payments', '1']]);
+  assert.deepEqual(plain(events.affectedQueryKeys('card.dispatched', '1')), [['cards', '1'], ['card-requests', '1'], ['payments', '1']]);
+  assert.deepEqual(plain(events.affectedQueryKeys('payment.succeeded', '1')).map(([root]) => root),
+    ['payments', 'inspections', 'card-requests', 'price-catalogue', 'provider-prices', 'services'], 'Benefits may have changed');
+  assert.deepEqual(plain(events.affectedQueryKeys('marketplace.changed', '1', { area: 'discovery' })), [['services', '1']]);
+  assert.deepEqual(plain(events.affectedQueryKeys('marketplace.changed', '1', { area: 'catalogue', itemId: 5 })), [['price-catalogue', '1'], ['provider-prices', '1']]);
+  assert.deepEqual(plain(events.affectedQueryKeys('marketplace.changed', '1')).map(([root]) => root), ['services', 'price-catalogue', 'provider-prices'], 'Unknown area: all');
   assert.deepEqual(plain(events.affectedQueryKeys('support.closed', '1')), [['support', '1']]);
   assert.deepEqual(plain(events.affectedQueryKeys('announcement.retired', '1')), [['announcements', '1']]);
   assert.deepEqual(plain(events.affectedQueryKeys('issue-report.status-changed', '1')), []);
@@ -174,6 +179,7 @@ test('deep links: permitted screens only, IDs validated, nothing during setup ex
   assert.deepEqual(plain(events.routeForNotice(notice('a', 'quote.issued', { quoteId: -1 }), member, false)), { pathname: '/(dashboard)/(quotes)' });
   assert.deepEqual(plain(events.routeForNotice(notice('a', 'quote.issued', { quoteId: '1; drop' }), member, false)), { pathname: '/(dashboard)/(quotes)' });
   assert.deepEqual(plain(events.routeForNotice(notice('a', 'support.closed', {}), member, true)), { pathname: '/(setup)/support' });
+  assert.deepEqual(plain(events.routeForNotice(notice('a', 'payment.failed', {}), member, false)), { pathname: '/(dashboard)/(menu)/billing' });
   assert.equal(events.routeForNotice(notice('a'), null, false), null);
 });
 
@@ -207,7 +213,7 @@ test('hub lifecycle: connects with the current token, dedupes, debounces refetch
   hub.handlers.notificationReceived(notice('e3', 'unknown.future'));
   assert.equal(timers.length, 1, 'One debounced flush');
   await runTimers();
-  assert.deepEqual(plain(invalidated), [['inspections', '1'], ['clients', '1']]);
+  assert.deepEqual(plain(invalidated), [['inspections', '1'], ['clients', '1'], ['payments', '1']]);
   assert.equal(toasts.length, 3, 'Duplicates and malformed notices are ignored');
   assert.equal(toasts[0][0], 'Inspection updated: Your inspection was accepted.');
 

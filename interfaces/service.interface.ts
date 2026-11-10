@@ -64,8 +64,6 @@ export interface DiscoveredService {
 export interface ServiceSearchFilters {
   latitude: number;
   longitude: number;
-  /** 1–500 km; the server defaults to 50. */
-  radiusKm?: number;
   membershipId?: string;
   occupationCode?: string;
 }

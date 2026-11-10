@@ -79,6 +79,19 @@ export interface Inspection {
   createdAtUtc: string;
   updatedAtUtc: string;
   history: InspectionEvent[];
+  /** Guide 21: the server's cancellation verdict (state, participant and scheduled-time cutoff). */
+  canCancel?: boolean;
+  /** Requester and SuperAdmin only; providers never receive financial references. */
+  refundId?: number | null;
+  refundStatus?: string | null;
+  /** Booked before payments existed: no paid refund is invented. */
+  isLegacyBilling?: boolean;
+  confirmationId?: number | null;
+  /** Snapshot of the informative price, paid to the provider outside the platform (cents). */
+  informativeInspectionPriceMinor?: number | null;
+  /** The confirmation fee charged by the platform (cents; 0 when a free credit funded it). */
+  chargedNowMinor?: number;
+  currency?: string;
 }
 
 /** The visit address is collected separately from the discovery location. */

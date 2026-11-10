@@ -67,7 +67,7 @@ export const refetchLiveState = () => queueRefetch(ALL_LIVE_ROOTS);
  */
 export function handleLiveNotice(notice: LiveNotice, source: 'live' | 'push'): boolean {
   if (!sessionKey() || !seen.add(notice.eventId)) return false;
-  queueRefetch(affectedQueryKeys(notice.type, accountId()).map(([root]) => root));
+  queueRefetch(affectedQueryKeys(notice.type, accountId(), notice.data).map(([root]) => root));
   if (source === 'live' && notice.title) {
     useToastStore.getState().showToast(notice.body ? `${notice.title}: ${notice.body}` : notice.title, 'info');
   }

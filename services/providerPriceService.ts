@@ -2,6 +2,7 @@ import {
   AdminPriceItemRequestFilters,
   ApprovePriceItemRequest,
   AvailablePriceItemPageResponse,
+  ProviderCurrentPricePageResponse,
   ChangeProviderPriceRequest,
   CreatePriceItemRequest,
   PriceItemRequestEventPageResponse,
@@ -145,3 +146,7 @@ export const adminRejectPriceItemRequest = (id: number, body: RejectPriceItemReq
   if (!body.reason.trim()) throw new Error("A rejection needs a reason.");
   return postData<RejectPriceItemRequest, PriceItemRequestResponse>(adminRequestPath(id, "/reject"), { reason: body.reason.trim() });
 };
+
+/** Guide 22: the tradesperson's private price list (published items matching active services). */
+export const listCurrentProviderPrices = (page = 1, pageSize = 20, signal?: AbortSignal) =>
+  getData<ProviderCurrentPricePageResponse>("/api/provider-prices/current", { params: pageParams(page, pageSize), signal });

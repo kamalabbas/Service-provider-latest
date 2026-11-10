@@ -6,15 +6,12 @@ import {
   CardPageResponse,
   CardResponse,
   CardSettingsResponse,
-  ReplaceCardRequest,
   UpdateCardSettingsRequest,
 } from "@/interfaces/card.interface";
-import { CardReplacementReason, CardRequestResponse } from "@/interfaces/cardRequest.interface";
 import { pageParams } from "@/utility/apiTransport";
 import { requireDatabaseId } from "@/utility/apiValues";
 import { getData, postData, putData } from "./api";
 
-const REPLACEMENT_REASONS: readonly CardReplacementReason[] = ["expired", "damaged", "lost"];
 const ACTIONS_WITHOUT_REASON = new Set(["dispatch"]);
 
 export const cardListParams = (filters: CardListFilters = {}, page = 1, pageSize = 20) => ({
@@ -33,12 +30,7 @@ export const getCard = (cardId: number, signal?: AbortSignal) =>
 export const receiveCard = (cardId: number) =>
   postData<undefined, CardResponse>(`/api/cards/${requireDatabaseId(cardId)}/receive`, undefined);
 
-/** Personal or employee route by the card's subject. Creates a new approval request. */
-export const requestCardReplacement = (card: Pick<Card, "id" | "subjectType">, reason: CardReplacementReason) => {
-  if (!REPLACEMENT_REASONS.includes(reason)) throw new Error("Choose expired, damaged or lost.");
-  const route = card.subjectType === "employee" ? "employee" : "personal";
-  return postData<ReplaceCardRequest, CardRequestResponse>(`/api/card-requests/${route}/replacement`, { cardId: requireDatabaseId(card.id), reason });
-};
+/** Guide 22: replacements now go through the funded card Checkout (startCardCheckout). */
 
 // Admin (guide 19): SuperAdmin issuance, fulfilment and validity settings.
 /** Repeating it doesn't create a duplicate card. */

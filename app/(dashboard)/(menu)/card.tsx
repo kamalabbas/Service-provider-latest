@@ -58,14 +58,20 @@ export default function CardScreen() {
   const reasonOptions = allowed.replacementReasons.map((value) => ({ label: REPLACEMENT_LABELS[value], value }));
   const history = showAllHistory ? card.history : card.history.slice(-HISTORY_PREVIEW);
 
-  const replace = () =>
-    reason && actions.replace.mutate({ card, reason }, {
-      onSuccess: (response) => {
-        setReplacing(false);
-        showToast("Replacement requested. An administrator will review it.", "success");
-        if (response.data) router.push({ pathname: "/(dashboard)/(menu)/card-request", params: { id: String(response.data.id) } });
-      },
+  // Guide 22: replacements are funded like new cards. A lost card is reported first, which
+  // cancels it immediately, even if the replacement payment is then abandoned.
+  const goToReplacement = () => {
+    setReplacing(false);
+    router.push({ pathname: "/(dashboard)/(menu)/card-request-new", params: { cardId: String(card.id), reason } });
+  };
+  const replace = () => {
+    if (!reason) return;
+    if (reason !== "lost") return goToReplacement();
+    actions.reportLost.mutate(undefined, {
+      onSuccess: () => { showToast("Card reported lost and cancelled.", "success"); goToReplacement(); },
+      onError: () => setReplacing(false),
     });
+  };
 
   return (
     <Screen hasHeader>
@@ -147,8 +153,9 @@ export default function CardScreen() {
         tone={reason === "lost" ? "danger" : "default"}
         title="Request a replacement"
         message={reason ? REPLACEMENT_EFFECTS[reason] : "Why do you need a new card?"}
-        confirmLabel="Request replacement"
-        isLoading={actions.replace.isPending}
+        confirmLabel={reason === "lost" ? "Report lost and continue" : "Continue"}
+        confirmDisabled={!reason}
+        isLoading={actions.reportLost.isPending}
         onCancel={() => setReplacing(false)}
         onConfirm={replace}
         customContent={<SelectInput label="Reason" placeholder="Choose a reason" value={reason} onChange={(value) => setReason(value as CardReplacementReason)} options={reasonOptions} />}

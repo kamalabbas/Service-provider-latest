@@ -2,33 +2,44 @@ import { ThemedText } from "@/components/ThemedText";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { Radius, Spacing } from "@/constants/Theme";
 import { useBusinessAccess, useMyBusiness } from "@/hooks/useBusiness";
+import { usePaymentAccount } from "@/hooks/usePayments";
 import { useMyServices } from "@/hooks/useServices";
 import { useThemeColor } from "@/hooks/useThemeColor";
-import { canManageOwnBusiness, canManageOwnServices } from "@/utility/access";
+import { canManageOwnBusiness, canManageOwnServices, canViewPayments } from "@/utility/access";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { useRouter } from "expo-router";
 import { StyleSheet, View } from "react-native";
 
-// Providers only appear in search once they have a business and at least one active
-// service listing. Shown on Home, My business and My services until both are done.
+// Providers only appear in search once they have a business, at least one active
+// service listing and the Provider plan. Shown on Home, My business and My services until done.
 export function VisibilityPrompt({ hideWhenOnServices = false }: { hideWhenOnServices?: boolean }) {
   const router = useRouter();
   const { user, userTypeCode } = useBusinessAccess();
   const business = useMyBusiness();
   const services = useMyServices(!!business.data);
+  const account = usePaymentAccount();
   const warningSurface = useThemeColor({}, "warningSurface");
   const warning = useThemeColor({}, "warning");
 
-  if (!canManageOwnServices(user, userTypeCode) || business.isLoading || services.isLoading) return null;
+  if (!canManageOwnServices(user, userTypeCode) || business.isLoading || services.isLoading || account.isLoading) return null;
 
   const hasBusiness = !!business.data;
   const activeServices = (services.data ?? []).filter((service) => !service.archivedAtUtc).length;
-  if (hasBusiness && activeServices > 0) return null;
-  // On My services the "Add a service" button is right there; only the business step matters.
-  if (hideWhenOnServices && hasBusiness) return null;
+  // Guide 21: listings are discoverable only with the Provider plan's verified benefit.
+  const subscribed = account.data?.hasProviderVisibility === true || !canViewPayments(user);
+  if (hasBusiness && activeServices > 0 && subscribed) return null;
+  // On My services the "Add a service" button is right there; only the other steps matter.
+  if (hideWhenOnServices && hasBusiness && activeServices === 0) return null;
   if (!hasBusiness && !canManageOwnBusiness(user, userTypeCode)) return null;
 
-  const step = hasBusiness
+  const step = hasBusiness && activeServices > 0
+    ? {
+        title: "Subscribe to appear in search",
+        text: "Your services are ready, but customers only see providers on the Provider plan. Subscribe to start getting inspection requests.",
+        action: "See plans",
+        go: () => router.push("/(dashboard)/(menu)/billing", { withAnchor: true }),
+      }
+    : hasBusiness
     ? {
         title: "Customers can't find you yet",
         text: "Add at least one service so your business appears in search. Without a service, no one can request an inspection from you.",

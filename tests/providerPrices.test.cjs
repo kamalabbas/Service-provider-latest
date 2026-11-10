@@ -105,7 +105,7 @@ const owner = (permissions = ['prices.view', 'prices.manage', 'prices.delete']) 
 const row = overrides => ({
   id: 1, businessId: 3, itemId: 8, providerUserId: 20, calendarYear: 2030, withdrawnAtUtc: null, itemStatus: 'published', businessArchivedAtUtc: null, ...overrides,
 });
-const actions = (target, rows = [target], user = owner(), type = 'builder') => plain(rules.providerPriceActions(target, rows, user, type, now));
+const actions = (target, rows = [target], user = owner(), type = 'tradeperson') => plain(rules.providerPriceActions(target, rows, user, type, now));
 
 test('yearly rows: current year editable; older latest row can only be withdrawn', () => {
   assert.equal(rules.currentUtcYear(now), 2030);

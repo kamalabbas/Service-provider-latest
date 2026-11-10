@@ -6,11 +6,11 @@ import { Screen } from "@/components/ui/Screen";
 import { Spacing } from "@/constants/Theme";
 import { usePriceCatalogueItem } from "@/hooks/usePriceCatalogue";
 import { formatAud } from "@/utility/apiValues";
-import { priceRangeText, providerAverageText } from "@/utility/priceCatalogueRules";
 import { useLocalSearchParams } from "expo-router";
 import { StyleSheet, View } from "react-native";
 
-// Guide 13: one catalogue item. The guide price and the provider average are shown separately.
+// Guide 13/22: one item of the Global price list. Members see a single price (the admin override,
+// else the provider average, else Guide); Guide, Min/Max and averages aren't returned to them.
 export default function PriceItemScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const itemId = Number.isSafeInteger(Number(id)) && Number(id) > 0 ? Number(id) : null;
@@ -20,14 +20,9 @@ export default function PriceItemScreen() {
   if (isError || !item) return <Screen hasHeader><Notice tone="warning" message="This item is no longer in the price guide." /></Screen>;
 
   return (
-    <Screen hasHeader title={item.name} subtitle={`${item.occupationName} · ${item.code}`}>
-      <ListSection title="Guide price" footer="Price guidance only. Not a quote, and tax isn't specified.">
-        <ListRow icon="pricetag-outline" title={formatAud(item.guidePrice)} subtitle="Guide price" />
-        <ListRow icon="swap-horizontal-outline" title={priceRangeText(item)} subtitle="Range providers can submit within" />
-      </ListSection>
-
-      <ListSection title="What providers charge">
-        <ListRow icon="people-outline" title={providerAverageText(item)} />
+    <Screen hasHeader title={item.name} subtitle={item.occupationName}>
+      <ListSection title="Typical price" footer="Based on what providers charge. A guide only, not a quote; tax isn't specified.">
+        <ListRow icon="pricetag-outline" title={formatAud(item.price)} subtitle="Typical price in AUD" />
       </ListSection>
 
       {item.description ? (

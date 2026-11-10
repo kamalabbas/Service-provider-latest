@@ -74,12 +74,12 @@ const user = (id, permissions = ['clients.view', 'clients.manage', 'clients.dele
 const row = (isHidden = false) => ({ isHidden, providerUserId: 20 });
 
 test('visibility: hide needs delete, restore needs manage; former ineligible providers are read-only', () => {
-  assert.deepEqual(plain(rules.clientActions(row(), user('20'), 'builder')), { hide: true, restore: false });
-  assert.deepEqual(plain(rules.clientActions(row(true), user('20'), 'builder')), { hide: false, restore: true });
-  assert.deepEqual(plain(rules.clientActions(row(), user('20', ['clients.view', 'clients.manage']), 'builder')), { hide: false, restore: false });
-  assert.deepEqual(plain(rules.clientActions(row(true), user('20', ['clients.view', 'clients.delete']), 'builder')), { hide: false, restore: false });
+  assert.deepEqual(plain(rules.clientActions(row(), user('20'), 'tradeperson')), { hide: true, restore: false });
+  assert.deepEqual(plain(rules.clientActions(row(true), user('20'), 'tradeperson')), { hide: false, restore: true });
+  assert.deepEqual(plain(rules.clientActions(row(), user('20', ['clients.view', 'clients.manage']), 'tradeperson')), { hide: false, restore: false });
+  assert.deepEqual(plain(rules.clientActions(row(true), user('20', ['clients.view', 'clients.delete']), 'tradeperson')), { hide: false, restore: false });
   assert.deepEqual(plain(rules.clientActions(row(), user('20'), 'individual')), { hide: false, restore: false }, 'Former provider: history only');
-  assert.deepEqual(plain(rules.clientActions(row(), user('10'), 'builder')), { hide: false, restore: false }, 'Only the provider side');
+  assert.deepEqual(plain(rules.clientActions(row(), user('10'), 'tradeperson')), { hide: false, restore: false }, 'Only the provider side');
   assert.equal(access.canViewClients(user('1', ['clients.view'])), true);
   assert.equal(access.canViewClients(user('1', [])), false);
 });
