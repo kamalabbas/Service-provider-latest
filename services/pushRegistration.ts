@@ -93,6 +93,17 @@ export async function disablePushOnThisDevice() {
   setRegistration('disabled');
 }
 
+/** Why push isn't on after trying, in plain words; null when it is on. */
+export function pushUnavailableReason(): string | null {
+  const { tokenStatus, registration } = useNotificationStore.getState();
+  if (registration === 'registered') return null;
+  if (tokenStatus === 'denied') return "Notifications are blocked for this app in your phone's settings. Allow them there, then try again.";
+  if (tokenStatus === 'unavailable') return "Push notifications don't work in Expo Go or on a simulator. Use the installed app build.";
+  if (registration === 'refused') return 'This phone is linked to another account. Sign out of that account on this phone first.';
+  return "Notifications couldn't be turned on. Check your connection and try again.";
+}
+
+/** Resolves only when this device is really registered; otherwise rejects with the reason. */
 export async function enablePushOnThisDevice() {
   await SecureStore.deleteItemAsync(DISABLED_KEY);
   lastKey = null;
@@ -100,4 +111,6 @@ export async function enablePushOnThisDevice() {
   // Ask for OS permission now if needed, then register the real token.
   await refreshPushToken({ requestPermission: true });
   await syncPushRegistration();
+  const reason = pushUnavailableReason();
+  if (reason) throw new Error(reason);
 }

@@ -1,13 +1,13 @@
-import { Radius, Spacing, Typography } from "@/constants/Theme";
+import { Spacing, Typography } from "@/constants/Theme";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToastStore } from "@/stores/toastStore";
 import { yupResolver } from "@hookform/resolvers/yup";
 import React, { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { StyleSheet, Text, View, ViewStyle } from "react-native";
-import OTPTextInput from "react-native-otp-textinput";
+import { StyleSheet, Text, View } from "react-native";
 import * as yup from "yup";
 import { ThemedText } from "../ThemedText";
+import { CodeInput } from "./CodeInput";
 import { PrimaryButton } from "./PrimaryButton";
 
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -39,11 +39,7 @@ export function OTPComponent({ isPending, email, onSubmit, reSendOtp, submitLabe
 
   // theme colors
   const tint = useThemeColor({}, "tint");
-  const border = useThemeColor({}, "borderColor");
-  const surface = useThemeColor({}, "surface");
-  const textColor = useThemeColor({}, "text");
   const muted = useThemeColor({}, "textMuted");
-  const errorColor = useThemeColor({}, "error");
 
   // States for resend otp
   const [resendDisabled, setResendDisabled] = useState(false);
@@ -102,21 +98,8 @@ export function OTPComponent({ isPending, email, onSubmit, reSendOtp, submitLabe
         control={control}
         name="otp"
         render={({ field: { onChange, value } }) => (
-          <OTPTextInput
-            inputCount={6}
-            handleTextChange={onChange}
-            defaultValue={value}
-            tintColor={errors.otp ? errorColor : tint}
-            offTintColor={errors.otp ? errorColor : border}
-            containerStyle={styles.otpContainer}
-            // The library types this as a ViewStyle, but applies it to each TextInput.
-            textInputStyle={{
-              ...styles.otpInput,
-              color: textColor,
-              backgroundColor: surface,
-            } as ViewStyle}
-            keyboardType="number-pad"
-          />
+          // Pasting the whole code fills every box; the keyboard can suggest it too.
+          <CodeInput value={value} onChange={onChange} hasError={!!errors.otp} />
         )}
       />
       {errors.otp?.message ? (
@@ -147,20 +130,6 @@ export function OTPComponent({ isPending, email, onSubmit, reSendOtp, submitLabe
 const styles = StyleSheet.create({
   container: {
     width: "100%",
-  },
-  otpContainer: {
-    justifyContent: "space-between",
-    marginBottom: Spacing.sm,
-  },
-  otpInput: {
-    width: 48,
-    height: 56,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderBottomWidth: 1,
-    ...Typography.title,
-    textAlign: "center",
-    marginHorizontal: 0,
   },
   error: {
     textAlign: "center",

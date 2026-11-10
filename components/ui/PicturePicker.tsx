@@ -1,7 +1,7 @@
 import { ThemedText } from "@/components/ThemedText";
 import { Radius, Spacing } from "@/constants/Theme";
 import { useThemeColor } from "@/hooks/useThemeColor";
-import { PictureUploadFile } from "@/services/apiFiles";
+import { PictureUploadFile, pictureForm } from "@/services/apiFiles";
 import { useToastStore } from "@/stores/toastStore";
 import { resolvePublicMediaUrl } from "@/utility/apiTransport";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -23,6 +23,13 @@ type PicturePickerProps = {
   /** Resolves on success; rejects with the API or local-check error. */
   onUpload: (file: PictureUploadFile) => Promise<unknown>;
   successMessage: string;
+  /**
+   * When upload isn't possible yet (e.g. no profile), keep the chosen picture locally instead:
+   * it's shown as a preview and saved later by the caller.
+   */
+  onPickLater?: (file: PictureUploadFile) => void;
+  /** Local preview of a picture chosen with onPickLater. */
+  previewUri?: string | null;
 };
 
 const fileSize = (asset: ImagePicker.ImagePickerAsset) => {
@@ -36,12 +43,12 @@ const publicUri = (url?: string | null) => {
 };
 
 // Shared JPEG/PNG upload (5 MB, 16 million pixels; checked by pictureForm before sending).
-export function PicturePicker({ pictureUrl, shape = "round", canUpload, uploadHint, uploading, onUpload, successMessage }: PicturePickerProps) {
+export function PicturePicker({ pictureUrl, shape = "round", canUpload, uploadHint, uploading, onUpload, successMessage, onPickLater, previewUri }: PicturePickerProps) {
   const showToast = useToastStore((state) => state.showToast);
   const muted = useThemeColor({}, "textMuted");
   const placeholder = useThemeColor({}, "primaryLight");
   const cover = shape === "cover";
-  const uri = publicUri(pictureUrl);
+  const uri = previewUri ?? publicUri(pictureUrl);
 
   const choose = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -51,15 +58,27 @@ export function PicturePicker({ pictureUrl, shape = "round", canUpload, uploadHi
     if (!asset) return;
 
     const mimeType = asset.mimeType ?? "image/jpeg";
+    const file: PictureUploadFile = {
+      uri: asset.uri,
+      name: asset.fileName ?? (mimeType === "image/png" ? "picture.png" : "picture.jpg"),
+      mimeType,
+      size: fileSize(asset),
+      width: asset.width,
+      height: asset.height,
+    };
+    if (!canUpload && onPickLater) {
+      // Same local checks as an upload (type, size, pixels), so problems show now, not later.
+      try {
+        pictureForm(file);
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : "This picture can't be used.", "error");
+        return;
+      }
+      onPickLater(file);
+      return;
+    }
     try {
-      await onUpload({
-        uri: asset.uri,
-        name: asset.fileName ?? (mimeType === "image/png" ? "picture.png" : "picture.jpg"),
-        mimeType,
-        size: fileSize(asset),
-        width: asset.width,
-        height: asset.height,
-      });
+      await onUpload(file);
       showToast(successMessage, "success");
     } catch (error) {
       // HTTP failures are already shown; local checks (type, size, pixels) are not.
@@ -80,7 +99,7 @@ export function PicturePicker({ pictureUrl, shape = "round", canUpload, uploadHi
       ) : (
         <ImageComponent source={uri} width={112} height={112} />
       )}
-      {canUpload ? (
+      {canUpload || onPickLater ? (
         <PrimaryButton
           title={uploading ? "Uploading..." : uri ? "Change photo" : "Add photo"}
           variant="secondary"

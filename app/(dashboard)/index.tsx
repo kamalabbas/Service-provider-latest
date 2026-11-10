@@ -16,7 +16,7 @@ import { useMyProfile } from "@/hooks/useProfile";
 import { useMyQuotes } from "@/hooks/useQuotes";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useAuthStore } from "@/stores/authStore";
-import { canViewAnnouncements, canViewCards, canViewInspections, canViewQuotes, canViewServices, canViewSupport } from "@/utility/access";
+import { canUseMembershipCards, canViewAnnouncements, canViewInspections, canViewQuotes, canViewServices, canViewSupport } from "@/utility/access";
 import { formatLocalTimestamp } from "@/utility/apiValues";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useCallback, type ComponentProps } from "react";
@@ -69,7 +69,7 @@ export default function HomeScreen() {
       show: canViewQuotes(user), icon: "document-text-outline", label: "Quotes", caption: "Sent and received",
       count: countText(pendingQuotes.data, !!pendingQuotes.hasNextPage), onPress: () => router.navigate("/(dashboard)/(quotes)"),
     },
-    { show: canViewCards(user), icon: "wallet-outline", label: "My cards", caption: "Membership cards", onPress: () => open("/(dashboard)/(menu)/cards") },
+    { show: canUseMembershipCards(user, member?.userTypeCode), icon: "wallet-outline", label: "Cards", caption: "Membership cards", onPress: () => open("/(dashboard)/(menu)/cards") },
     { show: canViewSupport(user), icon: "chatbubbles-outline", label: "Support", caption: "Talk to our team", onPress: () => open("/(dashboard)/(menu)/support") },
   ];
   const actions = allActions.filter((action) => action.show);

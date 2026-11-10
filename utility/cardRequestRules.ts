@@ -12,8 +12,9 @@ export const CARD_REQUEST_STATUS_LABELS: Record<CardRequestStatus, string> = {
   cancelled: "Cancelled",
 };
 
-/** Personal card: a completed member with card-requests.manage. */
-export const canRequestPersonalCard = (user?: User | null) => can(user, ["card-requests.manage"]);
+/** Personal card: membership cards are a tradesperson feature, with card-requests.manage. */
+export const canRequestPersonalCard = (user: User | null | undefined, userTypeCode?: string | null) =>
+  !!userTypeCode && BUSINESS_USER_TYPES.includes(userTypeCode) && can(user, ["card-requests.manage"]);
 
 /** Employee card: an eligible provider with both employees.manage and card-requests.manage. */
 export const canRequestEmployeeCard = (user: User | null | undefined, userTypeCode?: string | null) =>

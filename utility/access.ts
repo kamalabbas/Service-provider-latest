@@ -98,12 +98,18 @@ export const canReviewCardRequests = (user?: User | null) => isAdministrator(gra
 
 // Guide 11-b: issued cards. Receipt and replacement rules live in utility/cardRules.ts.
 export const canViewCards = (user?: User | null) => can(user, ["cards.view"]);
+/** Membership cards (requests and issued cards) are a tradesperson feature, on one page. */
+export const canUseMembershipCards = (user: User | null | undefined, userTypeCode?: string | null) =>
+  businessEligible(userTypeCode) && (can(user, ["cards.view"]) || can(user, ["card-requests.view"]));
 /** Issue, dispatch, delivery exceptions, void and validity settings are SuperAdmin-only. */
 export const canManageCardsAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));
 
 // Guide 12: client relationships. Both member lists need clients.view; hide/restore rules
-// live in utility/clientRules.ts.
+// live in utility/clientRules.ts. "My clients" is for tradespeople; "My providers" (businesses
+// that have worked for you) is for everyone.
 export const canViewClients = (user?: User | null) => can(user, ["clients.view"]);
+export const canViewMyClients = (user: User | null | undefined, userTypeCode?: string | null) =>
+  businessEligible(userTypeCode) && canViewClients(user);
 export const canManageClientsAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));
 
 // Guide 13: price catalogue. Management is delegated by permission (SuperAdmin bypasses);
@@ -112,8 +118,10 @@ export const canViewPriceCatalogue = (user?: User | null) => can(user, ["price-c
 export const canViewPriceCatalogueAdmin = (user?: User | null) => can(user, ["price-catalogue-admin.view"]);
 
 // Guide 14: provider prices. History reads need prices.view; write rules live in
-// utility/providerPriceRules.ts.
+// utility/providerPriceRules.ts. My prices is shown to tradespeople only.
 export const canViewProviderPrices = (user?: User | null) => can(user, ["prices.view"]);
+export const canUseMyPrices = (user: User | null | undefined, userTypeCode?: string | null) =>
+  businessEligible(userTypeCode) && canViewProviderPrices(user);
 export const canManageProviderPricesAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));
 
 // Guide 17: push installations (profile-setup sessions supported) and issue reports.

@@ -143,7 +143,7 @@ export function routeForNotice(notice: Pick<LiveNotice, "type" | "data">, user: 
   switch (feature) {
     case "inspection": return link("inspectionId", "/(dashboard)/(inspections)/[id]", "/(dashboard)/(inspections)");
     case "quote": return link("quoteId", "/(dashboard)/(quotes)/[id]", "/(dashboard)/(quotes)");
-    case "card-request": return link("cardRequestId", "/(dashboard)/(menu)/card-request", "/(dashboard)/(menu)/card-requests");
+    case "card-request": return link("cardRequestId", "/(dashboard)/(menu)/card-request", "/(dashboard)/(menu)/cards");
     case "card": return link("cardId", "/(dashboard)/(menu)/card", "/(dashboard)/(menu)/cards");
     case "price-item-request": return link("requestId", "/(dashboard)/(menu)/price-request", "/(dashboard)/(menu)/price-requests");
     case "announcement": return link("announcementId", "/(dashboard)/(menu)/announcement", "/(dashboard)/(menu)/announcements");

@@ -13,7 +13,7 @@ import { useCurrentProviderPrices, useMyProviderPrices, useProviderPriceActions 
 import type { ProviderCurrentPrice } from "@/interfaces/providerPrice.interface";
 import { useToastStore } from "@/stores/toastStore";
 import { useThemeColor } from "@/hooks/useThemeColor";
-import { canViewProviderPrices } from "@/utility/access";
+import { canUseMyPrices } from "@/utility/access";
 import { formatAud } from "@/utility/apiValues";
 import { canWriteProviderPrices, currentUtcYear } from "@/utility/providerPriceRules";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -46,8 +46,8 @@ export default function PricesScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []));
 
-  if (!canViewProviderPrices(user)) {
-    return <Screen hasHeader><Notice tone="warning" message="You don't have permission to view your prices." /></Screen>;
+  if (!canUseMyPrices(user, userTypeCode)) {
+    return <Screen hasHeader><Notice tone="warning" message="My prices is for tradespeople." /></Screen>;
   }
 
   const list = prices.data ?? [];

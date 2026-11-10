@@ -11,6 +11,7 @@ import {
   uploadMyProfilePicture,
 } from "@/services/profileService";
 import { useAuthStore } from "@/stores/authStore";
+import { usePendingProfilePictureStore } from "@/stores/pendingProfilePictureStore";
 import { canManageUserProfiles, canViewOwnProfile } from "@/utility/access";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -42,8 +43,10 @@ function useStoreMyProfile() {
 }
 
 /**
- * Saves the complete profile. During onboarding the session is refreshed so a
- * full-access token replaces the setup token; the caller checks the result.
+ * Saves the complete profile. A picture chosen before the profile existed is uploaded right
+ * after (a failed upload doesn't undo the save; the user can add it again later). During
+ * onboarding the session is then refreshed so a full-access token replaces the setup token;
+ * the caller checks the result.
  */
 export function useSaveMyProfile() {
   const store = useStoreMyProfile();
@@ -51,6 +54,16 @@ export function useSaveMyProfile() {
     mutationFn: (body: SaveProfileRequest) => saveMyProfile(body),
     onSuccess: async (response) => {
       await store(response);
+      const picture = usePendingProfilePictureStore.getState().file;
+      if (picture) {
+        try {
+          await store(await uploadMyProfilePicture(picture));
+        } catch {
+          // The API error toast explains it; the profile itself is saved.
+        } finally {
+          usePendingProfilePictureStore.getState().clear();
+        }
+      }
       if (useAuthStore.getState().user?.profileCompletionRequired) await refreshAccessToken();
     },
   });

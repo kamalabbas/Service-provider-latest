@@ -1,5 +1,4 @@
 import { ThemedText } from "@/components/ThemedText";
-import { PushSettings } from "@/components/notification/PushSettings";
 import { Avatar } from "@/components/ui/Avatar";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { ListRow, ListSection } from "@/components/ui/ListSection";
@@ -10,7 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDeactivateMyAccount, useMyMember } from "@/hooks/useMembership";
 import { useMyProfile } from "@/hooks/useProfile";
 import { useToastStore } from "@/stores/toastStore";
-import { canDeactivateOwnAccount, canViewAnnouncements,canViewCardRequests, canViewCards, canViewClients, canViewProviderPrices, canViewEmployees, canViewOwnBusiness, canViewOwnProfile, canViewPayments, canViewServices, canViewSupport } from "@/utility/access";
+import { canDeactivateOwnAccount, canUseMembershipCards, canUseMyPrices, canViewAnnouncements, canViewClients, canViewMyClients, canViewEmployees, canViewOwnBusiness, canViewOwnProfile, canViewPayments, canViewServices, canViewSupport } from "@/utility/access";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useAuthStore } from "@/stores/authStore";
 import { ThemePreference, useThemeStore } from "@/stores/theme";
@@ -75,20 +74,12 @@ export default function MenuScreen() {
       </View>
 
       <ListSection title="Membership">
-        {canViewCards(user) ? (
+        {canUseMembershipCards(user, member?.userTypeCode) ? (
           <ListRow
             icon="wallet-outline"
-            title="My cards"
-            subtitle="Issued cards, delivery and replacements"
-            onPress={() => router.push("/(dashboard)/(menu)/cards")}
-          />
-        ) : null}
-        {canViewCardRequests(user) ? (
-          <ListRow
-            icon="card-outline"
             title="Membership cards"
-            subtitle="Request a card for you or an employee"
-            onPress={() => router.push("/(dashboard)/(menu)/card-requests")}
+            subtitle="Request, track and receive cards for you and your team"
+            onPress={() => router.push("/(dashboard)/(menu)/cards")}
           />
         ) : null}
         {canViewOwnProfile(user) ? (
@@ -135,15 +126,16 @@ export default function MenuScreen() {
 
       {canViewClients(user) ? (
         <ListSection title="Relationships">
-          <ListRow icon="people-circle-outline" title="My clients" subtitle="Customers your business has worked for"
-            onPress={() => router.push("/(dashboard)/(menu)/clients")} />
-          <ListRow icon="storefront-outline" title="My providers" subtitle="Businesses that have worked for you"
+          {canViewMyClients(user, member?.userTypeCode) ? (
+            <ListRow icon="people-circle-outline" title="My clients" subtitle="Customers your business has worked for"
+              onPress={() => router.push("/(dashboard)/(menu)/clients")} />
+          ) : null}
+          <ListRow icon="storefront-outline" title="Tradespeople I've hired" subtitle="Businesses that have inspected or quoted for you"
             onPress={() => router.push("/(dashboard)/(menu)/providers")} />
         </ListSection>
       ) : null}
 
-      {canViewProviderPrices(user) ? (
-        // Outside Business: former providers keep read access to their price history.
+      {canUseMyPrices(user, member?.userTypeCode) ? (
         <ListSection title="Pricing">
           <ListRow icon="pricetags-outline" title="My prices" subtitle="Your price list and yearly prices"
             onPress={() => router.push("/(dashboard)/(menu)/prices")} />
@@ -166,7 +158,11 @@ export default function MenuScreen() {
         />
       </ListSection>
 
-      <PushSettings />
+
+      <ListSection title="Settings">
+        <ListRow icon="notifications-outline" title="Notifications" subtitle="Push alerts on this phone and live updates"
+          onPress={() => router.push("/(dashboard)/(menu)/notifications")} />
+      </ListSection>
 
       <ListSection title="Appearance">
         <View style={styles.appearance}>

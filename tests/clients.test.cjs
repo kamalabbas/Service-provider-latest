@@ -92,3 +92,12 @@ test('identity text labels changed membership IDs; rows are keyed by business an
   assert.notEqual(rules.relationshipKey({ businessId: 3, clientUserId: 10 }), rules.relationshipKey({ businessId: 4, clientUserId: 10 }),
     'The same customer under two businesses stays separate');
 });
+
+test('My clients and My prices are for tradespeople; hired tradespeople list is for everyone', () => {
+  const member = (permissions) => ({ id: '1', accessLevel: 'full', roles: [], permissions, profileCompletionRequired: false });
+  assert.equal(access.canViewMyClients(member(['clients.view']), 'tradeperson'), true);
+  assert.equal(access.canViewMyClients(member(['clients.view']), 'individual'), false);
+  assert.equal(access.canViewClients(member(['clients.view'])), true, 'Providers list needs only clients.view');
+  assert.equal(access.canUseMyPrices(member(['prices.view']), 'tradeperson'), true);
+  assert.equal(access.canUseMyPrices(member(['prices.view']), 'builder'), false);
+});

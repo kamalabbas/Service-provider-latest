@@ -19,6 +19,7 @@ import {
 } from "@/interfaces/serviceProviderAuth.interface";
 import { queryClient } from "@/services/queryClient";
 import { usePasswordRecoveryStore } from "@/stores/passwordRecoveryStore";
+import { takePendingSignIn, usePendingSignInStore } from "@/stores/pendingSignInStore";
 import { sessionUserFrom } from "@/utility/accessToken";
 import { getInstallationId } from "@/utility/installationId";
 import {
@@ -36,7 +37,7 @@ import {
 import { AuthenticationOperation, beginAuthenticationOperation, beginSessionLogout, clearSession, finishSessionLogout, getSessionGeneration, isCurrentAuthenticationOperation, setAuthenticatedSession } from "@/services/authSession";
 import { notifyApiError } from "@/services/api";
 import { ApiErrorAction, toAppError } from "@/services/apiError";
-import { useAuthStore } from "@/stores/authStore";
+import { selectIsAuthenticated, useAuthStore } from "@/stores/authStore";
 import { useToastStore } from "@/stores/toastStore";
 import { MutateOptions, useMutation, UseMutationResult } from "@tanstack/react-query";
 import { CanceledError, isCancel } from "axios";
@@ -136,8 +137,12 @@ export function useAuth() {
     mutationFn: login,
     onError: (error, request) => {
       notifyApiError(error, { action: "signIn" });
-      // A valid but unverified account receives 403 at sign-in (guides 00/01).
-      if (toAppError(error).status === 403) openEmailVerification(request.email);
+      // A valid but unverified account receives 403 at sign-in (guides 00/01). Keep the
+      // credentials in memory so verifying the email can sign straight in.
+      if (toAppError(error).status === 403) {
+        usePendingSignInStore.getState().set(request.email, request.password);
+        openEmailVerification(request.email);
+      }
     },
     onSuccess: async (response, request, operation) => {
       try {
@@ -170,7 +175,11 @@ export function useAuth() {
       const appError = toAppError(error);
       if (appError.status === 503 && appError.code === "EMAIL_DELIVERY_FAILED") openEmailVerification(request.email);
     },
-    onSuccess: (_response, request) => openEmailVerification(request.email),
+    onSuccess: (_response, request) => {
+      // Memory only, so verification can sign in without asking for the password again.
+      usePendingSignInStore.getState().set(request.email, request.password);
+      openEmailVerification(request.email);
+    },
   });
 
   // Change Email mutation
@@ -209,8 +218,22 @@ export function useAuth() {
     mutationFn: verifyEmail,
     onError: (error) => notifyApiError(error, { action: "verifyCode" }),
     onSuccess: (_response, request) => {
-      showToast("Email verified. Please sign in.", "success");
-      router.replace({ pathname: "/(auth)", params: { email: request.email } });
+      // Registered (or tried to sign in) in this app run: sign straight in. Otherwise, or if
+      // that sign-in fails, return to Sign In with the email filled in.
+      const credentials = takePendingSignIn(request.email);
+      if (!credentials) {
+        showToast("Email verified. Please sign in.", "success");
+        router.replace({ pathname: "/(auth)", params: { email: request.email } });
+        return;
+      }
+      showToast("Email verified. Signing you in…", "success");
+      // Start after verification settles: a new authentication operation would otherwise
+      // supersede this one. Without a session afterwards (error or no tokens), go to Sign In.
+      setTimeout(() => loginMutation.mutate(credentials, {
+        onSettled: () => {
+          if (!selectIsAuthenticated(useAuthStore.getState())) router.replace({ pathname: "/(auth)", params: { email: request.email } });
+        },
+      }), 0);
     },
   });
 
@@ -280,6 +303,7 @@ export function useAuth() {
 
   // Logout helper (decoupled)
   const logoutUser = async () => {
+    usePendingSignInStore.getState().clear();
     const { generation, refreshToken, accessToken } = beginSessionLogout();
     let storedRefreshToken;
     let durableLogout = false;

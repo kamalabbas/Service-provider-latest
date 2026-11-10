@@ -29,13 +29,12 @@ export default function MenuLayout() {
       <Stack.Screen name="employees" options={{ title: "Employees" }} />
       <Stack.Screen name="employee" options={{ title: "Employee" }} />
       <Stack.Screen name="employee-edit" options={{ title: "Employee details" }} />
-      <Stack.Screen name="card-requests" options={{ title: "Membership cards" }} />
       <Stack.Screen name="card-request" options={{ title: "Card request" }} />
       <Stack.Screen name="card-request-new" options={{ title: "New card request" }} />
-      <Stack.Screen name="cards" options={{ title: "My cards" }} />
+      <Stack.Screen name="cards" options={{ title: "Membership cards" }} />
       <Stack.Screen name="card" options={{ title: "Card" }} />
       <Stack.Screen name="clients" options={{ title: "My clients" }} />
-      <Stack.Screen name="providers" options={{ title: "My providers" }} />
+      <Stack.Screen name="providers" options={{ title: "Tradespeople I've hired" }} />
       <Stack.Screen name="prices" options={{ title: "My prices" }} />
       <Stack.Screen name="price" options={{ title: "Price" }} />
       <Stack.Screen name="price-submit" options={{ title: "Add a price" }} />
@@ -49,6 +48,7 @@ export default function MenuLayout() {
       <Stack.Screen name="support" options={{ title: "Support" }} />
       <Stack.Screen name="support-new" options={{ title: "New conversation" }} />
       <Stack.Screen name="support-ticket" options={{ title: "Conversation" }} />
+      <Stack.Screen name="notifications" options={{ title: "Notifications" }} />
       <Stack.Screen name="report-problem" options={{ title: "Report a problem" }} />
       <Stack.Screen name="changeEmailPassword" options={{ title: "Email & password" }} />
     </Stack>

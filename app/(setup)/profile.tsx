@@ -58,7 +58,7 @@ export default function SetupProfileScreen() {
           <PrimaryButton title="Check again" variant="secondary" leftIcon="refresh-outline" onPress={checkAgain} loading={checking} disabled={checking} style={styles.check} />
         </>
       ) : null}
-      <ProfilePicture pictureUrl={profile?.pictureUrl} canUpload={Boolean(profile) && canEditOwnProfile(user)} />
+      <ProfilePicture pictureUrl={profile?.pictureUrl} canUpload={Boolean(profile) && canEditOwnProfile(user)} canPickLater={canEditOwnProfile(user)} />
       <ProfileForm
         key={profile ? "saved" : "new"}
         profile={profile ?? null}

@@ -61,7 +61,7 @@ export default function NewCardRequestScreen() {
 
   const allowance = allowances.data;
   const replacing = previousCardId !== null && reason !== null && !!previous.data;
-  const allowed = isEmployee ? canRequestEmployeeCard(user, userTypeCode) && canViewEmployees(user, userTypeCode) : canRequestPersonalCard(user);
+  const allowed = isEmployee ? canRequestEmployeeCard(user, userTypeCode) && canViewEmployees(user, userTypeCode) : canRequestPersonalCard(user, userTypeCode);
   if (!allowed) return <Screen hasHeader><Notice tone="warning" message="You don't have permission to request this card." /></Screen>;
   if (!allowance?.cardRequestsEnabled) {
     return <Screen hasHeader><Notice tone="warning" message="Card requests are paused right now. Please try again later." /></Screen>;

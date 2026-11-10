@@ -130,9 +130,15 @@ test('owner actions: cancel while pending; address until first dispatch; "accept
   assert.equal(rules.CARD_REQUEST_STATUS_LABELS.accepted, 'Approved');
 });
 
-test('eligibility: personal needs card-requests.manage; employee also needs employees.manage and a provider type', () => {
-  assert.equal(rules.canRequestPersonalCard(user('5', ['card-requests.manage'])), true);
-  assert.equal(rules.canRequestPersonalCard(user('5', ['card-requests.view'])), false);
+test('eligibility: cards are for tradespeople; personal needs card-requests.manage; employee also needs employees.manage', () => {
+  assert.equal(rules.canRequestPersonalCard(user('5', ['card-requests.manage']), 'tradeperson'), true);
+  assert.equal(rules.canRequestPersonalCard(user('5', ['card-requests.view']), 'tradeperson'), false);
+  for (const type of ['builder', 'developer', 'individual', null]) {
+    assert.equal(rules.canRequestPersonalCard(user('5', ['card-requests.manage']), type), false, `${type}: not a tradesperson`);
+  }
+  assert.equal(access.canUseMembershipCards(user('5', ['cards.view']), 'tradeperson'), true);
+  assert.equal(access.canUseMembershipCards(user('5', ['card-requests.view']), 'tradeperson'), true);
+  assert.equal(access.canUseMembershipCards(user('5', ['cards.view', 'card-requests.view']), 'individual'), false);
   assert.equal(rules.canRequestEmployeeCard(user('5', ['card-requests.manage', 'employees.manage']), 'tradeperson'), true);
   assert.equal(rules.canRequestEmployeeCard(user('5', ['card-requests.manage']), 'tradeperson'), false, 'Independent permissions');
   assert.equal(rules.canRequestEmployeeCard(user('5', ['card-requests.manage', 'employees.manage']), 'builder'), false, 'Tradeperson is the only provider type');

@@ -52,7 +52,7 @@ export default function CardRequestScreen() {
         <Notice tone={request.status === "rejected" ? "warning" : "info"} message={STATUS_NOTES[request.status]!} style={styles.notice} />
       ) : null}
       {request.status === "accepted" ? (
-        <PrimaryButton title="Go to My cards" variant="secondary" leftIcon="wallet-outline" onPress={() => router.push("/(dashboard)/(menu)/cards")} style={styles.notice} />
+        <PrimaryButton title="Go to Membership cards" variant="secondary" leftIcon="wallet-outline" onPress={() => router.push("/(dashboard)/(menu)/cards")} style={styles.notice} />
       ) : null}
 
       <ListSection title="Card for">

@@ -9,7 +9,7 @@ import { useBusinessAccess } from "@/hooks/useBusiness";
 import { useMyClients, useSetClientHidden } from "@/hooks/useClients";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useToastStore } from "@/stores/toastStore";
-import { canViewClients } from "@/utility/access";
+import { canViewMyClients } from "@/utility/access";
 import { clientActions, relationshipKey } from "@/utility/clientRules";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
@@ -31,7 +31,7 @@ export default function ClientsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []));
 
-  if (!canViewClients(user)) {
+  if (!canViewMyClients(user, userTypeCode)) {
     return <Screen hasHeader><Notice tone="warning" message="You don't have permission to view clients." /></Screen>;
   }
 

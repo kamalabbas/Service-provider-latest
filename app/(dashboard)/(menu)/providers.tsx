@@ -34,7 +34,7 @@ export default function ProvidersScreen() {
   const list = providers.data ?? [];
 
   return (
-    <Screen hasHeader title="My providers" subtitle="Businesses that accepted your inspection requests.">
+    <Screen hasHeader title="Tradespeople I've hired" subtitle="Businesses that accepted your inspection requests. Rate them or hide ones you no longer need.">
       <View style={styles.switchRow}>
         <ThemedText style={styles.switchLabel}>Include deleted businesses</ThemedText>
         <Switch value={includeArchived} onValueChange={setIncludeArchived} trackColor={{ true: tint, false: border }} accessibilityLabel="Include deleted businesses" />

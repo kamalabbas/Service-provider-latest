@@ -2686,27 +2686,42 @@ test('consumer success/settled callbacks cannot run after a newer operation begi
   assert.deepEqual(callbacks, []);
 });
 
-test('registration opens verification for that email, and verification returns to sign-in without a session', async () => {
-  const h = harness({ signedIn: false, saved: null }), callbacks = [];
+test('verification without remembered credentials returns to sign-in without a session', async () => {
+  const h = harness({ signedIn: false, saved: null });
   h.setAdapter(async config => h.ok(config, emptyBody));
+  const auth = h.auth();
+  // A six-digit string code keeps its leading zero.
+  await auth.verifyEmailMutation.mutateAsync({ email: authPayload.email, code: '012345' });
+  assert.equal(h.requests[0].url, '/api/auth/verify-email');
+  assert.deepEqual(JSON.parse(h.requests[0].data), { email: authPayload.email, code: '012345' });
+  assert.equal(h.requests.length, 1, 'No sign-in attempt without the password');
+  assert.equal(h.store.getState().accessToken, null);
+  assert.equal(h.disk, null);
+  assert.deepEqual(plain(h.navigation[0]), ['replace', { pathname: '/(auth)', params: { email: authPayload.email } }]);
+  assert.deepEqual(h.toasts, [['Email verified. Please sign in.', 'success']]);
+});
+
+test('registration opens verification, and verifying signs straight in with the remembered password', async () => {
+  const h = harness({ signedIn: false, saved: null }), callbacks = [];
+  h.setAdapter(async config => h.ok(config, config.url.endsWith('/mobile/sign-in') ? responseFor(account('A')).data : emptyBody));
   const auth = h.auth();
   const registration = await auth.registerMutation.mutateAsync(authPayload, {
     onSuccess: (data, variables) => callbacks.push([data.data, variables.email]),
   });
   assert.equal(h.requests[0].url, '/api/auth/register');
   assert.equal(registration.data, null);
-  assert.equal(h.store.getState().accessToken, null);
+  assert.equal(h.store.getState().accessToken, null, 'Registration alone does not sign in');
   assert.deepEqual(plain(h.navigation), [['push', { pathname: '/(auth)/otp-register', params: { email: authPayload.email } }]]);
   assert.deepEqual(callbacks, [[null, authPayload.email]]);
-  // A six-digit string code keeps its leading zero.
   await auth.verifyEmailMutation.mutateAsync({ email: authPayload.email, code: '012345' });
   assert.equal(h.requests[1].url, '/api/auth/verify-email');
-  assert.deepEqual(JSON.parse(h.requests[1].data), { email: authPayload.email, code: '012345' });
-  assert.equal(h.store.getState().accessToken, null);
-  assert.equal(h.disk, null);
-  assert.deepEqual(plain(h.navigation[1]), ['replace', { pathname: '/(auth)', params: { email: authPayload.email } }]);
-  assert.deepEqual(h.toasts, [['Email verified. Please sign in.', 'success']]);
-  assert.equal(h.registrations.length, 0);
+  // Sign-in starts on a timer after verification settles; wait in real time.
+  for (let i = 0; i < 100 && h.store.getState().accessToken === null; i++) await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(h.requests[2].url, '/api/auth/mobile/sign-in');
+  assert.deepEqual(JSON.parse(h.requests[2].data), { email: authPayload.email, password: authPayload.password });
+  assert.equal(h.store.getState().accessToken, jwt('A-access'));
+  assert.deepEqual(h.toasts[0], ['Email verified. Signing you in…', 'success']);
+  assert.equal(h.requests.filter(request => request.url.endsWith('/mobile/sign-in')).length, 1, 'Signed in once');
 });
 
 test('a profile-setup sign-in publishes a session that requires initial setup', async () => {
