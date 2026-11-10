@@ -34,7 +34,7 @@ export default function MenuLayout() {
       <Stack.Screen name="cards" options={{ title: "Membership cards" }} />
       <Stack.Screen name="card" options={{ title: "Card" }} />
       <Stack.Screen name="clients" options={{ title: "My clients" }} />
-      <Stack.Screen name="providers" options={{ title: "Tradespeople I've hired" }} />
+      <Stack.Screen name="providers" options={{ title: "My providers" }} />
       <Stack.Screen name="prices" options={{ title: "My prices" }} />
       <Stack.Screen name="price" options={{ title: "Price" }} />
       <Stack.Screen name="price-submit" options={{ title: "Add a price" }} />

@@ -130,7 +130,7 @@ export default function MenuScreen() {
             <ListRow icon="people-circle-outline" title="My clients" subtitle="Customers your business has worked for"
               onPress={() => router.push("/(dashboard)/(menu)/clients")} />
           ) : null}
-          <ListRow icon="storefront-outline" title="Tradespeople I've hired" subtitle="Businesses that have inspected or quoted for you"
+          <ListRow icon="storefront-outline" title="My providers" subtitle="Businesses that have worked for you"
             onPress={() => router.push("/(dashboard)/(menu)/providers")} />
         </ListSection>
       ) : null}
