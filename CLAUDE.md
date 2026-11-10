@@ -1,6 +1,6 @@
 # Service Provider app
 
-React Native / Expo (SDK 54, Expo Router 6) Android + iOS app for the Service
+React Native / Expo (SDK 58, Expo Router 58, React Native 0.88) Android + iOS app for the Service
 Provider backend. Branding follows the AUETE logo (green `#1A543C`).
 
 ## Implementing BRDs

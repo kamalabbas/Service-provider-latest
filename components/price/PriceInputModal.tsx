@@ -6,7 +6,7 @@ import { useThemeColor } from "@/hooks/useThemeColor";
 import type { PriceRange } from "@/interfaces/providerPrice.interface";
 import { audToCents, centsToAud, formatAud } from "@/utility/apiValues";
 import { priceRangeError } from "@/utility/providerPriceRules";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 type PriceInputModalProps = {
@@ -28,12 +28,15 @@ export function PriceInputModal({ visible, title, confirmLabel, item, initialPri
   const tileBackground = useThemeColor({}, "muted");
   const tint = useThemeColor({}, "tint");
 
-  useEffect(() => {
+  // Reset when the dialog opens: adjust state during render rather than in an effect.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
     if (visible) {
       setValue(initialPrice == null ? "" : initialPrice.toFixed(2));
       setError(undefined);
     }
-  }, [visible, initialPrice]);
+  }
 
   const confirm = () => {
     const problem = item ? priceRangeError(value, item) : null;

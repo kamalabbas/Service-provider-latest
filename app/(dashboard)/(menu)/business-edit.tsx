@@ -17,7 +17,7 @@ import { referenceOptions } from "@/utility/referenceOptions";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useRouter } from "expo-router";
 import { ComponentProps } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 
 // Guide 05: create (POST, only when none is active) or edit (PUT) the business.
 export default function BusinessEditScreen() {
@@ -42,13 +42,13 @@ function BusinessForm({ business }: { business: Business | null }) {
   const { refetch } = useMyBusiness();
   const save = useSaveMyBusiness(Boolean(business));
 
-  const { control, handleSubmit, setError, setValue, watch, formState: { errors } } = useForm<BusinessFormValues>({
+  const { control, handleSubmit, setError, setValue, formState: { errors } } = useForm<BusinessFormValues>({
     resolver: yupResolver(businessSchema),
     defaultValues: businessFormValues(business),
   });
   // A retired saved region stays visible while unchanged; new choices must be active.
   const regionOptions = referenceOptions(regions.data, business?.regionCode);
-  const [latitude, longitude] = watch(["latitude", "longitude"]);
+  const [latitude, longitude] = useWatch({ control, name: ["latitude", "longitude"] });
 
   const onSubmit = (values: BusinessFormValues) => {
     if (save.isPending) return;

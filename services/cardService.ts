@@ -1,7 +1,6 @@
 import {
   AdminCardActionRequest,
   AdminCardListFilters,
-  Card,
   CardListFilters,
   CardPageResponse,
   CardResponse,

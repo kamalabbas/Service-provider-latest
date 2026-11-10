@@ -24,7 +24,7 @@ import {
 import { referenceLabel, referenceOptions } from "@/utility/referenceOptions";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { PropsWithChildren } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { StyleSheet, Switch, View } from "react-native";
 
 type ProfileFormProps = {
@@ -62,11 +62,11 @@ export function ProfileForm({ profile, userTypeCode, submitLabel, onSaved }: Pro
   const { refetch } = useMyProfile();
   const save = useSaveMyProfile();
 
-  const { control, handleSubmit, setError, watch, formState: { errors } } = useForm<ProfileFormValues>({
+  const { control, handleSubmit, setError, formState: { errors } } = useForm<ProfileFormValues>({
     resolver: yupResolver(profileSchema(userTypeCode)),
     defaultValues: profileFormValues(profile),
   });
-  const samePostal = watch("isPostalSameAsAddress");
+  const samePostal = useWatch({ control, name: "isPostalSameAsAddress" });
 
   // Retired saved codes stay visible while unchanged; they can't be chosen anew.
   const regionOptions = referenceOptions(regions.data, [profile?.regionCode ?? "", profile?.isPostalSameAsAddress ? "" : profile?.postalRegionCode ?? ""]);

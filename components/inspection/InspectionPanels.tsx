@@ -185,7 +185,12 @@ export function ReasonModal({ visible, title, message, confirmLabel, isLoading, 
   onConfirm: (reason: string) => void; onCancel: () => void;
 }) {
   const [reason, setReason] = useState("");
-  useEffect(() => { if (visible) setReason(""); }, [visible]);
+  // Clear the reason each time the dialog opens (state adjusted during render, not in an effect).
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) setReason("");
+  }
   return (
     <ConfirmModal
       visible={visible}

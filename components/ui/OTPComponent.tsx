@@ -93,7 +93,8 @@ export function OTPComponent({ isPending, email, onSubmit, reSendOtp, submitLabe
   }, []);
 
   const canResend = !resendDisabled && !!process.env.EXPO_PUBLIC_BASE_URL;
-  const counting = resendDisabled && resendInterval.current;
+  // The countdown runs exactly while resending is disabled.
+  const counting = resendDisabled;
 
   return (
     <View style={styles.container}>

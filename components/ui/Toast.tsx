@@ -2,7 +2,7 @@ import { Radius, Shadow, Spacing, Typography } from '@/constants/Theme';
 import { useThemeColor } from '@/hooks/useThemeColor';
 import { useToastStore } from '@/stores/toastStore';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Animated, Linking, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -40,8 +40,9 @@ export const Toast: React.FC<ToastProps> = ({ message, type = 'error', visible, 
     info: useThemeColor({}, 'primaryLight'),
   }[type];
 
-  const translateY = useRef(new Animated.Value(-24)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
+  // Created once per mount (state initialisers, so render never reads a ref).
+  const [translateY] = useState(() => new Animated.Value(-24));
+  const [opacity] = useState(() => new Animated.Value(0));
 
   const dismiss = useCallback(() => {
     Animated.parallel([
@@ -64,17 +65,15 @@ export const Toast: React.FC<ToastProps> = ({ message, type = 'error', visible, 
     return () => clearTimeout(timer);
   }, [visible, persist, toastId, dismiss, opacity, translateY]);
 
-  // Swipe up to dismiss. The responder is created once, so read the latest dismiss.
-  const dismissRef = useRef(dismiss);
-  dismissRef.current = dismiss;
-  const panResponder = useRef(PanResponder.create({
+  // Swipe up to dismiss. dismiss is memoised, so the responder is effectively created once.
+  const panResponder = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 6,
     onPanResponderMove: (_, gesture) => translateY.setValue(Math.min(0, gesture.dy)),
     onPanResponderRelease: (_, gesture) => {
-      if (gesture.dy < -24 || gesture.vy < -0.5) dismissRef.current();
+      if (gesture.dy < -24 || gesture.vy < -0.5) dismiss();
       else Animated.spring(translateY, { toValue: 0, useNativeDriver: true }).start();
     },
-  })).current;
+  }), [dismiss, translateY]);
 
   if (!visible) return null;
 

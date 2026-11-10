@@ -5,13 +5,17 @@ import { useThemeColor } from "@/hooks/useThemeColor";
 import { Card } from "@/interfaces/card.interface";
 import { cardValidityText, isCardUsable } from "@/utility/cardRules";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 
 const date = (value: string) => new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
 
 // Guide 11-b: a card drawn from data. The API has no card image, PDF or public QR link.
 // Height follows the content (no fixed aspect ratio), so nothing overflows on small screens.
-export function CardFace({ card, now = Date.now() }: { card: Card; now?: number }) {
+export function CardFace({ card, now: nowProp }: { card: Card; now?: number }) {
+  // Validity is judged at mount time unless a time is given (render stays pure).
+  const [mountedAt] = useState(() => Date.now());
+  const now = nowProp ?? mountedAt;
   const primary = useThemeColor({}, "primary");
   const onPrimary = useThemeColor({}, "buttonText");
   const usable = isCardUsable(card, now);

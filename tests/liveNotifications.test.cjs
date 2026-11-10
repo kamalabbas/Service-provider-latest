@@ -1,6 +1,6 @@
 // Run with: node --test tests/*.test.cjs
 // Guide 18: notice validation, event routing, deep links, dedup across transports and the hub lifecycle.
-/* global __dirname */
+/* global __dirname, Buffer */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');

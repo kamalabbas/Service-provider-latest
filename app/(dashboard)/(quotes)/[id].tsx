@@ -27,7 +27,7 @@ export default function QuoteScreen() {
   const showToast = useToastStore((state) => state.showToast);
   const { data: quote, isLoading, refetch } = useQuote(quoteId);
   const actions = useQuoteActions(quoteId ?? 0);
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   const [confirmAccept, setConfirmAccept] = useState(false);
   const [prompt, setPrompt] = useState<"reject" | "withdraw" | null>(null);
   const [opening, setOpening] = useState(false);

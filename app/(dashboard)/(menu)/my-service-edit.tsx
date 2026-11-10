@@ -21,7 +21,7 @@ import { SERVICE_FIELDS, ServiceFormValues, allowedOccupationCodes, serviceFormV
 import { yupResolver } from "@hookform/resolvers/yup";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ComponentProps } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { StyleSheet } from "react-native";
 
 // Guide 07: create (POST) or edit (PUT) an active listing.
@@ -72,7 +72,7 @@ function ServiceForm({ listing, business, allowedOccupations }: ServiceFormProps
   const invalidateChoices = useInvalidateReferenceChoices();
   const save = useSaveMyService(listing?.id ?? null);
 
-  const { control, handleSubmit, setError, setValue, watch, formState: { errors } } = useForm<ServiceFormValues>({
+  const { control, handleSubmit, setError, setValue, formState: { errors } } = useForm<ServiceFormValues>({
     resolver: yupResolver(serviceSchema),
     // A new listing starts at the business location; the provider can change it.
     defaultValues: serviceFormValues(listing, listing ? null : business),
@@ -83,7 +83,7 @@ function ServiceForm({ listing, business, allowedOccupations }: ServiceFormProps
     : occupations.data?.filter((choice) => allowedOccupations.includes(choice.code));
   const occupationOptions = referenceOptions(occupationChoices, listing?.occupationCode);
   const regionOptions = referenceOptions(regions.data, listing?.regionCode);
-  const [latitude, longitude] = watch(["latitude", "longitude"]);
+  const [latitude, longitude] = useWatch({ control, name: ["latitude", "longitude"] });
 
   const applyBusinessLocation = () => {
     setValue("suburb", business.suburb);

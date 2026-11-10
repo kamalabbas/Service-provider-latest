@@ -55,8 +55,10 @@ export function LocationPicker({ label, value, onChange, error, helperText, loca
   };
 
   useEffect(() => {
+    // Only on first show; later locates are explicit. Reading the device location is an
+    // external sync; its loading flag is set as it starts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (locateOnMount && !value) locate();
-    // Only on first show; later locates are explicit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

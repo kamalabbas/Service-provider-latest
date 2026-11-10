@@ -1,7 +1,7 @@
 // Run with: node --test tests/*.test.cjs
 // Execute the real root layout and session modules with deterministic native
 // boundaries. The small hook runner models effects/cleanup; it is not a native renderer.
-/* global __dirname */
+/* global __dirname, Buffer */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -87,6 +87,9 @@ const routerImports = {
   './useSafeLayoutEffect': {},
   '../utils/stack': {},
   '../native-tabs/NativeBottomTabs/NativeTabTrigger': { isNativeTabTrigger: () => false },
+  // Expo Router 58 (SDK 58) paths: native tabs moved, and guard redirects live in GuardContext.
+  '../native-tabs/NativeTabTrigger': { isNativeTabTrigger: () => false },
+  './GuardContext': { normalizeRouteName: name => name, GuardContextProvider: () => null, useGuardRedirect: () => null },
 };
 function loadRouter(file) {
   if (routerModules.has(file)) return routerModules.get(file).exports;
@@ -294,7 +297,12 @@ function harness(options = {}) {
     setFonts: (loaded, error = null) => { fonts = [loaded, error]; },
     screens(instance) {
       const navigator = findElement(instance.tree, Stack) ?? findElement(instance.tree, Tabs);
-      const names = navigator ? Array.from(filterScreens(navigator.props.children).screens, screen => screen.name) : [];
+      // Expo Router 58 keeps guarded screens in the list and blocks them via guardedRedirects;
+      // only screens whose guard passes are reachable.
+      const filtered = navigator ? filterScreens(navigator.props.children) : null;
+      const names = filtered
+        ? Array.from(filtered.screens, screen => screen.name).filter(name => !filtered.guardedRedirects?.has(name))
+        : [];
       if (instance.file === 'app/_layout.tsx') {
         for (const name of names) assert.ok(rootRoutes.children.some(route => route.route === name), `Root screen ${name} must exist in Expo Router's discovered routes`);
       }

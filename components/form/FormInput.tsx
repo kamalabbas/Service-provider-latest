@@ -16,7 +16,7 @@ interface FormInputProps extends TextInputProps {
   helperText?: string;
 }
 
-export const FormInput = forwardRef<TextInput, FormInputProps>(
+export const FormInput = forwardRef<React.ComponentRef<typeof TextInput>, FormInputProps>(
   ({ label, error, labelStyle, style, secureTextEntry, showPasswordRule = true, leftIcon, helperText, onFocus, onBlur, ...props }, ref) => {
   const [showPassword, setShowPassword] = useState(false);
   const [focused, setFocused] = useState(false);

@@ -1,4 +1,3 @@
-import type { PriceCatalogueItem } from "@/interfaces/priceCatalogue.interface";
 import type { PriceItemRequestStatus, PriceRange, ProviderPrice } from "@/interfaces/providerPrice.interface";
 import type { User } from "@/interfaces/user.interface";
 import { BUSINESS_USER_TYPES, can } from "@/utility/access";

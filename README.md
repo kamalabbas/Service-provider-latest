@@ -252,7 +252,7 @@ Account access follows guide 01 (`/api/auth/register`, `/verify-email`, `/resend
 
 ## Route protection
 
-The installed Expo Router `6.0.24` / Expo SDK `54.0.35` supports [`Stack.Protected`](https://docs.expo.dev/router/advanced/protected/). The root stack declares authentication guards using the supported `guard` API and its default fallback. Disallowed groups are excluded from the navigator, and their entries are removed from history when access changes. No dependency upgrade or newer `redirectTo` API is used.
+The installed Expo Router `58` / Expo SDK `58` supports [`Stack.Protected`](https://docs.expo.dev/router/advanced/protected/). The root stack declares authentication guards using the supported `guard` API and its default fallback. Disallowed groups stay declared but are blocked (Expo Router 58 tracks them as guarded redirects), and their entries are removed from history when access changes. The newer `redirectTo` API isn't used.
 
 The shared Zustand selector `selectIsAuthenticated` requires both an in-memory access token and a known user. Stored refresh credentials or an unresolved user grant no dashboard access. `selectNeedsProfileSetup` additionally sends an authenticated session with `profileCompletionRequired` to `(setup)` instead of the dashboard. The existing session service remains responsible for establishing and persisting credentials. The root still renders no navigator until bootstrap settles and fonts load or fail. During cold restoration, an old in-memory token cannot bypass that startup gate.
 

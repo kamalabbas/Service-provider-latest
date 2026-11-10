@@ -1,4 +1,4 @@
-import type { CardDeliveryAddress, CardReplacementReason, CardSubjectType } from "./cardRequest.interface";
+import type { CardDeliveryAddress, CardSubjectType } from "./cardRequest.interface";
 import type { ApiPage, ApiResponse } from "./serviceProviderApi.interface";
 
 /** Guide 11-b. Status alone isn't proof of a usable card; see isValid and the timestamps. */

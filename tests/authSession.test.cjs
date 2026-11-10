@@ -1,6 +1,6 @@
 // Run with: node tests/authSession.test.cjs
 // Execute the real TypeScript modules with deferred native/network boundaries.
-/* global __dirname */
+/* global __dirname, Buffer */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
