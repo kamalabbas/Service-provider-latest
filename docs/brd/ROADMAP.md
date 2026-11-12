@@ -36,6 +36,7 @@ Status: ✅ done · 🔜 next · ⬜ not started · ⏸ blocked on a decision
 | 6 Communication | 16 Announcements | ✅ | 03 | 2 / 7 | `announcements.view`; admin SuperAdmin-only |
 | 8 Payments | 21 Payments and subscriptions (Stripe) | ✅ | 08, 11, 18 | 15 / 13 | `payments.view/.manage/.delete` (reads, card removal and stopping renewal: setup ok) |
 | 8 Payments | 22 Marketplace updates (discovery, paid cards, price lists) | ✅ | 07, 11, 13, 14, 21 | 6 new, 4 removed / 7 | Tradeperson-only providers; price list needs the paid benefit |
+| 8 Payments | 23 Annual access and eligibility changes (V040, `docs/2026-11-12-brd/`) | ✅ | 21, 22 | changed: annual terms, `/subscriptions/cancel` retired | Business: Tradeperson/Individual/Builder/Developer; provider features: Tradeperson |
 | 7 Administration | 19 Admin screens (admin routes of 03–17, 21, 22) | ⏸ | everything above | ~122 admin | SuperAdmin / delegated roles |
 
 Phase 1 order: **02 → 06 → 03 → 04**. Guide 04's form needs region/occupation

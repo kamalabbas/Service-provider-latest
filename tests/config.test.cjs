@@ -230,3 +230,22 @@ test("EAS worker checks reject missing/unknown context", () => {
     assert.match(cli(env, ["--eas"]).output, /known EAS_BUILD_PROFILE and EAS_BUILD_PLATFORM/);
   }
 });
+
+test("app links: an HTTPS origin adds verified /billing links for Android and iOS; unset adds none", t => {
+  const directory = fixture(t);
+  const plain = dynamic({}, directory).config;
+  assert.equal(plain.android.intentFilters, undefined);
+  assert.equal(plain.ios.associatedDomains, undefined);
+  const { config } = dynamic({ APP_LINK_ORIGIN: "https://app.example.test" }, directory);
+  assert.deepEqual(config.android.intentFilters, [{
+    action: "VIEW", autoVerify: true, data: [{ scheme: "https", host: "app.example.test", pathPrefix: "/billing" }], category: ["BROWSABLE", "DEFAULT"],
+  }]);
+  assert.deepEqual(config.ios.associatedDomains, ["applinks:app.example.test"]);
+  for (const value of ["http://app.example.test", "https://app.example.test/billing", "https://user:private@app.example.test", " https://app.example.test"]) {
+    assert.throws(() => dynamic({ APP_LINK_ORIGIN: value }, directory), error => {
+      assert.match(error.message, /APP_LINK_ORIGIN must be an absolute HTTPS origin/);
+      assert.equal(error.message.includes("private"), false);
+      return true;
+    });
+  }
+});

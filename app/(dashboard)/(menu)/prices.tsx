@@ -9,6 +9,7 @@ import { Spacing } from "@/constants/Theme";
 import { useBusinessAccess, useMyBusiness } from "@/hooks/useBusiness";
 import { PriceInputModal } from "@/components/price/PriceInputModal";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { usePaymentAccount } from "@/hooks/usePayments";
 import { useCurrentProviderPrices, useMyProviderPrices, useProviderPriceActions } from "@/hooks/useProviderPrices";
 import type { ProviderCurrentPrice } from "@/interfaces/providerPrice.interface";
 import { useToastStore } from "@/stores/toastStore";
@@ -36,6 +37,7 @@ export default function PricesScreen() {
   const border = useThemeColor({}, "borderColor");
   const thisYear = currentUtcYear();
   const [view, setView] = useState<"list" | "years">("list");
+  const account = usePaymentAccount();
   const [year, setYear] = useState(ALL);
   const [includeWithdrawn, setIncludeWithdrawn] = useState(true);
   const [includeArchived, setIncludeArchived] = useState(false);
@@ -67,6 +69,10 @@ export default function PricesScreen() {
         <PrimaryButton title="Suggest a new item" variant="secondary" leftIcon="bulb-outline" onPress={() => router.push("/(dashboard)/(menu)/price-requests")} />
       </View>
 
+      {/* Guide 23: prices (Guide defaults included) count in the public guide only with Provider Visibility. */}
+      {account.data && !account.data.hasProviderVisibility ? (
+        <Notice message="Your prices count toward the public price guide only while you're on the Provider plan. You can still set them now." style={styles.view} />
+      ) : null}
       <SegmentedControl options={VIEWS} value={view} onChange={setView} style={styles.view} />
 
       {view === "list" ? (

@@ -132,9 +132,9 @@ const user = (permissions, accessLevel = 'full', roles = []) => ({
 
 test('eligibility: business types plus each operation permission; no setup exception', () => {
   const all = user(['businesses.view', 'businesses.manage', 'businesses.delete']);
-  assert.equal(access.canViewOwnBusiness(all, 'tradeperson'), true);
-  // Guide 22: Tradeperson is the only provider type.
-  for (const type of ['builder', 'developer', 'individual', 'public_government_sector', null]) {
+  // Guide 23: a business is for Tradepeople, Individuals, Builders and Developers, never Government.
+  for (const type of ['tradeperson', 'individual', 'builder', 'developer']) assert.equal(access.canViewOwnBusiness(all, type), true, type);
+  for (const type of ['public_government_sector', 'unknown', null]) {
     assert.equal(access.canViewOwnBusiness(all, type), false, 'A type alone is not access, nor permission alone');
   }
   const viewOnly = user(['businesses.view']);

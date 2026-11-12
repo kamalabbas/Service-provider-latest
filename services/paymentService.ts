@@ -62,20 +62,21 @@ export const removeSavedCard = (cardId: string) => deleteData<ApiResponse<boolea
 
 const subscription = (body: SubscriptionPaymentRequest): SubscriptionPaymentRequest => {
   if (body.planCode !== "price_list" && body.planCode !== "provider") throw new Error("Choose a plan.");
-  if (body.consentAccepted !== true) throw new Error("Agree to the yearly charge before continuing.");
+  if (body.consentAccepted !== true) throw new Error("Agree to the payment before continuing.");
   return { ...base(body), planCode: body.planCode };
 };
 
+/**
+ * Guide 23: one payment for one year of access. The same endpoint buys a first year, renews in
+ * the final 30 days (extending from the current expiry), buys again after expiry, or prepays
+ * a lower plan for next year. There is no automatic renewal.
+ */
 export const startSubscriptionCheckout = (body: SubscriptionPaymentRequest) =>
   postData<SubscriptionPaymentRequest, PaymentOperationResponse>("/api/payments/subscriptions/checkout", subscription(body));
 
-/** Upgrade (prorated now) or downgrade (at renewal). */
-export const changeSubscriptionPlan = (body: SubscriptionPaymentRequest) =>
-  postData<SubscriptionPaymentRequest, PaymentOperationResponse>("/api/payments/subscriptions/change", subscription(body));
-
-/** Stops renewal; paid access continues to the end of the term. */
-export const cancelSubscriptionRenewal = (body: PaymentOperationRequest) =>
-  postData<PaymentOperationRequest, PaymentOperationResponse>("/api/payments/subscriptions/cancel", base(body));
+/** Guide 23: upgrades Price list to Provider for the rest of the term (prorated; may succeed at once for free). */
+export const upgradeSubscriptionPlan = (body: Omit<SubscriptionPaymentRequest, "planCode">) =>
+  postData<SubscriptionPaymentRequest, PaymentOperationResponse>("/api/payments/subscriptions/change", subscription({ ...body, planCode: "provider" }));
 
 /**
  * Books an inspection. A free confirmation may fund it without charging (consent can be false);

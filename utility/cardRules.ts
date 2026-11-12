@@ -1,7 +1,7 @@
 import type { Card, CardStatus } from "@/interfaces/card.interface";
 import type { CardReplacementReason } from "@/interfaces/cardRequest.interface";
 import type { User } from "@/interfaces/user.interface";
-import { BUSINESS_USER_TYPES, can } from "@/utility/access";
+import { PROVIDER_USER_TYPES, can } from "@/utility/access";
 
 export const CARD_STATUS_LABELS: Record<CardStatus, string> = {
   issued: "Issued",
@@ -31,7 +31,7 @@ const isOwner = (card: Pick<Card, "ownerUserId">, user?: User | null) => !!user?
 /** Employee cards also need employees.manage and a provider type; employees never sign in. */
 const canRequestReplacementFor = (card: Pick<Card, "subjectType">, user: User | null | undefined, userTypeCode?: string | null) =>
   card.subjectType === "employee"
-    ? !!userTypeCode && BUSINESS_USER_TYPES.includes(userTypeCode) && can(user, ["employees.manage", "card-requests.manage"])
+    ? !!userTypeCode && PROVIDER_USER_TYPES.includes(userTypeCode) && can(user, ["employees.manage", "card-requests.manage"])
     : can(user, ["card-requests.manage"]);
 
 export interface CardActions {

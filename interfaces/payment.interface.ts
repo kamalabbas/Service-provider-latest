@@ -25,16 +25,26 @@ export interface PaymentPlan {
   prices: PaymentPlanPrice[];
 }
 
+/**
+ * Guide 23: an application-managed annual access term, bought with a one-off payment (no
+ * automatic renewal). Renewal and upgrade actions follow canRenew / canUpgrade.
+ */
 export interface PaymentSubscription {
+  termId?: number | null;
   channel: string;
   planCode: PlanCode | string;
-  /** e.g. active, past_due, cancelled; display text comes from paymentRules. */
+  /** e.g. active, suspended (disputed), expired; display text comes from paymentRules. */
   status: string;
+  paidFromUtc?: string | null;
   paidUntilUtc?: string | null;
-  cancelAtPeriodEnd: boolean;
-  renewalOffRequired: boolean;
-  /** A downgrade waiting for the renewal date. */
-  pendingPlanCode?: string | null;
+  /** Manual renewal is open (the final 30 days, or after expiry). */
+  canRenew: boolean;
+  /** Price list → Provider for the rest of the term (prorated; free under AUD 0.50). */
+  canUpgrade: boolean;
+  /** One following term can be prepaid; it starts when the current one ends. */
+  upcomingPlanCode?: string | null;
+  upcomingStartsAtUtc?: string | null;
+  upcomingPaidUntilUtc?: string | null;
 }
 
 export interface PaymentBalance {
@@ -73,6 +83,12 @@ export interface PaymentOperation {
   /** Paid but the resource couldn't be created: an automatic full refund follows. */
   refundRequired: boolean;
   errorCode?: string | null;
+  /** Guide 23: what the operation charged (cents; 0 for a free upgrade) and the access it bought. */
+  amountMinor?: number | null;
+  planCode?: string | null;
+  accessStartsAtUtc?: string | null;
+  accessEndsAtUtc?: string | null;
+  refundStatus?: string | null;
   createdAtUtc: string;
   updatedAtUtc: string;
 }

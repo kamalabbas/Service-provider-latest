@@ -1,4 +1,5 @@
 import { VisibilityPrompt } from "@/components/business/VisibilityPrompt";
+import { Notice } from "@/components/ui/Notice";
 import { ActionTile } from "@/components/home/ActionTile";
 import { InspectionCard } from "@/components/inspection/InspectionCard";
 import { QuoteCard } from "@/components/quote/QuoteCard";
@@ -12,12 +13,14 @@ import { Radius, Shadow, Spacing } from "@/constants/Theme";
 import { useAnnouncements } from "@/hooks/useAnnouncements";
 import { useMyInspections } from "@/hooks/useInspections";
 import { useMyMember } from "@/hooks/useMembership";
+import { usePaymentAccount } from "@/hooks/usePayments";
 import { useMyProfile } from "@/hooks/useProfile";
 import { useMyQuotes } from "@/hooks/useQuotes";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useAuthStore } from "@/stores/authStore";
 import { canUseMembershipCards, canViewAnnouncements, canViewInspections, canViewQuotes, canViewServices, canViewSupport } from "@/utility/access";
 import { formatLocalTimestamp } from "@/utility/apiValues";
+import { renewalReminder } from "@/utility/paymentRules";
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useCallback, type ComponentProps } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
@@ -41,6 +44,8 @@ export default function HomeScreen() {
   // Waiting on someone: pending inspections and quotes, both sides.
   const pendingInspections = useMyInspections({ status: "pending" });
   const pendingQuotes = useMyQuotes({ status: "pending" });
+  const account = usePaymentAccount();
+  const reminder = renewalReminder(account.data);
   const recentInspections = useMyInspections({});
   const recentQuotes = useMyQuotes({});
   const announcements = useAnnouncements(RECENT);
@@ -85,6 +90,14 @@ export default function HomeScreen() {
       }
     >
       <VisibilityPrompt />
+
+      {/* Guide 23: annual access doesn't renew by itself; remind in the final 30 days. */}
+      {reminder ? (
+        <View style={styles.section}>
+          <Notice tone="warning" message={reminder} />
+          <PrimaryButton title="Renew in Billing" variant="secondary" size="md" leftIcon="refresh-outline" onPress={() => open("/(dashboard)/(menu)/billing")} style={styles.reminderButton} />
+        </View>
+      ) : null}
 
       {canViewServices(user) ? (
         <View style={[styles.hero, Shadow.card, { backgroundColor: primary }]}>
@@ -159,5 +172,6 @@ const styles = StyleSheet.create({
   heroCaption: { opacity: 0.85 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.md, marginBottom: Spacing.xl },
   section: { marginBottom: Spacing.xl },
+  reminderButton: { marginTop: Spacing.sm },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md },
 });

@@ -23,6 +23,20 @@ function validateHubUrl(value) {
   }
 }
 
+// Guide 23: Stripe returns to the HTTPS /billing page; with an origin set, Android App Links and
+// iOS Universal Links open that page in the app. The hosting team publishes the verification
+// files (/.well-known/assetlinks.json and apple-app-site-association) on that origin.
+function appLinkHost(value) {
+  if (value === undefined || value === "") return null;
+  let url;
+  try { url = new URL(value); } catch { /* Report only controlled configuration text. */ }
+  if (!url || value !== value.trim() || url.protocol !== 'https:' || !url.hostname || url.username || url.password ||
+      url.search || url.hash || url.pathname !== '/') {
+    throw new Error("APP_LINK_ORIGIN must be an absolute HTTPS origin without a path, credentials, query parameters, fragments, or surrounding whitespace.");
+  }
+  return url.hostname;
+}
+
 function resolveAppConfig(config, env, projectRoot) {
   const variant = env.APP_VARIANT === undefined ? "dev" : env.APP_VARIANT;
   if (!["dev", "preview", "production"].includes(variant)) {
@@ -30,6 +44,7 @@ function resolveAppConfig(config, env, projectRoot) {
   }
   validateApiUrl(env.EXPO_PUBLIC_BASE_URL);
   validateHubUrl(env.EXPO_PUBLIC_SIGNALR_URL);
+  const linkHost = appLinkHost(env.APP_LINK_ORIGIN);
   const isDev = variant === "dev";
   const devFile = "./google-services.dev.json";
   const googleServicesFile = env.GOOGLE_SERVICES_JSON ||
@@ -38,8 +53,24 @@ function resolveAppConfig(config, env, projectRoot) {
   return {
     ...config,
     name: isDev && !String(config.name).endsWith(" - Dev") ? `${config.name} - Dev` : config.name,
-    ios: { ...config.ios, bundleIdentifier: isDev ? `${config.ios.bundleIdentifier}.dev` : config.ios.bundleIdentifier },
-    android: { ...config.android, package: isDev ? `${config.android.package}.dev` : config.android.package, googleServicesFile },
+    ios: {
+      ...config.ios,
+      bundleIdentifier: isDev ? `${config.ios.bundleIdentifier}.dev` : config.ios.bundleIdentifier,
+      ...(linkHost ? { associatedDomains: [...(config.ios.associatedDomains ?? []), `applinks:${linkHost}`] } : {}),
+    },
+    android: {
+      ...config.android,
+      package: isDev ? `${config.android.package}.dev` : config.android.package,
+      googleServicesFile,
+      ...(linkHost ? {
+        intentFilters: [...(config.android.intentFilters ?? []), {
+          action: "VIEW",
+          autoVerify: true,
+          data: [{ scheme: "https", host: linkHost, pathPrefix: "/billing" }],
+          category: ["BROWSABLE", "DEFAULT"],
+        }],
+      } : {}),
+    },
     extra: { ...config.extra, appVariant: variant },
   };
 }

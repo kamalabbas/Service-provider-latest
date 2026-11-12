@@ -8,7 +8,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Spacing } from "@/constants/Theme";
 import { useBusinessAccess, useMyBusiness } from "@/hooks/useBusiness";
 import { useMyServices } from "@/hooks/useServices";
-import { canManageOwnServices, canViewServices } from "@/utility/access";
+import { canManageOwnServices, canViewOwnServices } from "@/utility/access";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { StyleSheet } from "react-native";
@@ -26,8 +26,8 @@ export default function MyServicesScreen() {
   const { data: services = [], isLoading } = useMyServices();
   const [filter, setFilter] = useState<"active" | "archived">("active");
 
-  if (!canViewServices(user)) {
-    return <Screen hasHeader><Notice tone="warning" message="You don't have permission to view services." /></Screen>;
+  if (!member.isLoading && !canViewOwnServices(user, userTypeCode)) {
+    return <Screen hasHeader><Notice tone="warning" message="My services is for tradespeople." /></Screen>;
   }
   if (member.isLoading || businessLoading || isLoading) {
     return <Screen hasHeader><Loader visible overlay={false} message="Loading your services…" /></Screen>;

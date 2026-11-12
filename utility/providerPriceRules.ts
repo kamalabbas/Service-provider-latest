@@ -1,6 +1,6 @@
 import type { PriceItemRequestStatus, PriceRange, ProviderPrice } from "@/interfaces/providerPrice.interface";
 import type { User } from "@/interfaces/user.interface";
-import { BUSINESS_USER_TYPES, can } from "@/utility/access";
+import { PROVIDER_USER_TYPES, can } from "@/utility/access";
 import { audToCents } from "@/utility/apiValues";
 import * as yup from "yup";
 
@@ -16,7 +16,7 @@ export const PRICE_REQUEST_STATUS_LABELS: Record<PriceItemRequestStatus, string>
 
 /** Writes need a provider type plus the operation's permission; history visibility isn't eligibility. */
 export const canWriteProviderPrices = (user: User | null | undefined, userTypeCode?: string | null) =>
-  !!userTypeCode && BUSINESS_USER_TYPES.includes(userTypeCode) && can(user, ["prices.manage"]);
+  !!userTypeCode && PROVIDER_USER_TYPES.includes(userTypeCode) && can(user, ["prices.manage"]);
 
 /** The latest year for its business and item among the rows loaded (the server confirms). */
 export const isLatestRow = (row: Pick<ProviderPrice, "id" | "businessId" | "itemId" | "calendarYear">, rows: readonly Pick<ProviderPrice, "id" | "businessId" | "itemId" | "calendarYear">[]) =>
@@ -40,7 +40,7 @@ export function providerPriceActions(
   now = Date.now(),
 ): ProviderPriceActions {
   const owner = !!user?.id && String(row.providerUserId) === user.id;
-  const eligible = owner && !row.businessArchivedAtUtc && !!userTypeCode && BUSINESS_USER_TYPES.includes(userTypeCode);
+  const eligible = owner && !row.businessArchivedAtUtc && !!userTypeCode && PROVIDER_USER_TYPES.includes(userTypeCode);
   const current = row.calendarYear === currentUtcYear(now);
   const withdrawn = !!row.withdrawnAtUtc;
   const retired = row.itemStatus === "retired";

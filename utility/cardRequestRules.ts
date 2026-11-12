@@ -1,7 +1,7 @@
 import type { CardDeliveryAddress, CardRequest, CardRequestStatus } from "@/interfaces/cardRequest.interface";
 import type { Profile } from "@/interfaces/profile.interface";
 import type { User } from "@/interfaces/user.interface";
-import { BUSINESS_USER_TYPES, can } from "@/utility/access";
+import { PROVIDER_USER_TYPES, can } from "@/utility/access";
 import * as yup from "yup";
 
 /** The API's "accepted" is shown as "Approved". */
@@ -14,11 +14,11 @@ export const CARD_REQUEST_STATUS_LABELS: Record<CardRequestStatus, string> = {
 
 /** Personal card: membership cards are a tradesperson feature, with card-requests.manage. */
 export const canRequestPersonalCard = (user: User | null | undefined, userTypeCode?: string | null) =>
-  !!userTypeCode && BUSINESS_USER_TYPES.includes(userTypeCode) && can(user, ["card-requests.manage"]);
+  !!userTypeCode && PROVIDER_USER_TYPES.includes(userTypeCode) && can(user, ["card-requests.manage"]);
 
 /** Employee card: an eligible provider with both employees.manage and card-requests.manage. */
 export const canRequestEmployeeCard = (user: User | null | undefined, userTypeCode?: string | null) =>
-  !!userTypeCode && BUSINESS_USER_TYPES.includes(userTypeCode) && can(user, ["employees.manage", "card-requests.manage"]);
+  !!userTypeCode && PROVIDER_USER_TYPES.includes(userTypeCode) && can(user, ["employees.manage", "card-requests.manage"]);
 
 export interface CardRequestActions {
   editAddress: boolean;

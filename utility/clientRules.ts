@@ -1,6 +1,6 @@
 import type { ClientRelationship } from "@/interfaces/client.interface";
 import type { User } from "@/interfaces/user.interface";
-import { BUSINESS_USER_TYPES, can } from "@/utility/access";
+import { PROVIDER_USER_TYPES, can } from "@/utility/access";
 
 export interface ClientActions {
   hide: boolean;
@@ -13,7 +13,7 @@ export interface ClientActions {
  */
 export function clientActions(relationship: Pick<ClientRelationship, "isHidden" | "providerUserId">, user: User | null | undefined, userTypeCode?: string | null): ClientActions {
   const provider = !!user?.id && String(relationship.providerUserId) === user.id;
-  const eligible = !!userTypeCode && BUSINESS_USER_TYPES.includes(userTypeCode);
+  const eligible = !!userTypeCode && PROVIDER_USER_TYPES.includes(userTypeCode);
   const editable = provider && eligible;
   return {
     hide: editable && !relationship.isHidden && can(user, ["clients.delete"]),

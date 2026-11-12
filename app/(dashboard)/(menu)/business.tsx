@@ -11,7 +11,7 @@ import { Spacing } from "@/constants/Theme";
 import { useArchiveMyBusiness, useBusinessAccess, useMyBusiness, useUploadMyBusinessPicture } from "@/hooks/useBusiness";
 import { useReferenceChoices } from "@/hooks/useReferenceChoices";
 import { useToastStore } from "@/stores/toastStore";
-import { BUSINESS_USER_TYPES, canArchiveOwnBusiness, canManageOwnBusiness, canViewOwnBusiness } from "@/utility/access";
+import { BUSINESS_OWNER_TYPES, canArchiveOwnBusiness, canManageOwnBusiness, canViewOwnBusiness } from "@/utility/access";
 import { formatRegistrationNumber } from "@/utility/businessForm";
 import { referenceLabel } from "@/utility/referenceOptions";
 import { useRouter } from "expo-router";
@@ -38,8 +38,8 @@ export default function BusinessScreen() {
   if (member.isLoading || isLoading) {
     return <Screen hasHeader><Loader visible overlay={false} message="Loading your business…" /></Screen>;
   }
-  if (!userTypeCode || !BUSINESS_USER_TYPES.includes(userTypeCode)) {
-    return <Screen hasHeader><Notice message="Business details are for tradespeople. Other members can find and request services from the Find tab." /></Screen>;
+  if (!userTypeCode || !BUSINESS_OWNER_TYPES.includes(userTypeCode)) {
+    return <Screen hasHeader><Notice message="Business details are for tradespeople, individuals, builders and developers." /></Screen>;
   }
   if (!canViewOwnBusiness(user, userTypeCode)) {
     return <Screen hasHeader><Notice tone="warning" message="You don't have permission to view business details." /></Screen>;

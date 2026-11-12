@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDeactivateMyAccount, useMyMember } from "@/hooks/useMembership";
 import { useMyProfile } from "@/hooks/useProfile";
 import { useToastStore } from "@/stores/toastStore";
-import { canDeactivateOwnAccount, canUseMembershipCards, canUseMyPrices, canViewAnnouncements, canViewClients, canViewMyClients, canViewEmployees, canViewOwnBusiness, canViewOwnProfile, canViewPayments, canViewServices, canViewSupport } from "@/utility/access";
+import { canDeactivateOwnAccount, canUseMembershipCards, canUseMyPrices, canViewAnnouncements, canViewClients, canViewMyClients, canViewEmployees, canViewOwnBusiness, canViewOwnProfile, canViewPayments, canViewOwnServices, canViewSupport } from "@/utility/access";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useAuthStore } from "@/stores/authStore";
 import { ThemePreference, useThemeStore } from "@/stores/theme";
@@ -105,7 +105,7 @@ export default function MenuScreen() {
             subtitle="Name, ABN, address and picture"
             onPress={() => router.push("/(dashboard)/(menu)/business")}
           />
-          {canViewServices(user) ? (
+          {canViewOwnServices(user, member?.userTypeCode) ? (
             <ListRow
               icon="construct-outline"
               title="My services"

@@ -46,23 +46,29 @@ export const canEditOwnProfile = (user?: User | null) => can(user, ["profiles.ma
 /** Target-user profile routes are SuperAdmin-only (full session). */
 export const canManageUserProfiles = (user?: User | null) => isAdministrator(grantsOf(user));
 
-// Guide 05 / BRD 19 (guide 22): Tradeperson is the only provider type. Only they manage a
-// business, services, employees and provider prices; everyone else requests services. Each
+// Guide 23 (V040): a business is for Tradepeople, Individuals, Builders and Developers (never
+// Government). Services, employees, My prices and membership cards are Tradeperson-only. Each
 // operation still needs its own permission. Full access only (no setup exception).
-export const BUSINESS_USER_TYPES: readonly string[] = ["tradeperson"];
-const businessEligible = (userTypeCode?: string | null) => !!userTypeCode && BUSINESS_USER_TYPES.includes(userTypeCode);
+export const BUSINESS_OWNER_TYPES: readonly string[] = ["tradeperson", "individual", "builder", "developer"];
+export const PROVIDER_USER_TYPES: readonly string[] = ["tradeperson"];
+const businessOwnerEligible = (userTypeCode?: string | null) => !!userTypeCode && BUSINESS_OWNER_TYPES.includes(userTypeCode);
+/** Tradeperson-only features: services, employees, provider prices, clients and cards. */
+const businessEligible = (userTypeCode?: string | null) => !!userTypeCode && PROVIDER_USER_TYPES.includes(userTypeCode);
 export const canViewOwnBusiness = (user: User | null | undefined, userTypeCode?: string | null) =>
-  businessEligible(userTypeCode) && can(user, ["businesses.view"]);
+  businessOwnerEligible(userTypeCode) && can(user, ["businesses.view"]);
 export const canManageOwnBusiness = (user: User | null | undefined, userTypeCode?: string | null) =>
-  businessEligible(userTypeCode) && can(user, ["businesses.manage"]);
+  businessOwnerEligible(userTypeCode) && can(user, ["businesses.manage"]);
 export const canArchiveOwnBusiness = (user: User | null | undefined, userTypeCode?: string | null) =>
-  businessEligible(userTypeCode) && can(user, ["businesses.delete"]);
+  businessOwnerEligible(userTypeCode) && can(user, ["businesses.delete"]);
 /** Admin business routes are SuperAdmin-only (full session). */
 export const canManageBusinessesAsAdmin = (user?: User | null) => isAdministrator(grantsOf(user));
 
 // Guide 07: services and discovery. Reads need services.view; publishing also needs an
 // eligible type (and, checked by the screen, an active business); archival needs services.delete.
 export const canViewServices = (user?: User | null) => can(user, ["services.view"]);
+/** "My services" (the provider's own listings) is a Tradeperson screen; search is for everyone. */
+export const canViewOwnServices = (user: User | null | undefined, userTypeCode?: string | null) =>
+  businessEligible(userTypeCode) && canViewServices(user);
 export const canManageOwnServices = (user: User | null | undefined, userTypeCode?: string | null) =>
   businessEligible(userTypeCode) && can(user, ["services.manage"]);
 export const canArchiveOwnServices = (user: User | null | undefined, userTypeCode?: string | null) =>

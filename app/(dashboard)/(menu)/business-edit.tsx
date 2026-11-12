@@ -10,7 +10,7 @@ import { useInvalidateReferenceChoices, useReferenceChoices } from "@/hooks/useR
 import { Business } from "@/interfaces/business.interface";
 import { mapApiValidation, toAppError } from "@/services/apiError";
 import { useToastStore } from "@/stores/toastStore";
-import { canManageOwnBusiness } from "@/utility/access";
+import { canManageOwnBusiness, canManageOwnServices } from "@/utility/access";
 import { parseCoordinates } from "@/utility/coordinates";
 import { BUSINESS_FIELDS, BusinessFormValues, businessFormValues, businessSchema, toSaveBusinessRequest } from "@/utility/businessForm";
 import { referenceOptions } from "@/utility/referenceOptions";
@@ -40,6 +40,7 @@ function BusinessForm({ business }: { business: Business | null }) {
   const regions = useReferenceChoices("regions");
   const invalidateChoices = useInvalidateReferenceChoices();
   const { refetch } = useMyBusiness();
+  const { user, userTypeCode } = useBusinessAccess();
   const save = useSaveMyBusiness(Boolean(business));
 
   const { control, handleSubmit, setError, setValue, formState: { errors } } = useForm<BusinessFormValues>({
@@ -57,10 +58,13 @@ function BusinessForm({ business }: { business: Business | null }) {
         if (business) {
           showToast("Your business has been updated.", "success");
           router.back();
-        } else {
-          // A new business isn't searchable until it has a service: go straight to adding one.
+        } else if (canManageOwnServices(user, userTypeCode)) {
+          // A tradesperson's new business isn't searchable until it has a service: add one next.
           showToast("Your business has been added. Now add a service so customers can find you.", "success");
           router.replace("/(dashboard)/(menu)/my-service-edit");
+        } else {
+          showToast("Your business has been added.", "success");
+          router.back();
         }
       },
       onError: (error) => {

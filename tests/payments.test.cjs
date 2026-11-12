@@ -84,13 +84,14 @@ test('member routes: account, plans, cards, operations and history', async () =>
 
 test('charging needs a request ID and explicit consent; plans are exact codes', async () => {
   await service.startSubscriptionCheckout({ requestId: ID, consentAccepted: true, planCode: 'provider' });
-  await service.changeSubscriptionPlan({ requestId: ID, consentAccepted: true, planCode: 'price_list' });
-  await service.cancelSubscriptionRenewal({ requestId: ID, consentAccepted: true });
+  await service.upgradeSubscriptionPlan({ requestId: ID, consentAccepted: true });
   await service.setupSavedCard({ requestId: ID, consentAccepted: true });
   assert.deepEqual(plain(calls).map(call => `${call.method} ${call.url}`), [
-    'post /api/payments/subscriptions/checkout', 'post /api/payments/subscriptions/change', 'post /api/payments/subscriptions/cancel', 'post /api/payments/cards/setup',
+    'post /api/payments/subscriptions/checkout', 'post /api/payments/subscriptions/change', 'post /api/payments/cards/setup',
   ]);
   assert.deepEqual(plain(calls[0].body), { requestId: ID, consentAccepted: true, planCode: 'provider' });
+  assert.deepEqual(plain(calls[1].body), { requestId: ID, consentAccepted: true, planCode: 'provider' }, 'Upgrade is always to Provider');
+  assert.equal(service.cancelSubscriptionRenewal, undefined, 'Guide 23: no renewal cancellation; terms are one-off payments');
   assert.throws(() => service.startSubscriptionCheckout({ requestId: ID, consentAccepted: false, planCode: 'provider' }), /Agree/);
   assert.throws(() => service.startSubscriptionCheckout({ requestId: ID, consentAccepted: true, planCode: 'gold' }), /Choose a plan/);
   assert.throws(() => service.setupSavedCard({ requestId: ID, consentAccepted: false }), /Agree/);
@@ -157,20 +158,40 @@ test('money in cents: formatted as AUD including zero', () => {
 
 const plan = (code, overrides = {}) => ({ code, name: code, description: '', isAvailable: true, isEligible: true,
   prices: [{ id: 1, channel: 'stripe', amountMinor: code === 'provider' ? 5000 : 100, currency: 'AUD', isPublished: true, createdAtUtc: 'x' }], ...overrides });
-const sub = overrides => ({ subscription: { channel: 'stripe', planCode: 'price_list', status: 'active', cancelAtPeriodEnd: false, renewalOffRequired: false, paidUntilUtc: '2031-01-01T00:00:00Z', ...overrides } });
+const sub = overrides => ({ subscription: { termId: 601, channel: 'stripe', planCode: 'price_list', status: 'active', paidFromUtc: '2030-11-12T10:00:00Z',
+  paidUntilUtc: '2031-11-12T10:00:00Z', canRenew: false, canUpgrade: true, upcomingPlanCode: null, upcomingStartsAtUtc: null, upcomingPaidUntilUtc: null, ...overrides } });
 
-test('plans: subscribe, upgrade, downgrade, current; unpublished or ineligible are unavailable', () => {
+test('annual terms (guide 23): buy, renew in the last 30 days, upgrade, next year, one prepaid term', () => {
   assert.equal(rules.planAction(plan('provider'), { subscription: null }), 'subscribe');
-  assert.equal(rules.planAction(plan('provider'), sub()), 'upgrade');
-  assert.equal(rules.planAction(plan('price_list'), sub({ planCode: 'provider' })), 'downgrade');
-  assert.equal(rules.planAction(plan('price_list'), sub()), 'current');
+  assert.equal(rules.planAction(plan('provider'), sub()), 'upgrade', 'canUpgrade');
+  assert.equal(rules.planAction(plan('provider'), sub({ canUpgrade: false })), 'unavailable');
+  assert.equal(rules.planAction(plan('price_list'), sub()), 'current', 'Renewal not open yet');
+  assert.equal(rules.planAction(plan('price_list'), sub({ canRenew: true })), 'renew');
+  assert.equal(rules.planAction(plan('price_list'), sub({ planCode: 'provider', canRenew: true })), 'next_year', 'A lower plan for next year');
+  assert.equal(rules.planAction(plan('price_list'), sub({ planCode: 'provider' })), 'unavailable', 'Not before renewal opens');
+  assert.equal(rules.planAction(plan('price_list'), sub({ canRenew: true, upcomingPlanCode: 'price_list' })), 'prepaid', 'One following term only');
+  assert.equal(rules.planAction(plan('provider'), sub({ canRenew: true, upcomingPlanCode: 'price_list' })), 'unavailable');
   assert.equal(rules.planAction(plan('provider', { isEligible: false }), { subscription: null }), 'unavailable', 'Provider is for tradespeople');
   assert.equal(rules.planAction(plan('provider', { prices: [] }), { subscription: null }), 'unavailable');
   assert.equal(rules.planAction(plan('provider'), sub({ channel: 'app_store' })), 'unavailable', 'Another channel must end first');
-  assert.equal(rules.planAction(plan('provider'), sub({ status: 'cancelled' })), 'subscribe', 'An ended plan can be bought again');
-  assert.match(rules.subscriptionSummary(sub({ cancelAtPeriodEnd: true }).subscription), /Renewal is off/);
-  assert.match(rules.subscriptionSummary(sub({ pendingPlanCode: 'price_list' }).subscription, [plan('price_list', { name: 'Price list' })]), /Changes to Price list/);
-  assert.match(rules.subscriptionSummary(sub({ status: 'past_due' }).subscription), /paused/);
+  assert.equal(rules.planAction(plan('provider'), sub({ status: 'expired' })), 'subscribe', 'An expired plan can be bought again');
+  assert.match(rules.subscriptionSummary(sub().subscription), /renew automatically/);
+  assert.match(rules.subscriptionSummary(sub({ canRenew: true }).subscription), /renew now/);
+  assert.match(rules.subscriptionSummary(sub({ upcomingPlanCode: 'price_list', upcomingStartsAtUtc: '2031-11-12T10:00:00Z', upcomingPaidUntilUtc: '2032-11-12T10:00:00Z' }).subscription,
+    [plan('price_list', { name: 'Price list' })]), /Next year is paid: Price list/);
+  assert.match(rules.subscriptionSummary(sub({ status: 'suspended' }).subscription), /paused/);
+  assert.match(rules.subscriptionSummary(sub({ status: 'expired' }).subscription), /ended/);
+  assert.match(rules.renewalReminder(sub({ canRenew: true })), /Renew now/);
+  assert.equal(rules.renewalReminder(sub()), null);
+  assert.equal(rules.renewalReminder(sub({ canRenew: true, upcomingPlanCode: 'provider' })), null, 'Already prepaid');
+  assert.equal(rules.renewalReminder({ subscription: null }), null);
+});
+
+test('operation outcomes for annual access: until date, free upgrade, refunded activation', () => {
+  assert.match(rules.operationView({ status: 'succeeded', refundRequired: false, amountMinor: 0, accessEndsAtUtc: '2031-11-12T10:00:00Z' }).title, /free/);
+  assert.match(rules.operationView({ status: 'succeeded', refundRequired: false, amountMinor: 5000, accessEndsAtUtc: '2031-11-12T10:00:00Z' }).text, /access runs until/);
+  assert.match(rules.operationView({ status: 'succeeded', refundRequired: true, refundStatus: 'succeeded' }).text, /was refunded/);
+  assert.match(rules.operationView({ status: 'succeeded', refundRequired: true, refundStatus: 'processing' }).text, /being refunded/);
 });
 
 test('gates: reads and stopping renewal work during setup; buying needs full access', () => {
