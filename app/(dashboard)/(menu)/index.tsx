@@ -9,7 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useDeactivateMyAccount, useMyMember } from "@/hooks/useMembership";
 import { useMyProfile } from "@/hooks/useProfile";
 import { useToastStore } from "@/stores/toastStore";
-import { canDeactivateOwnAccount, canUseMembershipCards, canUseMyPrices, canViewAnnouncements, canViewClients, canViewMyClients, canViewEmployees, canViewOwnBusiness, canViewOwnProfile, canViewPayments, canViewOwnServices, canViewSupport } from "@/utility/access";
+import { canDeactivateOwnAccount, canViewPriceCatalogue, canUseMembershipCards, canUseMyPrices, canViewAnnouncements, canViewClients, canViewMyClients, canViewEmployees, canViewOwnBusiness, canViewOwnProfile, canViewPayments, canViewOwnServices, canViewSupport } from "@/utility/access";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import { useAuthStore } from "@/stores/authStore";
 import { ThemePreference, useThemeStore } from "@/stores/theme";
@@ -135,10 +135,17 @@ export default function MenuScreen() {
         </ListSection>
       ) : null}
 
-      {canUseMyPrices(user, member?.userTypeCode) ? (
+      {/* Everyone with access sees the shared price guide; only tradespeople have My prices. */}
+      {canViewPriceCatalogue(user) || canUseMyPrices(user, member?.userTypeCode) ? (
         <ListSection title="Pricing">
-          <ListRow icon="pricetags-outline" title="My prices" subtitle="Your price list and yearly prices"
-            onPress={() => router.push("/(dashboard)/(menu)/prices")} />
+          {canViewPriceCatalogue(user) ? (
+            <ListRow icon="pricetag-outline" title="Price guide" subtitle="Typical prices for common jobs"
+              onPress={() => router.push("/(dashboard)/(menu)/price-guide")} />
+          ) : null}
+          {canUseMyPrices(user, member?.userTypeCode) ? (
+            <ListRow icon="pricetags-outline" title="My prices" subtitle="Your price list and yearly prices"
+              onPress={() => router.push("/(dashboard)/(menu)/prices")} />
+          ) : null}
         </ListSection>
       ) : null}
 

@@ -161,3 +161,13 @@ export function renewalReminder(account: Pick<PaymentAccount, "subscription"> | 
   const until = term.paidUntilUtc ? new Date(term.paidUntilUtc).toLocaleDateString() : "soon";
   return `Your plan ends on ${until}. Renew now to keep your benefits.`;
 }
+
+/**
+ * Which plans a member is offered: tradespeople get Provider (it includes the price guide);
+ * everyone else gets Price list. A plan the member already holds or prepaid stays visible.
+ */
+export function plansForMember(plans: readonly PaymentPlan[], userTypeCode: string | null | undefined, subscription?: PaymentSubscription | null): PaymentPlan[] {
+  const offered: PlanCode = userTypeCode === "tradeperson" ? "provider" : "price_list";
+  const held = [subscription?.planCode, subscription?.upcomingPlanCode].filter(Boolean);
+  return plans.filter((plan) => plan.code === offered || held.includes(plan.code));
+}

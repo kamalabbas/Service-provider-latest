@@ -9,6 +9,7 @@ import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { Screen } from "@/components/ui/Screen";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { Radius, Spacing } from "@/constants/Theme";
+import { useBusinessAccess } from "@/hooks/useBusiness";
 import { usePaymentAccount, usePaymentFlow, usePaymentPlans, useSavedCardActions, useSavedCards } from "@/hooks/usePayments";
 import { useThemeColor } from "@/hooks/useThemeColor";
 import type { PaymentOperation, PaymentPlan, PlanCode, SavedCard } from "@/interfaces/payment.interface";
@@ -17,7 +18,7 @@ import { setupSavedCard, startSubscriptionCheckout, upgradeSubscriptionPlan } fr
 import { useAuthStore } from "@/stores/authStore";
 import { useToastStore } from "@/stores/toastStore";
 import { canDeletePayments, canManagePayments, canViewPayments } from "@/utility/access";
-import { formatMinor, planAction, planPrice, renewalReminder, SUBSCRIPTION_STATUS_LABELS, subscriptionSummary, type PlanAction } from "@/utility/paymentRules";
+import { formatMinor, planAction, planPrice, plansForMember, renewalReminder, SUBSCRIPTION_STATUS_LABELS, subscriptionSummary, type PlanAction } from "@/utility/paymentRules";
 import { UUID_PATTERN } from "@/utility/uuid";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
@@ -49,6 +50,7 @@ export default function BillingScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ operationId?: string }>();
   const user = useAuthStore((state) => state.user);
+  const { userTypeCode } = useBusinessAccess();
   const showToast = useToastStore((state) => state.showToast);
   const account = usePaymentAccount();
   const plans = usePaymentPlans();
@@ -88,7 +90,9 @@ export default function BillingScreen() {
   if (account.isLoading || plans.isLoading) return <Screen hasHeader><Loader visible overlay={false} message="Loading billing…" /></Screen>;
 
   const data = account.data;
-  const planList = plans.data ?? [];
+  const allPlans = plans.data ?? [];
+  // $1 Price list for members, $50 Provider for tradespeople (Provider includes the guide).
+  const planList = plansForMember(allPlans, userTypeCode, data?.subscription);
   const busy = flows.some((flow) => flow.submitting || flow.polling);
   const chosenPrice = choice ? planPrice(choice.plan) : null;
   const reminder = renewalReminder(data);
@@ -150,8 +154,8 @@ export default function BillingScreen() {
         <View style={[styles.subscription, { backgroundColor: muted }]}>
           <StatusBadge label={SUBSCRIPTION_STATUS_LABELS[data.subscription.status] ?? data.subscription.status}
             tone={data.subscription.status === "active" ? "success" : data.subscription.status === "suspended" || data.subscription.status === "past_due" ? "danger" : "neutral"} />
-          <ThemedText type="headline">{planList.find((plan) => plan.code === data.subscription!.planCode)?.name ?? data.subscription.planCode}</ThemedText>
-          <ThemedText type="callout" tone="muted">{subscriptionSummary(data.subscription, planList)}</ThemedText>
+          <ThemedText type="headline">{allPlans.find((plan) => plan.code === data.subscription!.planCode)?.name ?? data.subscription.planCode}</ThemedText>
+          <ThemedText type="callout" tone="muted">{subscriptionSummary(data.subscription, allPlans)}</ThemedText>
           {data.subscription.channel !== "stripe" ? (
             <Notice message="This plan was bought through another store. Manage it there; you can buy here after its paid year ends." />
           ) : null}

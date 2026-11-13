@@ -221,3 +221,13 @@ test('provider price list: current route', async () => {
   assert.equal(calls[0].url, '/api/provider-prices/current');
   assert.deepEqual(plain(calls[0].params), { page: 2, pageSize: 20 });
 });
+
+test('plans by member type: Price list for members, Provider for tradespeople; held plans stay visible', () => {
+  const plans = [plan('price_list'), plan('provider')];
+  const codes = list => plain(list).map(item => item.code);
+  assert.deepEqual(codes(rules.plansForMember(plans, 'individual')), ['price_list']);
+  assert.deepEqual(codes(rules.plansForMember(plans, 'builder')), ['price_list']);
+  assert.deepEqual(codes(rules.plansForMember(plans, 'tradeperson')), ['provider']);
+  assert.deepEqual(codes(rules.plansForMember(plans, 'tradeperson', sub().subscription)), ['price_list', 'provider'], 'An existing Price list term is still shown');
+  assert.deepEqual(codes(rules.plansForMember(plans, null)), ['price_list']);
+});
