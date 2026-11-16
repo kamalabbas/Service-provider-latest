@@ -69,7 +69,7 @@ test("an unset local variant uses dev without altering base identity", t => {
   assert.equal(base.ios.bundleIdentifier, "com.kimzaster.serviceprovider");
   assert.equal(base.scheme, "service-provider");
   assert.deepEqual(base.platforms, ["android", "ios"]);
-  assert.equal(base.extra.eas.projectId, "02557e69-e417-490c-81ea-6d46a925c66a");
+  assert.equal(base.extra.eas.projectId, "7fd6dd14-8e5b-42a3-9fba-2651f619b069");
   assert.equal(config.extra.eas.projectId, base.extra.eas.projectId);
   assert.equal(config.scheme, base.scheme);
   assert.equal(config.android.googleServicesFile, "./google-services.json");
