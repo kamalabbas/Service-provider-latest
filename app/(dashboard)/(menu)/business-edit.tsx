@@ -117,6 +117,7 @@ function BusinessForm({ business }: { business: Business | null }) {
         }}
         error={errors.latitude?.message ?? errors.longitude?.message}
         helperText="Place the pin on your business address. Your current position is used only if you tap the button."
+        noMapHelperText="Tap the button while you're at your business address. Your position is used only when you tap it."
       />
 
       <PrimaryButton

@@ -124,7 +124,8 @@ test("all local variants permit missing API/Firebase inputs with clear diagnosti
   for (const APP_VARIANT of ["dev", "preview", "production"]) {
     const { config, warnings } = dynamic({ APP_VARIANT }, fixture(t));
     assert.equal(config.android.googleServicesFile, base.android.googleServicesFile);
-    assert.equal(warnings.length, 3);
+    assert.equal(warnings.length, 4);
+    assert.match(warnings.join("\n"), /location panel instead of the map/);
     assert.match(warnings.join("\n"), /backend-dependent features remain disabled/);
     assert.match(warnings.join("\n"), /live updates are off/);
     assert.match(warnings.join("\n"), /JavaScript exports can continue/);
@@ -169,9 +170,11 @@ for (const content of [null, "{invalid-json-private", "null", '{"client":{}}', '
 test("registered Android prebuild validation accepts a matching client", async t => {
   const directory = fixture(t);
   firebase(directory, "google-services.dev.json", [base.android.package + ".dev"]);
-  const { config } = dynamic({}, directory);
+  const { config } = dynamic({ GOOGLE_MAPS_ANDROID_API_KEY: "maps-test-key" }, directory);
   const result = await config.mods.android.dangerous({ ...config, modRequest: { projectRoot: directory } });
   assert.equal(result.android.package, base.android.package + ".dev");
+  assert.equal(config.android.config.googleMaps.apiKey, "maps-test-key");
+  assert.equal(config.extra.androidMapsEnabled, true);
   assert.deepEqual(configurationWarnings(config, { EXPO_PUBLIC_BASE_URL: api, EXPO_PUBLIC_SIGNALR_URL: hub }, directory), []);
 });
 
@@ -248,4 +251,11 @@ test("app links: an HTTPS origin adds verified /billing links for Android and iO
       return true;
     });
   }
+});
+
+test("without a Maps key Android builds turn the map off instead of crashing", t => {
+  const config = resolveAppConfig(structuredClone(base), { GOOGLE_MAPS_ANDROID_API_KEY: " " }, fixture(t));
+  assert.equal(config.extra.androidMapsEnabled, false);
+  assert.equal(config.android.config?.googleMaps, undefined);
+  assert.match(configurationWarnings(config, {}, fixture(t)).join(" "), /GOOGLE_MAPS_ANDROID_API_KEY is unset/);
 });

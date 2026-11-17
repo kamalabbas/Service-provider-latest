@@ -49,6 +49,9 @@ function resolveAppConfig(config, env, projectRoot) {
   const devFile = "./google-services.dev.json";
   const googleServicesFile = env.GOOGLE_SERVICES_JSON ||
     (isDev && fs.existsSync(path.resolve(projectRoot, devFile)) ? devFile : config.android?.googleServicesFile);
+  // Google Maps on Android needs a key; without one the native map crashes, so the app shows
+  // a plain location panel instead (extra.androidMapsEnabled). iOS uses Apple Maps, no key.
+  const mapsKey = (env.GOOGLE_MAPS_ANDROID_API_KEY ?? "").trim();
 
   return {
     ...config,
@@ -62,6 +65,7 @@ function resolveAppConfig(config, env, projectRoot) {
       ...config.android,
       package: isDev ? `${config.android.package}.dev` : config.android.package,
       googleServicesFile,
+      ...(mapsKey ? { config: { ...config.android?.config, googleMaps: { apiKey: mapsKey } } } : {}),
       ...(linkHost ? {
         intentFilters: [...(config.android.intentFilters ?? []), {
           action: "VIEW",
@@ -71,7 +75,7 @@ function resolveAppConfig(config, env, projectRoot) {
         }],
       } : {}),
     },
-    extra: { ...config.extra, appVariant: variant },
+    extra: { ...config.extra, appVariant: variant, androidMapsEnabled: Boolean(mapsKey) },
   };
 }
 
@@ -82,6 +86,9 @@ function configurationWarnings(config, env, projectRoot) {
   }
   if (!env.EXPO_PUBLIC_SIGNALR_URL) {
     warnings.push("EXPO_PUBLIC_SIGNALR_URL is unset; live updates are off and screens refresh over HTTP only.");
+  }
+  if (!config.extra?.androidMapsEnabled) {
+    warnings.push("GOOGLE_MAPS_ANDROID_API_KEY is unset; Android builds show a location panel instead of the map.");
   }
   if (!config.android?.googleServicesFile || !fs.existsSync(path.resolve(projectRoot, config.android.googleServicesFile))) {
     warnings.push("Android Firebase input is missing. Config inspection and JavaScript exports can continue; native Android builds require a matching google-services file. See README.");

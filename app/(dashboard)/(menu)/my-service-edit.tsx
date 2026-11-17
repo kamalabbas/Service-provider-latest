@@ -157,6 +157,7 @@ function ServiceForm({ listing, business, allowedOccupations }: ServiceFormProps
         }}
         error={errors.latitude?.message ?? errors.longitude?.message}
         helperText="Drag the pin to where you offer this service. The suburb isn't checked against the pin."
+        noMapHelperText="Tap the button while you're where you offer this service. The suburb isn't checked against it."
       />
 
       <PrimaryButton

@@ -14,7 +14,12 @@ export async function getDeviceLocation(): Promise<DeviceLocationResult> {
   try {
     const permission = await Location.requestForegroundPermissionsAsync();
     if (permission.status !== "granted") return { status: "denied" };
-    const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    // Network location can be missing (indoors, no Wi-Fi scan, emulators), and without a map the
+    // member has no other way to set a point, so fall back to the last fix, then to GPS.
+    const position =
+      (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null)) ??
+      (await Location.getLastKnownPositionAsync().catch(() => null)) ??
+      (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }));
     return {
       status: "granted",
       coordinates: { latitude: roundCoordinate(position.coords.latitude), longitude: roundCoordinate(position.coords.longitude) },

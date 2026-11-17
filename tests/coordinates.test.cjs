@@ -37,3 +37,20 @@ test('a missing pin asks the member to set the location, not to type coordinates
   assert.equal(await coordinates.coordinateField('longitude').isValid('-180'), true);
   assert.equal(await coordinates.coordinateField('longitude').isValid('180.5'), false);
 });
+
+test('the native map shows only where it cannot crash: iOS, Expo Go, or Android with a Maps key', () => {
+  const box = { exports: {} };
+  const source = ts.transpileModule(fs.readFileSync(path.join(__dirname, '..', 'utility/maps.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
+  }).outputText;
+  const stubs = {
+    'expo-constants': { __esModule: true, default: { executionEnvironment: 'standalone', expoConfig: { extra: {} } }, ExecutionEnvironment: { StoreClient: 'storeClient' } },
+    'react-native': { Platform: { OS: 'android' } },
+  };
+  vm.runInNewContext(source, { module: box, exports: box.exports, require: id => stubs[id] ?? assert.fail(id) });
+  const { mapAvailable } = box.exports;
+  assert.equal(mapAvailable(), false, 'An Android build without a key shows the location panel');
+  assert.equal(mapAvailable('android', 'standalone', true), true);
+  assert.equal(mapAvailable('android', 'storeClient', false), true, 'Expo Go has its own key');
+  assert.equal(mapAvailable('ios', 'standalone', false), true, 'Apple Maps needs no key');
+});
